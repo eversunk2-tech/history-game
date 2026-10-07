@@ -1,0 +1,25 @@
+{
+  "name": "joseon-year",
+  "private": true,
+  "version": "0.1.0",
+  "description": "조선에서 한 해 살기 — 초등 5학년 사회 역할 선택형 이야기 게임",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.11.3",
+    "preact": "^11.0.0",
+    "pretendard": "^1.3.9"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3"
+  }
+}
