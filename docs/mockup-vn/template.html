@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>조선에서 한 해 살기 — 미연시 구도 시안</title>
+<link rel="stylesheet" href="../../node_modules/pretendard/dist/web/variable/pretendardvariable.css">
+<style>
+  :root { --ink:#1b1410; --paper:#f6efe2; --line:#e9d9b4; --gold:#d9b872; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#15110e; color:var(--paper);
+         font-family:"Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", sans-serif; }
+  .wrap { max-width:1280px; margin:0 auto; padding:20px 16px 48px; }
+  h1 { font-size:20px; font-weight:700; margin:8px 0 4px; }
+  p.note { font-size:14px; opacity:.75; margin:0 0 18px; line-height:1.6; }
+  h2 { font-size:15px; font-weight:600; margin:26px 0 8px; opacity:.9; }
+
+  /* 화면 하나(16:9). 안쪽 치수는 화면 너비에 맞춰 함께 커지고 줄어든다. */
+  .screen { position:relative; width:100%; aspect-ratio:16/9; overflow:hidden; border-radius:10px;
+            background:#000 url("bg-village-spring.jpg") center/cover no-repeat;
+            container-type:inline-size; box-shadow:0 10px 40px rgba(0,0,0,.5); }
+  .who { position:absolute; left:50%; bottom:-22%; height:118%; transform:translateX(-50%);
+         filter:drop-shadow(0 1.2cqw 1.6cqw rgba(0,0,0,.35)); }
+  .who.left { left:30%; }
+  .shade { position:absolute; inset:0; background:linear-gradient(to bottom, rgba(0,0,0,.18), rgba(0,0,0,0) 22%, rgba(0,0,0,0) 55%, rgba(0,0,0,.45)); }
+
+  /* 위쪽 얇은 띠 */
+  .hud { position:absolute; top:1.6cqw; left:1.8cqw; right:1.8cqw; display:flex; align-items:center; gap:1cqw; }
+  .round { width:4.4cqw; height:4.4cqw; border-radius:50%; display:grid; place-items:center;
+           background:rgba(27,20,16,.72); border:.18cqw solid var(--gold); font-size:2.1cqw; }
+  .chip { padding:.7cqw 1.4cqw; border-radius:99cqw; background:rgba(27,20,16,.72);
+          border:.14cqw solid rgba(233,217,180,.55); font-size:1.55cqw; font-weight:600; white-space:nowrap; }
+  .spacer { flex:1; }
+  .stat b { font-weight:700; margin-left:.5cqw; }
+
+  /* 아래 대화창 */
+  .talk { position:absolute; left:2.2cqw; right:2.2cqw; bottom:2cqw; min-height:23%;
+          padding:2.4cqw 3.2cqw 2.2cqw; border-radius:1.2cqw;
+          background:linear-gradient(to bottom, rgba(20,16,13,.80), rgba(20,16,13,.90));
+          border:.16cqw solid rgba(217,184,114,.8);
+          box-shadow:inset 0 0 0 .5cqw rgba(20,16,13,.35), inset 0 0 0 .62cqw rgba(217,184,114,.28); }
+  .name { position:absolute; left:3cqw; top:-2.1cqw; padding:.55cqw 1.8cqw; border-radius:.7cqw;
+          background:var(--gold); color:var(--ink); font-size:1.7cqw; font-weight:700; }
+  .line { font-size:2.15cqw; line-height:1.62; font-weight:500; word-break:keep-all; }
+  .next { position:absolute; right:2.2cqw; bottom:1.2cqw; font-size:1.7cqw; color:var(--gold); }
+
+  /* 선택지 */
+  .choices { position:absolute; left:50%; top:16%; transform:translateX(-50%); width:56%;
+             display:flex; flex-direction:column; gap:1.3cqw; }
+  .choice { padding:1.35cqw 2.2cqw; border-radius:1cqw; text-align:center; font-size:2.05cqw; font-weight:600;
+            background:rgba(246,239,226,.94); color:var(--ink); border:.2cqw solid var(--gold);
+            box-shadow:0 .5cqw 1.2cqw rgba(0,0,0,.3); word-break:keep-all; }
+  .choice.locked { background:rgba(40,33,28,.82); color:rgba(246,239,226,.6); border-style:dashed; }
+  .choice small { display:block; margin-top:.45cqw; font-size:1.55cqw; font-weight:500; color:var(--paper); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>「조선에서 한 해 살기」 — 미연시 구도 시안</h1>
+  <p class="note">배경과 인물은 캔바 그림 생성으로 만든 시안입니다(2026-10-08). 대화창·이름표·선택지·위쪽 띠는 코드로 그렸습니다.
+  문장과 수치는 구도를 보이기 위한 예시이고, 실제 장면은 기획서를 따릅니다.</p>
+
+  <h2>① 대화 장면 — 만난 사람이 서 있고, 아래 대화창에 말이 나온다(눌러서 넘김)</h2>
+  <div class="screen">
+    <div class="shade"></div>
+    <img class="who" src="char-farmer-child.png" alt="이웃집 동무">
+    <div class="hud">
+      <div class="round">←</div>
+      <div class="chip">1395년 봄 · 느티골</div>
+      <div class="spacer"></div>
+      <div class="chip stat">살림<b>4</b></div>
+      <div class="chip stat">기력<b>6</b></div>
+      <div class="chip stat">인심<b>5</b></div>
+    </div>
+    <div class="talk">
+      <div class="name">이웃집 동무</div>
+      <div class="line">들었어? 임금님이 도읍을 한양으로 옮기셨대.<br>궁궐도 새로 짓는다더라.</div>
+      <div class="next">▼</div>
+    </div>
+  </div>
+
+  <h2>② 선택 장면 — 선택지가 배경 위에 뜨고, 고를 수 없는 것은 까닭과 함께 보인다</h2>
+  <div class="screen">
+    <div class="shade"></div>
+    <img class="who left" src="char-farmer-child.png" alt="이웃집 동무">
+    <div class="hud">
+      <div class="round">←</div>
+      <div class="chip">1395년 봄 · 느티골</div>
+      <div class="spacer"></div>
+      <div class="chip stat">살림<b>4</b></div>
+      <div class="chip stat">기력<b>1</b></div>
+      <div class="chip stat">인심<b>5</b></div>
+    </div>
+    <div class="choices" style="left:66%; width:50%;">
+      <div class="choice">한양 이야기를 더 묻는다</div>
+      <div class="choice">논에 나갈 채비를 한다</div>
+      <div class="choice locked">🔒 이웃 마을까지 다녀온다<small>기력이 모자라 오늘은 갈 수 없어요.</small></div>
+    </div>
+    <div class="talk">
+      <div class="line">동무의 말에 귀가 솔깃하다. 하지만 오늘 할 일도 많다. 어떻게 할까?</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
