@@ -1,50 +1,22 @@
-/* 맵 화면(바퀴 1-나): 위쪽 띠, 캔버스, 할 일 쪽지, 작은 지도, 까닭 한 줄, 임시 창.
+/* 맵 화면: 캔버스, 할 일 쪽지, 작은 지도, 까닭 한 줄. 위쪽 띠는 band.css, 그 위에 얹히는 대화 장면은 talk.css.
    글자는 1.25rem(20px)부터, 누르는 것은 높이 3.5rem(56px)부터. */
 
 .mapscreen {
   display: grid;
-  grid-template-rows: 4rem minmax(0, 1fr);
-}
-
-.map-band {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  min-width: 0;
-  padding: 0 1rem;
-  border-bottom: 0.14rem solid var(--ink);
-  background: var(--paper-light);
-}
-
-.map-where {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  font-size: 1.125rem;
-  line-height: 1.25;
-}
-
-.map-help {
-  flex: 1 1 0;
-  min-width: 0;
-  color: var(--ink-soft);
-  font-size: 1.25rem;
-  font-weight: 600;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* 위쪽 띠의 높이는 띠의 내용이 정한다 */
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .map-fps {
-  flex: none;
+  position: absolute;
+  top: 0.4rem;
+  right: 0.75rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.4rem;
+  background: rgba(251, 246, 233, 0.9);
   font-size: 1.125rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-}
-
-.map-band .hud-home {
-  min-height: 3.5rem;
 }
 
 .map-stage {
@@ -96,7 +68,12 @@
 
 .todo.shut {
   width: auto;
-  max-width: 19rem;
+  max-width: 22rem;
+}
+
+/* 덤의 줄에는 한마디가 붙어 길다. 덤을 폈을 때만 쪽지가 조금 넓어진다. */
+.todo.wide {
+  width: 22rem;
 }
 
 .todo-head-text {
@@ -107,23 +84,23 @@
   line-height: 1.3;
 }
 
-/* 접힌 쪽지에는 화살표가 가리키는 미션의 이름만 한 줄로 남는다 */
+/* 접힌 쪽지에는 화살표가 가리키는 미션의 이름이 남는다. 긴 이름은 잘리지 않고 두 줄로 넘어간다. */
 .todo-going {
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .todo-head {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   min-height: 3.5rem;
-  padding: 0 0.9rem;
+  padding: 0.3rem 0.9rem;
   border: 0;
   background: var(--season-soft);
   font-size: 1.25rem;
@@ -140,10 +117,13 @@
 
 .todo-body {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 0.3rem;
+  min-height: 0;
   padding: 0.5rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .todo-body ul {
@@ -183,6 +163,23 @@
   font-weight: 700;
 }
 
+/* 해낸 미션과 아직 갈 곳이 없는 미션은 누르는 것이 아니다(테두리가 점선이고 바탕이 없다). 해낸 것은 "해냄"이라는 글로 알린다. */
+.todo-row.done,
+.todo-row.still {
+  border-style: dashed;
+  background: transparent;
+  cursor: default;
+}
+
+.todo-row.done .todo-title {
+  color: var(--ink-soft);
+}
+
+.todo-row.done .todo-where {
+  color: var(--ink);
+  font-weight: 800;
+}
+
 /* 고른 줄: 테두리 굵기를 바꾸지 않는다(이름이 두 줄로 넘어가지 않게). 바탕 빛과 안쪽 테, 화살표로 알린다. */
 .todo-row.on {
   border-color: var(--ink);
@@ -204,10 +201,46 @@
 }
 
 .todo-where {
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 600;
   line-height: 1.3;
   color: var(--ink-soft);
+  word-break: keep-all;
+}
+
+/* 덤의 줄: "우물가 — 아주머니가 한양 이야기를 한다더라" */
+.todo-lure {
+  min-width: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  word-break: keep-all;
+}
+
+.todo-lure b {
+  font-weight: 800;
+}
+
+/* 해 ☀가 없어 이번 계절에는 못 하는 덤: 테두리가 점선이다(글로도 알린다 — 위의 한 줄) */
+.todo-row.spent {
+  border-style: dashed;
+  color: var(--ink-soft);
+}
+
+/* 덤 미션의 줄에는 표시 그림이 없다 */
+.todo-row.side {
+  padding-left: 0.9rem;
+}
+
+/* 쪽지가 화면 아래로 넘칠 때: 아래에 더 있다는 한 줄(쪽지 안은 손가락으로 넘긴다) */
+.todo-below {
+  flex: none;
+  padding: 0.2rem 0.6rem 0.3rem;
+  border-top: 0.1rem solid var(--ink-faint);
+  background: var(--season-soft);
+  font-size: 1.25rem;
+  font-weight: 800;
+  text-align: center;
 }
 
 .todo-tip {
@@ -295,6 +328,18 @@
   pointer-events: none;
 }
 
+/* 할 일 쪽지가 펴져 있을 때는 쪽지와 작은 지도 사이의 빈 곳 한가운데에 뜬다(쪽지의 아래쪽 글을 가리지 않게) */
+.map-toast.beside {
+  left: calc(50% + 3.3rem);
+  max-width: calc(100% - 35rem);
+}
+
+/* 덤을 펴서 쪽지가 넓어졌을 때 */
+.map-toast.beside.wide {
+  left: calc(50% + 4.8rem);
+  max-width: calc(100% - 38rem);
+}
+
 .map-toast.locked {
   border-style: dashed;
   border-width: 0.2rem;
@@ -321,159 +366,19 @@
   font-size: 1.375rem;
   font-weight: 800;
   line-height: 1.4;
+  word-break: keep-all;
 }
 
-/* ── 임시 창(대화 장면이 들어올 자리) ── */
-
-.map-panel {
-  position: absolute;
-  left: 0.75rem;
-  right: 0.75rem;
-  bottom: 0.75rem;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    'tag close'
-    'name close'
-    'text close'
-    'note close';
-  column-gap: 1.25rem;
-  row-gap: 0.15rem;
-  align-items: center;
-  padding: 0.9rem 1.2rem 1rem;
-  border: 0.14rem solid #f4ecd9;
-  border-radius: 0.9rem;
-  background: rgba(34, 30, 27, 0.92);
-  color: #fbf6e9;
-}
-
-.panel-tag {
-  grid-area: tag;
-  justify-self: start;
-  padding: 0 0.7rem;
-  border-radius: 1rem;
-  background: #f4ecd9;
-  color: var(--ink);
-  font-size: 1.125rem;
-  font-weight: 800;
-}
-
-.panel-name {
-  grid-area: name;
-  font-size: 1.375rem;
-  font-weight: 800;
-}
-
-.panel-text {
-  grid-area: text;
+/* 덧붙이는 한 줄(해 ☀가 무엇인지 등) */
+.toast-sub {
+  margin-top: 0.15rem;
+  padding-top: 0.25rem;
+  border-top: 0.1rem dashed var(--ink-faint);
   font-size: 1.25rem;
-  line-height: 1.6;
-}
-
-.panel-note {
-  grid-area: note;
-  font-size: 1.25rem;
-  color: #d9cdb3;
-}
-
-.panel-close {
-  grid-area: close;
-  min-width: 7rem;
-  border-color: #f4ecd9;
-  background: #f4ecd9;
-  color: var(--ink);
-}
-
-/* ── 누가 될까 ── */
-
-.walkpick {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 0.8rem;
-  padding: 1rem 1.5rem 1.25rem;
-}
-
-.walk-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
-  gap: 0.8rem;
-  min-height: 0;
-}
-
-.walk-cards > li {
-  display: flex;
-  min-height: 0;
-}
-
-.walk-card {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  width: 100%;
-  min-height: 3.5rem;
-  padding: 0.7rem 0.9rem;
-  border: 0.14rem solid var(--ink);
-  border-radius: 0.9rem;
-  background: var(--paper-light);
-  text-align: left;
-  cursor: pointer;
-}
-
-.walk-card:active {
-  transform: translateY(0.06rem);
-}
-
-.pick-portrait {
-  flex: none;
-  border-radius: 0.6rem;
-  background: var(--season-soft);
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-}
-
-.walk-card-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  min-width: 0;
-}
-
-.walk-card-name {
-  font-size: 1.5rem;
-  font-weight: 800;
-  line-height: 1.25;
-}
-
-.walk-card-look {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1.4;
   color: var(--ink-soft);
-}
-
-.walk-card-closed {
-  font-size: 1.25rem;
-  line-height: 1.35;
-  color: var(--ink-soft);
-}
-
-/* 제목 화면의 단추 줄 */
-.title-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.7rem;
-}
-
-.title-row .btn {
-  padding: 0.5rem 0.6rem;
-  flex-wrap: wrap;
-}
-
-.title-dev {
-  align-self: flex-start;
-  min-height: 3.5rem;
-  border-style: dashed;
-  color: var(--ink-soft);
+  word-break: keep-all;
 }
 
 /* ── 그림 견본(개발용) ── */

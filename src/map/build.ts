@@ -159,7 +159,9 @@ export class MapBuilder {
   put(kind: string, tx: number, ty: number, opts: Partial<Omit<Placed, 'kind' | 'tx' | 'ty'>> = {}): void {
     const def = thing(kind);
     const variant = opts.variant ?? Math.floor(hash2(tx, ty, this.seed + 7) * def.variants);
-    this.objects.push({ kind, tx, ty, variant, flip: opts.flip, dx: opts.dx, dy: opts.dy });
+    const placed: Placed = { kind, tx, ty, variant, flip: opts.flip, dx: opts.dx, dy: opts.dy };
+    if (opts.gate) placed.gate = opts.gate;
+    this.objects.push(placed);
     for (let j = 0; j < def.fh; j++) {
       for (let i = 0; i < def.fw; i++) {
         if (this.inb(tx + i, ty - j)) this.solid[(ty - j) * this.w + tx + i] = 1;
@@ -292,6 +294,20 @@ export class MapBuilder {
     }
     for (let i = 0; i < w * h; i++) if (blocked[i] === 0 && !seen[i]) blocked[i] = 1;
     return blocked;
+  }
+
+  /**
+   * 걸을 수 있는 땅이고 세운 것도 없는데 (sx, sy)에서 닿지 못하는 칸들.
+   * 덤불이나 바위가 좁은 목을 막으면 그 너머가 이렇게 된다. 풀밭처럼 보이는데 못 들어가면 헷갈리므로
+   * 맵을 지을 때 이 칸들을 빽빽한 숲으로 채운다(느티골의 buildNeutigol).
+   */
+  sealedFrom(sx: number, sy: number): number[] {
+    const blocked = this.blockedGrid(sx, sy);
+    const out: number[] = [];
+    for (let i = 0; i < blocked.length; i++) {
+      if (blocked[i] === 1 && terrainWalkable(this.terrain[i]) && this.solid[i] === 0) out.push(i);
+    }
+    return out;
   }
 
   /** 네모 안의 걸을 수 있는 칸을 모두 모은다(문이 가로막을 줄) */

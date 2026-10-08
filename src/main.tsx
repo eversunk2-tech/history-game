@@ -4,6 +4,8 @@ import './styles/base.css';
 import './styles/layout.css';
 import './styles/screens.css';
 import './styles/map.css';
+import './styles/band.css';
+import './styles/talk.css';
 import { App } from './app/App';
 import { bundle } from './content';
 import { errorsOf, formatIssue, validateContent } from './content/validate';

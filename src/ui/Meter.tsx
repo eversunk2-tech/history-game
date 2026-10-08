@@ -1,4 +1,4 @@
-// 수치 막대: 그림 표시 + 이름 + 숫자 + 10칸. 찬 칸과 빈 칸은 색이 아니라 채움과 테두리로 가린다.
+// 수치 막대: (그림 표시) + 이름 + 숫자 + 10칸. 찬 칸과 빈 칸은 색이 아니라 채움과 테두리로 가린다.
 
 import type { JSX } from 'preact';
 import { statLabels } from '../content/labels';

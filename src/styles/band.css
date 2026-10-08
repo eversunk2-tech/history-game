@@ -1,0 +1,712 @@
+/* 위쪽 띠(맵 화면과 대화 장면이 함께 쓴다)와, 맵의 무대 위에 얹히는 종이(미션이 풀림, 봇짐, 지난 이야기).
+   띠는 넓으면 한 줄, 좁으면(1024 너비) 두 줄이 된다. 높이는 내용이 정한다.
+   꼭 할 일을 다 한 뒤에는 안내 한 줄이 어느 너비에서도 보인다(자리가 모자라면 띠가 한 줄 늘어난다).
+   대화 장면과 일 놀이가 떠 있는 동안에는 한 줄로 줄어든다(.band.compact — 어두운 바탕, 단추와 안내 없음).
+   글은 1.25rem(20px)부터(이름표만 1.125rem), 누르는 것은 높이 3.5rem(56px)부터. */
+
+.band {
+  position: relative;
+  z-index: 6; /* 까닭 풍선이 무대 위로 내려온다 */
+  min-width: 0;
+  padding: 0.25rem 0.75rem;
+  border-bottom: 0.14rem solid var(--ink);
+  background: var(--paper-light);
+}
+
+.band-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  min-width: 0;
+}
+
+/* 왼쪽: 계절 · 해와 곳 · 수치 셋 · 해 ☀ */
+.band-info {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+  min-height: 3.25rem;
+}
+
+.band-where {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  font-size: 1.125rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.band-year {
+  font-weight: 800;
+}
+
+.band-role {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.band-stats {
+  display: flex;
+  flex: none;
+  gap: 0.9rem;
+}
+
+.band-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.band-stat .icon {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.band-stat-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.band-stat-num {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.band-cells {
+  display: flex;
+  gap: 0.1rem;
+  margin-top: 0.12rem;
+}
+
+.band-cells .cell {
+  width: 0.52rem;
+  height: 0.75rem;
+}
+
+/* 해 ☀: 남은 것은 살이 뻗은 찬 해, 진 것은 빈 동그라미. 숫자가 함께 있다. */
+.band-suns {
+  flex: none;
+  padding-left: 0.8rem;
+  border-left: 0.1rem solid var(--ink-faint);
+}
+
+.band-sun-all {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.band-sun-row {
+  display: flex;
+  gap: 0.1rem;
+  margin-top: 0.05rem;
+}
+
+.band-sun-row .icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.band-sun-row .icon.spent {
+  color: var(--ink-faint);
+}
+
+/* 오른쪽: (한 줄 안내) · 단추 넷. 자리가 모자라면 이 묶음이 통째로 둘째 줄로 내려간다. */
+.band-tools {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+/* 단추 넷은 언제나 한 줄에 함께 있다 */
+.band-btns {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* 꼭 할 일을 다 한 뒤: 안내 한 줄이 반드시 보인다.
+   - 이 묶음의 가장 좁은 너비는 안내 글 한 줄이다(글은 줄이 바뀌지 않는다). 그래서
+     좁은 화면(1024 너비)에서는 묶음이 둘째 줄로 내려가 [안내 · 단추들]이 한 줄에 놓이고,
+     넓은 화면에서는 첫 줄에 남되 안에서 두 줄이 된다 — 단추들이 위, 안내가 그 밑(wrap-reverse).
+   어느 쪽이든 띠는 두 줄이다. 아주 넓은 화면에서는 모두 한 줄에 들어간다. */
+.band-tools.done {
+  flex: 1 1 0;
+  flex-wrap: wrap-reverse;
+  gap: 0.15rem 0.6rem;
+  min-width: auto;
+}
+
+/* 묶음이 두 줄이 되어도(넓은 화면) 왼쪽의 정보는 첫 줄에 나란히 선다 */
+.band.open .band-row {
+  align-items: flex-start;
+}
+
+.band-done {
+  display: flex;
+  flex: 1 0 auto;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.band-done-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.6rem;
+  padding: 0.2rem 0.9rem;
+  border: 0.14rem solid var(--ink);
+  border-radius: 0.7rem;
+  background: var(--season-soft);
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.band-done-mark {
+  font-size: 0.8rem;
+}
+
+/* 한 줄 안내: 자리가 넉넉할 때만 보인다. 모자라면 글이 둘째 줄로 밀려 통째로 가려진다(잘린 글은 보이지 않는다).
+   글은 띠의 너비 셈에 끼지 않는다(안쪽 줄을 띄워 놓았다). 그래서 넓은 화면에서는 단추들이 첫 줄에 함께 놓인다. */
+.band-hint {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 3.5rem;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 3.5rem;
+}
+
+.band-hint-line {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  align-content: flex-start;
+}
+
+.band-hint-strut {
+  flex: none;
+  width: 1px;
+  height: 3.5rem;
+}
+
+.band-hint-text {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.3rem;
+  height: 3.5rem;
+  white-space: nowrap;
+}
+
+.band-hint .icon {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.band-hint.nudge .band-hint-text {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.25rem;
+}
+
+.band-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 3.5rem;
+  min-height: 3.5rem;
+  padding: 0 0.7rem;
+  border: 0.14rem solid var(--ink);
+  border-radius: 0.7rem;
+  background: var(--paper);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.band-btn .icon {
+  width: 1.3rem;
+  height: 1.3rem;
+}
+
+.band-btn[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--paper-light);
+}
+
+/* "봄을 보낸다": 잠겼으면 자물쇠와 점선과 흐린 글, 열렸으면 먹빛으로 찬 바탕과 "▶"와 겹테(색만으로 가르지 않는다).
+   열린 단추는 띠가 다시 보일 때마다 두어 번 두근거린다(움직임을 줄여 달라고 한 기기에서는 가만히 있다). */
+.band-btn.send.open {
+  padding: 0 0.9rem;
+  border-color: var(--ink);
+  background: var(--ink);
+  box-shadow:
+    0 0 0 0.14rem var(--paper-light),
+    0 0 0 0.3rem var(--ink);
+  color: var(--paper-light);
+  font-weight: 800;
+  animation: send-beat 1.2s ease-in-out 0.3s 3;
+}
+
+.band-send-go {
+  font-size: 1rem;
+}
+
+@keyframes send-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .band-btn.send.open {
+    animation: none;
+  }
+}
+
+.band-btn.send.locked {
+  border-style: dashed;
+  border-color: var(--ink-soft);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.band-btn.quiet {
+  border-color: var(--ink-faint);
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.band-btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.band-btn:active:not(:disabled) {
+  transform: translateY(0.06rem);
+}
+
+/* ── 줄인 띠 ── 대화 장면과 일 놀이가 떠 있는 동안. 한 줄, 어두운 바탕(무대와 한 덩어리로 보이게).
+   계절 · 해와 곳 · 수치 셋 · 해 ☀만 남는다. 뜻은 여전히 이름·숫자·칸·모양으로 전한다. */
+.band.compact {
+  padding: 0.2rem 0.75rem;
+  border-bottom-color: #0f0b09;
+  background: #1b1410;
+  color: #f6efe2;
+}
+
+.band.compact .band-row {
+  flex-wrap: nowrap;
+}
+
+.band.compact .band-info {
+  min-height: 3rem;
+}
+
+.band.compact .season-chip.now {
+  height: 2.5rem;
+  border-color: #d9b872;
+}
+
+.band.compact .band-role,
+.band.compact .band-sun-all {
+  color: rgba(246, 239, 226, 0.78);
+}
+
+.band.compact .cell {
+  border-color: rgba(246, 239, 226, 0.85);
+}
+
+.band.compact .cell.on {
+  background: #f6efe2;
+}
+
+.band.compact .band-suns {
+  border-left-color: rgba(246, 239, 226, 0.4);
+}
+
+.band.compact .band-sun-row .icon.spent {
+  color: rgba(246, 239, 226, 0.6);
+}
+
+/* 알림 줄은 줄인 띠에서도 보인다(밝은 바탕 그대로) */
+.band.compact .band-notice {
+  color: var(--ink);
+}
+
+/* 알림 한 줄(기록을 남기지 못했어요, 인터넷이 끊겼어요) */
+.band-notice {
+  align-items: center;
+  margin: 0.25rem 0 0.1rem;
+  padding: 0.15rem 0.6rem;
+}
+
+.band-notice-mark {
+  margin-top: 0;
+}
+
+/* 잠긴 "봄을 보낸다"를 눌렀을 때의 까닭 풍선(띠 아래, 무대의 오른쪽 위에 잠깐 뜬다) */
+.band-why {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0.75rem;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.5rem 1rem;
+  border: 0.2rem dashed var(--ink);
+  border-radius: 0.8rem;
+  background: rgba(251, 246, 233, 0.97);
+  box-shadow: 0 0.2rem 0 rgba(46, 41, 37, 0.35);
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.band-why .icon {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* ── 종이 한 장 ── 무대를 덮는 어두운 막 위의 한지 빛 창 */
+
+.paper-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  background: rgba(46, 41, 37, 0.5);
+}
+
+.paper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 36rem;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 1rem 1.4rem 1.1rem;
+  border: 0.14rem solid var(--ink);
+  border-radius: 1rem;
+  background: var(--paper-light);
+  color: var(--ink);
+  box-shadow: 0 0.3rem 0 rgba(46, 41, 37, 0.4);
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
+  text-align: left;
+}
+
+.paper.bag,
+.paper.past {
+  width: 44rem;
+  overflow: hidden;
+}
+
+.paper-top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 0.14rem solid var(--ink);
+}
+
+.paper-kicker {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+  line-height: 1.3;
+}
+
+.paper-title {
+  font-size: 1.75rem;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.paper-sub {
+  margin-left: 0.7rem;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.paper-head {
+  display: block;
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+.paper-part {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.paper-line {
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.paper-small {
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.paper-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-height: 0;
+  padding-right: 0.3rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.paper-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.paper-chip {
+  padding: 0.1rem 0.8rem;
+  border: 0.14rem solid var(--ink);
+  border-radius: 0.5rem;
+  background: var(--paper);
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.paper-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.2rem;
+}
+
+.paper-foot .btn {
+  flex: none;
+}
+
+.paper-saved {
+  min-width: 0;
+  color: var(--ink-soft);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* 얻은 것의 갈래(생활 카드 · 물건) — 이름 앞의 작은 딱지 */
+.paper-chip-kind {
+  margin-right: 0.5rem;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.paper.mission {
+  border-width: 0.24rem;
+}
+
+/* ── 봇짐 ── */
+
+/* 살림·기력·인심·해가 무엇인지 한 줄씩(그림 표시 · 이름과 숫자 · 풀이) */
+.bag-about {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.2rem 1.2rem;
+}
+
+.bag-about li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.bag-about .icon {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.bag-about-name {
+  flex: none;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.bag-about-text {
+  min-width: 0;
+  color: var(--ink-soft);
+}
+
+.bag-goods {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.bag-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.bag-pile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+}
+
+.bag-pile .icon {
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
+.bag-count {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.bag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.bag-list li {
+  padding: 0.35rem 0.7rem;
+  border: 0.1rem solid var(--ink-faint);
+  border-radius: 0.6rem;
+  background: var(--paper);
+  line-height: 1.45;
+}
+
+.bag-name {
+  display: block;
+  font-weight: 800;
+}
+
+.bag-text {
+  display: block;
+}
+
+/* ── 지난 이야기 ── */
+
+.past-pager {
+  display: grid;
+  flex: none;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.past-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.past-title {
+  font-weight: 800;
+}
+
+.past-num {
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.past-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.past-lines li {
+  line-height: 1.5;
+}
+
+.past-tells {
+  color: var(--ink);
+}
+
+.past-says {
+  padding: 0.3rem 0.7rem;
+  border-left: 0.3rem solid var(--season);
+  border-radius: 0.4rem;
+  background: var(--paper);
+}
+
+.past-who {
+  display: block;
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+  line-height: 1.3;
+}
+
+.past-picked {
+  padding: 0.35rem 0.7rem;
+  border: 0.14rem solid var(--ink);
+  border-radius: 0.6rem;
+  background: var(--paper);
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.past-empty {
+  padding: 1rem 0;
+}

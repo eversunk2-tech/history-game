@@ -73,9 +73,6 @@ export interface Scene {
   /** 가끔 화면을 가로질러 날아가는 새 떼 */
   flock: { x: number; y: number; vx: number; vy: number; n: number } | null;
   flockWait: number;
-  /** 대문이 닫혀 보이는가(주인공에 따라) */
-  gateShut: boolean;
-  locks: { x: number; y: number }[];
   shown: (Static | Actor)[];
 }
 
@@ -88,9 +85,10 @@ function sceneFrom(map: MapData, atlas: Atlas, world: World, ground: Ground, can
   const statics: Static[] = [];
   const chimneys: Scene['chimneys'] = [];
   const blossoms: Scene['blossoms'] = [];
-  const shut = closedGates(map, world.who).some((c) => c.gate.id === 'manor');
+  // 문에 딸린 문짝은 그 문이 닫힌 사람에게 닫힌 모습(variant 1)으로 보인다
+  const shutIds = new Set(closedGates(map, world.who).map((c) => c.gate.id));
   for (const o of map.objects) {
-    const variant = o.kind === 'gate' ? (shut ? 1 : 0) : o.variant;
+    const variant = o.gate ? (shutIds.has(o.gate) ? 1 : 0) : o.variant;
     const img = atlas.things.get(thingKey(o.kind, variant));
     if (!img) continue;
     const def = thing(o.kind);
@@ -123,16 +121,6 @@ function sceneFrom(map: MapData, atlas: Atlas, world: World, ground: Ground, can
   }
   const W = map.w * TILE;
   const H = map.h * TILE;
-  const locks: Scene['locks'] = [];
-  for (const { gate } of closedGates(map, world.who)) {
-    let sx = 0;
-    let sy = 0;
-    for (const [x, y] of gate.tiles) {
-      sx += x;
-      sy += y;
-    }
-    locks.push({ x: (sx / gate.tiles.length) * TILE + 8, y: (sy / gate.tiles.length) * TILE + 2 });
-  }
   return {
     map,
     atlas,
@@ -155,8 +143,6 @@ function sceneFrom(map: MapData, atlas: Atlas, world: World, ground: Ground, can
     ],
     flock: null,
     flockWait: 5,
-    gateShut: shut,
-    locks,
     shown: [],
   };
 }
@@ -421,6 +407,7 @@ export function render(view: View, world: World, scene: Scene): void {
     shown.push(it);
   }
   for (const a of world.actors) {
+    if (a.hidden) continue;
     if (a.x < vx0 - 50 || a.x > vx1 + 50 || a.y < vy0 - 20 || a.y - a.lift > vy1 + 60) continue;
     shown.push(a);
   }
@@ -487,13 +474,17 @@ export function render(view: View, world: World, scene: Scene): void {
   }
 
   // 7. 표시: 깃발과 말풍선, 막힌 길의 표시
-  for (const spot of world.spots) {
+  for (const mark of world.marks) {
+    const spot = mark.spot;
     const p = spotPoint(spot);
     if (p.x < vx0 - 20 || p.x > vx1 + 20 || p.y < vy0 - 10 || p.y > vy1 + 50) continue;
-    const img = spot.kind === 'must' ? atlas.flag : atlas.bubble;
-    const bob = Math.round(Math.sin(world.time * 3 + spot.at[0]) * 1.5);
+    const img = mark.must ? atlas.flag : atlas.bubble;
+    // 지금 할 수 없는 일의 표시는 엷고 까딱이지 않는다
+    const bob = mark.faded ? 0 : Math.round(Math.sin(world.time * 3 + spot.at[0]) * 1.5);
     const guided = world.guide === spot.id;
+    if (mark.faded) ctx.globalAlpha = 0.5;
     ctx.drawImage(img.canvas, 0, 0, img.w, img.h, (p.x - img.ax) * s - camX, (p.y - 22 - img.ay + bob) * s - camY, img.w * s, img.h * s);
+    ctx.globalAlpha = 1;
     if (guided) {
       // 가리키는 자리 위에서 아래로 까딱이는 화살표
       const ar = atlas.arrows[2];
@@ -501,7 +492,7 @@ export function render(view: View, world: World, scene: Scene): void {
       ctx.drawImage(ar.canvas, 0, 0, ar.w, ar.h, (p.x - ar.ax) * s - camX, (p.y - 52 - hop) * s - camY, ar.w * s, ar.h * s);
     }
   }
-  for (const l of scene.locks) {
+  for (const l of world.locks) {
     if (l.x < vx0 - 20 || l.x > vx1 + 20 || l.y < vy0 - 10 || l.y > vy1 + 40) continue;
     const img = atlas.lock;
     const bob = Math.round(Math.sin(world.time * 2.4 + l.x) * 1.2);
@@ -510,7 +501,7 @@ export function render(view: View, world: World, scene: Scene): void {
 
   // 화면 밖의 자리를 가리키는 화살표(화면 가장자리에)
   if (world.guide) {
-    const spot = world.spots.find((sp) => sp.id === world.guide);
+    const spot = world.marks.find((m) => m.spot.id === world.guide)?.spot;
     if (spot) {
       const p = spotPoint(spot);
       const sx = p.x * s - camX;
@@ -550,6 +541,30 @@ export function render(view: View, world: World, scene: Scene): void {
   if (atlas.pal.wash) {
     ctx.fillStyle = atlas.pal.wash;
     ctx.fillRect(0, 0, view.w, view.h);
+  }
+  // 하루의 빛: 아침은 엷은 노란빛, 해거름은 붉은빛이 위에서 보랏빛으로 내려앉는다(그림 견본의 빛과 같은 빛깔)
+  const { morning, dusk } = world.glow;
+  if (morning > 0.01 || dusk > 0.01) {
+    ctx.globalCompositeOperation = 'multiply';
+    if (morning > 0.01) {
+      const g = ctx.createLinearGradient(0, 0, 0, view.h);
+      g.addColorStop(0, '#fff3cf');
+      g.addColorStop(1, '#ffe9d2');
+      ctx.globalAlpha = morning;
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, view.w, view.h);
+    }
+    if (dusk > 0.01) {
+      const g = ctx.createLinearGradient(0, 0, 0, view.h);
+      g.addColorStop(0, '#f6b37f');
+      g.addColorStop(1, '#c78fb0');
+      // 견본(0.85)보다 엷게: 걸어 다니며 표시와 사람을 알아보는 데 걸리지 않게
+      ctx.globalAlpha = dusk * 0.55;
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, view.w, view.h);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
   }
 }
 

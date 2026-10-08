@@ -4,7 +4,22 @@ import { describe, expect, it } from 'vitest';
 import { neutigol } from '../src/content/maps/neutigol';
 import { boxFree, routeLength, routeTo, tileCenter, tileOf } from '../src/map/path';
 import { TILE, type Who } from '../src/map/types';
-import { createWorld, focusOf, interact, setKeys, stepWorld, tapWorld, walkToSpot, WALK_SPEED, type World, type WorldEvent } from '../src/map/world';
+import {
+  createWorld,
+  dayLight,
+  focusOf,
+  interact,
+  setHidden,
+  setKeys,
+  setMarks,
+  stepWorld,
+  tapWorld,
+  walkToMark,
+  WALK_SPEED,
+  type Mark,
+  type World,
+  type WorldEvent,
+} from '../src/map/world';
 
 const map = neutigol();
 const FARMER_BOY: Who = { role: 'farmer', look: 'boy' };
@@ -25,6 +40,16 @@ function run(world: World, seconds: number, until?: (events: WorldEvent[]) => bo
 }
 
 const px = (tx: number, ty: number): [number, number] => [tx * TILE + 8, ty * TILE + 8];
+
+/** 그 자리에 선 표시(일의 id는 자리 이름으로 둔다) */
+function mark(id: string, must = true): Mark {
+  const spot = map.spots.find((s) => s.id === id);
+  if (!spot) throw new Error(id);
+  return { id: `do-${id}`, spot, must };
+}
+
+// 농민 집 아이의 봄에 일이 벌어지는 자리
+const FARMER_SPOTS = ['tree', 'treeShade', 'home', 'well', 'ourPaddy', 'neighborPaddy', 'templeRoad', 'temple', 'woods'];
 
 describe('누르면 걸어가기', () => {
   it('누른 곳까지 걸어가서 멈춘다', () => {
@@ -63,29 +88,66 @@ describe('누르면 걸어가기', () => {
     expect(Math.hypot(wx - 60, wy - 62)).toBeLessThan(5);
   });
 
-  it('깃발을 누르면 그 앞까지 걸어가서 임시 창을 띄울 일이 생긴다', () => {
+  it('깃발을 누르면 그 앞까지 걸어가서 그 일이 열린다', () => {
     const world = createWorld(map, FARMER_BOY, 'farmer-boy');
-    const spot = world.spots.find((s) => s.id === 'tree')!;
+    const tree = mark('tree');
+    setMarks(world, [tree, mark('well', false)]);
     // 표시는 자리의 칸 위에 떠 있다
-    tapWorld(world, spot.at[0] * TILE + 8, spot.at[1] * TILE - 12);
-    const events = run(world, 20, (all) => all.some((e) => e.type === 'spot'));
-    const hit = events.find((e) => e.type === 'spot');
-    expect(hit && hit.type === 'spot' && hit.spot.id).toBe('tree');
-    expect(tileOf(world.player)).toEqual(spot.stand);
+    tapWorld(world, tree.spot.at[0] * TILE + 8, tree.spot.at[1] * TILE - 12);
+    const events = run(world, 20, (all) => all.some((e) => e.type === 'mark'));
+    const hit = events.find((e) => e.type === 'mark');
+    expect(hit && hit.type === 'mark' && hit.mark.id).toBe('do-tree');
+    expect(tileOf(world.player)).toEqual(tree.spot.stand);
   });
 
-  it('할 일 쪽지에서 고른 자리로 걸어갈 수 있다: 역할마다 보이는 자리 모두', () => {
+  it('표시가 없는 자리는 눌러도 일이 열리지 않는다(엔진이 연 일만 맵에 선다)', () => {
+    const world = createWorld(map, FARMER_BOY, 'farmer-boy');
+    const tree = mark('tree');
+    tapWorld(world, tree.spot.at[0] * TILE + 8, tree.spot.at[1] * TILE - 12);
+    expect(run(world, 12).some((e) => e.type === 'mark')).toBe(false);
+    // 걸어가는 도중에 그 일이 닫히면(표시가 사라지면) 다다라도 열리지 않는다
+    setMarks(world, [tree]);
+    walkToMark(world, tree);
+    run(world, 0.5);
+    setMarks(world, []);
+    expect(run(world, 12).some((e) => e.type === 'mark')).toBe(false);
+  });
+
+  it('한 자리에 일이 둘이면 꼭 할 일의 표시 하나만 선다', () => {
+    const world = createWorld(map, FARMER_BOY, 'farmer-boy');
+    const side = { ...mark('tree', false), id: 'side' };
+    const must = { ...mark('tree', true), id: 'must' };
+    setMarks(world, [side, must]);
+    expect(world.marks.map((m) => m.id)).toEqual(['must']);
+    setMarks(world, [must, side]);
+    expect(world.marks.map((m) => m.id)).toEqual(['must']);
+  });
+
+  it('할 일 쪽지에서 고른 자리로 걸어갈 수 있다: 농민 집 아이의 자리 모두(남자아이·여자아이 모습)', () => {
     for (const [who, hero] of [
       [FARMER_BOY, 'farmer-boy'],
-      [DAUGHTER, 'daughter'],
-      [NOBI_GIRL, 'nobi-girl'],
+      [{ role: 'farmer', look: 'girl' } as Who, 'farmer-girl'],
     ] as const) {
       const world = createWorld(map, who, hero);
-      for (const spot of world.spots) {
-        walkToSpot(world, spot);
-        const events = run(world, 60, (all) => all.some((e) => e.type === 'spot' && e.spot.id === spot.id));
-        expect(events.some((e) => e.type === 'spot' && e.spot.id === spot.id), `${hero} → ${spot.id}`).toBe(true);
+      const marks = FARMER_SPOTS.map((id) => mark(id));
+      setMarks(world, marks);
+      for (const m of marks) {
+        walkToMark(world, m);
+        const events = run(world, 60, (all) => all.some((e) => e.type === 'mark' && e.mark.id === m.id));
+        expect(events.some((e) => e.type === 'mark' && e.mark.id === m.id), `${hero} → ${m.spot.id}`).toBe(true);
+        expect(tileOf(world.player), m.spot.id).toEqual(m.spot.stand);
       }
+    }
+  });
+
+  it('이어 하기: 마지막에 서 있던 칸에서 시작한다. 그 칸에 설 수 없으면 처음 서는 칸으로 간다', () => {
+    const well = map.spots.find((s) => s.id === 'well')!;
+    const there = createWorld(map, FARMER_BOY, 'farmer-boy', well.stand);
+    expect(tileOf(there.player)).toEqual(well.stand);
+    // 지붕 위, 맵 밖, 닫힌 문 너머는 설 수 없다
+    for (const bad of [[38, 31], [-3, 400], [53, 24]] as [number, number][]) {
+      const world = createWorld(map, FARMER_BOY, 'farmer-boy', bad);
+      expect(tileOf(world.player), String(bad)).toEqual(map.start.farmer);
     }
   });
 
@@ -143,13 +205,17 @@ describe('자판으로 걷기', () => {
 
   it('Enter·Space로 곁에 있는 자리에 말을 건다', () => {
     const world = createWorld(map, FARMER_BOY, 'farmer-boy');
-    expect(interact(world)?.type).not.toBe('spot');
-    const spot = world.spots.find((s) => s.id === 'well')!;
-    const at = tileCenter(spot.stand[0], spot.stand[1]);
+    const well = mark('well', false);
+    setMarks(world, [well]);
+    expect(interact(world)?.type).not.toBe('mark');
+    const at = tileCenter(well.spot.stand[0], well.spot.stand[1]);
     world.player.x = at.x;
     world.player.y = at.y;
     const e = interact(world);
-    expect(e && e.type === 'spot' && e.spot.id).toBe('well');
+    expect(e && e.type === 'mark' && e.mark.id).toBe('do-well');
+    // 표시가 사라지면(일을 마치면) 그 일은 다시 열리지 않는다
+    setMarks(world, []);
+    expect(interact(world)?.type).not.toBe('mark');
   });
 });
 
@@ -166,11 +232,94 @@ describe('막힌 길의 까닭', () => {
     expect(tileOf(world.player)[0]).toBeGreaterThan(3);
     // 그 자리에 머무는 동안에는 다시 뜨지 않는다
     expect(run(world, 3).filter((e) => e.type === 'gate').length).toBe(0);
-    // 멀어졌다가 다시 오면 다시 뜬다
+    // 같은 곳을 다시 누르면 물러났다 오지 않아도 다시 뜬다(review 26번 ㉣)
+    tapWorld(world, ...px(1, 37));
+    expect(run(world, 3).filter((e) => e.type === 'gate').length).toBe(1);
+    // 멀어졌다가 다시 와도 다시 뜬다
     tapWorld(world, ...px(14, 37));
     run(world, 6);
     tapWorld(world, ...px(1, 37));
     expect(run(world, 8).filter((e) => e.type === 'gate').length).toBe(1);
+  });
+
+  it('까닭이 사라진 뒤 자판으로 다시 밀면 다시 뜬다(문 넷 모두 — review 15번)', () => {
+    const pushes: Record<string, { from: [number, number]; key: [number, number] }> = {
+      hyanggyo: { from: [4, 37], key: [-1, 0] },
+      hanyang: { from: [25, 7], key: [0, -1] },
+      pass: { from: [92, 23], key: [1, 0] },
+      manor: { from: [53, 28], key: [0, -1] },
+    };
+    for (const [id, { from, key }] of Object.entries(pushes)) {
+      const world = createWorld(map, NOBI_GIRL, 'nobi-girl');
+      const at = tileCenter(from[0], from[1]);
+      world.player.x = at.x;
+      world.player.y = at.y;
+      setKeys(world, key[0], key[1]);
+      expect(run(world, 0.6).filter((e) => e.type === 'gate').length, id).toBe(1);
+      // 누르고 있는 동안에는 되풀이해서 뜨지 않는다
+      expect(run(world, 1.5).filter((e) => e.type === 'gate').length, id).toBe(0);
+      setKeys(world, 0, 0);
+      // 문 앞에 선 채로 한참 있다가(까닭은 화면에서 사라졌다) 다시 민다
+      run(world, 10);
+      setKeys(world, key[0], key[1]);
+      expect(run(world, 0.6).filter((e) => e.type === 'gate').length, id).toBe(1);
+      setKeys(world, 0, 0);
+    }
+  });
+
+  it('막힌 길의 표시를 누르면 그 문을 누른 것으로 친다: 문 앞까지 가서 까닭이 뜬다(문 넷 모두)', () => {
+    // 여섯 모습 가운데 문이 가장 많이 닫힌 노비 집 아이로 넷을 다 본다
+    for (const id of ['hyanggyo', 'hanyang', 'pass', 'manor']) {
+      const world = createWorld(map, NOBI_GIRL, 'nobi-girl');
+      const lock = world.locks.find((l) => l.closed.gate.id === id)!;
+      expect(lock, id).toBeDefined();
+      // 표시는 문의 칸 위에 떠 있다(문 칸이 아니라 그 위의 숲 칸에 걸쳐 그려진다)
+      tapWorld(world, lock.x, lock.y - 20);
+      const events = run(world, 90, (all) => all.some((e) => e.type === 'gate'));
+      const gates = events.filter((e) => e.type === 'gate');
+      expect(gates.length, id).toBe(1);
+      expect(gates[0].type === 'gate' && gates[0].reason, id).toBe(lock.closed.reason);
+      // 문 한 칸 안에 서 있다
+      const [tx, ty] = tileOf(world.player);
+      expect(lock.closed.gate.tiles.some(([x, y]) => Math.abs(x - tx) <= 1 && Math.abs(y - ty) <= 1), id).toBe(true);
+    }
+  });
+
+  it('문 바로 앞 칸을 눌러 거기 멈춰 서면 까닭이 뜬다(문 넷 모두)', () => {
+    const fronts: Record<string, [number, number]> = { hyanggyo: [4, 37], hanyang: [25, 7], pass: [92, 23], manor: [53, 28] };
+    for (const [id, front] of Object.entries(fronts)) {
+      const world = createWorld(map, NOBI_GIRL, 'nobi-girl');
+      tapWorld(world, ...px(front[0], front[1]));
+      const events = run(world, 90, (all) => all.some((e) => e.type === 'gate'));
+      expect(events.filter((e) => e.type === 'gate').length, id).toBe(1);
+      expect(tileOf(world.player), id).toEqual(front);
+    }
+  });
+
+  it('문 너머의 먼 곳을 눌러도 문 앞으로 가서 까닭이 뜬다(담 밖 가까운 곳에 가서 서지 않는다)', () => {
+    const world = createWorld(map, FARMER_BOY, 'farmer-boy');
+    // 안마당에서 대문과 가장 먼 칸, 그리고 안채의 지붕
+    const manor = world.locks.findIndex((l) => l.closed.gate.id === 'manor');
+    let far: [number, number] = [53, 26];
+    for (let i = 0; i < world.beyond.length; i++) {
+      if (world.beyond[i] !== manor) continue;
+      const x = i % map.w;
+      const y = Math.floor(i / map.w);
+      if (Math.hypot(x - 52.5, y - 27) > Math.hypot(far[0] - 52.5, far[1] - 27)) far = [x, y];
+    }
+    expect(Math.hypot(far[0] - 52.5, far[1] - 27)).toBeGreaterThan(6);
+    for (const target of [far, [52, 19]] as [number, number][]) {
+      const farmer = createWorld(map, FARMER_BOY, 'farmer-boy');
+      tapWorld(farmer, ...px(target[0], target[1]));
+      const events = run(farmer, 30, (all) => all.some((e) => e.type === 'gate'));
+      expect(events.some((e) => e.type === 'gate' && e.reason === '양반 댁 안에는 부름이 있을 때만 들어갔어요'), String(target)).toBe(true);
+      const [tx, ty] = tileOf(farmer.player);
+      expect(ty, String(target)).toBe(28);
+      expect(tx === 52 || tx === 53, String(target)).toBe(true);
+    }
+    // 문과 상관없는 지붕(우리 집)을 누르면 가까운 데까지 갈 뿐 까닭이 뜨지 않는다
+    tapWorld(world, ...px(38, 31));
+    expect(run(world, 10).some((e) => e.type === 'gate')).toBe(false);
   });
 
   it('자판으로 밀어도 닫힌 문을 넘지 못한다', () => {
@@ -197,14 +346,20 @@ describe('막힌 길의 까닭', () => {
   it('문 앞을 지나가기만 할 때는 까닭이 뜨지 않는다(문 쪽으로 가려 할 때만 뜬다)', () => {
     // 노비 집 아이가 집에서 우물로 가는 길은 주인댁 대문 앞을 지난다
     const world = createWorld(map, NOBI_GIRL, 'nobi-girl');
-    const well = world.spots.find((s) => s.id === 'well')!;
-    walkToSpot(world, well);
-    const events = run(world, 20, (all) => all.some((e) => e.type === 'spot'));
-    expect(events.some((e) => e.type === 'spot')).toBe(true);
+    const well = mark('well', false);
+    setMarks(world, [well]);
+    walkToMark(world, well);
+    const events = run(world, 20, (all) => all.some((e) => e.type === 'mark'));
+    expect(events.some((e) => e.type === 'mark')).toBe(true);
     expect(events.filter((e) => e.type === 'gate')).toEqual([]);
-    // 대문 앞 칸을 눌러 거기 서 있기만 해도 뜨지 않는다
+    // 대문에서 두 칸 떨어진 길 위에 서 있기만 해도 뜨지 않는다
     tapWorld(world, ...px(53, 29));
     expect(run(world, 8).filter((e) => e.type === 'gate')).toEqual([]);
+    // 자판으로 문 앞을 지나가기만 해도 뜨지 않는다
+    setKeys(world, 1, 0);
+    expect(run(world, 1.2).filter((e) => e.type === 'gate')).toEqual([]);
+    setKeys(world, 0, 0);
+    run(world, 0.2);
     // 문 안쪽을 누르면 문 앞에서 멈추고 까닭이 뜬다
     tapWorld(world, ...px(53, 25));
     const tried = run(world, 6);
@@ -215,6 +370,39 @@ describe('막힌 길의 까닭', () => {
     farmer.player.y = 29 * TILE + 10;
     setKeys(farmer, 0, -1);
     expect(run(farmer, 2).some((e) => e.type === 'gate')).toBe(true);
+  });
+
+  it('자리를 옮긴 사람은 그 자리에서 사라진다: 그리지도, 말이 걸리지도, 길을 막지도 않는다', () => {
+    const world = createWorld(map, FARMER_BOY, 'farmer-boy');
+    const elder = world.actors.find((a) => a.id === 'returned')!;
+    const [tx, ty] = elder.def!.at;
+    expect(elder.hidden).toBe(false);
+    expect(world.grid.blocked[ty * map.w + tx]).toBe(1);
+    setHidden(world, new Set(['returned']));
+    expect(elder.hidden).toBe(true);
+    expect(world.grid.blocked[ty * map.w + tx]).toBe(0);
+    // 서 있던 곳을 눌러도 말이 걸리지 않고, 그 칸으로 걸어 들어갈 수 있다
+    tapWorld(world, elder.x, elder.y - 12);
+    const events = run(world, 12);
+    expect(events.filter((e) => e.type === 'dweller')).toEqual([]);
+    world.player.x = elder.x;
+    world.player.y = elder.y + TILE;
+    const e = interact(world);
+    expect(e && e.type === 'dweller' && e.dweller.id).not.toBe('returned');
+    // 주인공이 그 칸에 서 있는 동안에는 돌아와 서지 않는다(끼이지 않게)
+    const at = tileCenter(tx, ty);
+    world.player.x = at.x;
+    world.player.y = at.y;
+    setHidden(world, new Set());
+    expect(elder.hidden).toBe(true);
+    expect(world.grid.blocked[ty * map.w + tx]).toBe(0);
+    // 비켜난 뒤에 다시 부르면 돌아와 서고 칸이 다시 막힌다
+    world.player.x = at.x + TILE * 3;
+    setHidden(world, new Set());
+    expect(elder.hidden).toBe(false);
+    expect(world.grid.blocked[ty * map.w + tx]).toBe(1);
+    // 다른 사람은 그대로다
+    expect(world.actors.filter((a) => a.hidden).length).toBe(0);
   });
 
   it('담 너머의 사람에게는 말이 걸리지 않는다', () => {
@@ -278,16 +466,28 @@ describe('걸음의 빠르기와 맵의 크기', () => {
     expect(climb).toBeLessThan(11);
   });
 
-  it('큰 느티나무 곁에서는 화면이 나무 쪽으로 쏠리되, 주인공은 화면 안에 남는다', () => {
+  it('느티나무 아래 마당에 들어서면 화면이 나무 쪽으로 천천히 쏠리되, 주인공은 화면 안에 남는다', () => {
     const world = createWorld(map, FARMER_BOY, 'farmer-boy');
     world.view = { w: 480, h: 247 }; // TV(1920×990)의 네 배
     const far = focusOf(world);
     expect(far.y).toBeCloseTo(world.player.y - 10, 5);
     // 느티나무의 미션 자리에 서면
-    const spot = world.spots.find((s) => s.id === 'tree')!;
+    const spot = map.spots.find((s) => s.id === 'tree')!;
     const at = tileCenter(spot.stand[0], spot.stand[1]);
     world.player.x = at.x;
     world.player.y = at.y;
+    // 한 번에 튀지 않는다: 첫 장에서는 한 칸도 쏠리지 않고, 1.4초쯤에 걸쳐 다 쏠린다
+    stepWorld(world, 1 / 60);
+    expect(at.y - 10 - focusOf(world).y).toBeLessThan(2);
+    let step = 0;
+    let before = focusOf(world).y;
+    for (let t = 0; t < 2; t += 1 / 60) {
+      stepWorld(world, 1 / 60);
+      const now = focusOf(world).y;
+      step = Math.max(step, Math.abs(now - before));
+      before = now;
+    }
+    expect(step).toBeLessThan(2.5); // 한 장에 2.5점(세 배에서 8px) 넘게 움직이지 않는다
     const near = focusOf(world);
     expect(near.y).toBeLessThan(at.y - 10 - 30); // 두 칸 넘게 위로
     // 주인공은 화면 아래 끝에서 세 칸 안쪽에 남는다
@@ -295,6 +495,90 @@ describe('걸음의 빠르기와 맵의 크기', () => {
     // 나무갓의 꼭대기 가까이까지 화면에 든다(나무의 발치에서 열 칸 위)
     const top = near.y - world.view.h / 2;
     expect(top).toBeLessThan(35 * TILE - 2 - 150);
+  });
+
+  it('느티나무 앞 큰길과 한양 가는 길을 지나가기만 할 때는 화면이 오르내리지 않는다(review 29번)', () => {
+    for (const [from, to] of [
+      [[40, 38], [16, 38]],
+      [[40, 37], [16, 37]],
+      [[25, 44], [25, 26]],
+    ] as [[number, number], [number, number]][]) {
+      const world = createWorld(map, FARMER_BOY, 'farmer-boy');
+      world.view = { w: 341, h: 196 }; // 1024×588의 세 배
+      const start = tileCenter(from[0], from[1]);
+      world.player.x = start.x;
+      world.player.y = start.y;
+      tapWorld(world, ...px(to[0], to[1]));
+      let worst = 0;
+      for (let t = 0; t < 12; t += 1 / 60) {
+        stepWorld(world, 1 / 60);
+        const f = focusOf(world);
+        worst = Math.max(worst, Math.abs(f.y - (world.player.y - 10)), Math.abs(f.x - world.player.x));
+      }
+      expect(tileOf(world.player), String(to)).toEqual(to);
+      expect(worst, `${from} → ${to}`).toBe(0);
+    }
+  });
+
+  it('길목의 한 줄: 열린 사람이 맵 끝의 길목에 들어서면 어디로 가는 길인지 뜬다(둘 다)', () => {
+    for (const [from, to, text] of [
+      [[8, 37], [0, 37], '이 길을 따라가면 고을의 향교가 나와요.'],
+      [[90, 23], [95, 23], '이 고개를 넘으면 이웃 마을이에요.'],
+    ] as [[number, number], [number, number], string][]) {
+      const world = createWorld(map, FARMER_BOY, 'farmer-boy');
+      const start = tileCenter(from[0], from[1]);
+      world.player.x = start.x;
+      world.player.y = start.y;
+      tapWorld(world, ...px(to[0], to[1]));
+      const events = run(world, 10);
+      expect(events.filter((e) => e.type === 'note').map((e) => (e.type === 'note' ? e.text : '')), text).toEqual([text]);
+      // 길목의 네모는 맵 끝의 두 칸이다: 그 앞 칸에 서 있을 때는 뜨지 않는다
+      const before = createWorld(map, FARMER_BOY, 'farmer-boy');
+      before.player.x = start.x;
+      before.player.y = start.y;
+      expect(run(before, 1).some((e) => e.type === 'note')).toBe(false);
+    }
+  });
+
+  it('하루의 빛: 해 ☀를 하나도 쓰지 않았으면 아침, 다 썼으면 해거름, 그 사이는 한낮이다', () => {
+    expect(dayLight(3, 3)).toBe('morning');
+    expect(dayLight(2, 3)).toBe('noon');
+    expect(dayLight(1, 3)).toBe('noon');
+    expect(dayLight(0, 3)).toBe('dusk');
+    // 해가 둘인 역할(노비 집, 군사)
+    expect(dayLight(2, 2)).toBe('morning');
+    expect(dayLight(1, 2)).toBe('noon');
+    expect(dayLight(0, 2)).toBe('dusk');
+    // 기력이 낮아 해가 하나뿐인 날, 해가 없는 날
+    expect(dayLight(1, 1)).toBe('morning');
+    expect(dayLight(0, 1)).toBe('dusk');
+    expect(dayLight(0, 0)).toBe('morning');
+  });
+
+  it('하루의 빛은 한 번에 바뀌지 않고 2초쯤에 걸쳐 바뀐다', () => {
+    const world = createWorld(map, FARMER_BOY, 'farmer-boy');
+    expect(world.glow).toEqual({ morning: 0, dusk: 0 });
+    world.light = 'dusk';
+    stepWorld(world, 1 / 60);
+    expect(world.glow.dusk).toBeGreaterThan(0);
+    expect(world.glow.dusk).toBeLessThan(0.05);
+    for (let t = 0; t < 2.2; t += 1 / 60) stepWorld(world, 1 / 60);
+    expect(world.glow.dusk).toBe(1);
+    world.light = 'morning';
+    for (let t = 0; t < 1; t += 1 / 60) stepWorld(world, 1 / 60);
+    expect(world.glow.dusk).toBeGreaterThan(0.3);
+    expect(world.glow.dusk).toBeLessThan(0.7);
+    expect(world.glow.morning).toBeGreaterThan(0.3);
+    for (let t = 0; t < 1.5; t += 1 / 60) stepWorld(world, 1 / 60);
+    expect(world.glow).toEqual({ morning: 1, dusk: 0 });
+    // 창이 떠 있는 동안에는 멈춰 있다가(대화 장면이 맵을 덮고 있다), 맵으로 돌아오면 눈앞에서 바뀐다
+    world.paused = true;
+    world.light = 'noon';
+    for (let t = 0; t < 2.2; t += 1 / 60) stepWorld(world, 1 / 60);
+    expect(world.glow).toEqual({ morning: 1, dusk: 0 });
+    world.paused = false;
+    for (let t = 0; t < 2.2; t += 1 / 60) stepWorld(world, 1 / 60);
+    expect(world.glow).toEqual({ morning: 0, dusk: 0 });
   });
 
   it('가 본 곳이 채워진다', () => {

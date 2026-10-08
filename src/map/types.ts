@@ -1,7 +1,8 @@
 // 맵의 자료 꼴. 이 폴더의 셈(길 찾기, 문 판정, 걸을 수 있는 곳)은 캔버스와 화면을 모른다.
 // 그리기는 draw.ts와 src/pixel이 맡는다.
 
-import type { RoleId } from '../engine/types';
+import { meets } from '../engine/conditions';
+import type { Condition, Look as EngineLook, RoleId } from '../engine/types';
 
 /** 타일 한 칸은 16×16 점 */
 export const TILE = 16;
@@ -51,7 +52,7 @@ export function terrainWalkable(t: number): boolean {
 export const isWater = (t: number): boolean => t === T.shallow || t === T.deep || t === T.ford || t === T.bridge;
 
 /** 주인공의 모습. 양반 집 아들·딸은 역할이 모습을 정한다. */
-export type Look = 'boy' | 'girl';
+export type Look = EngineLook;
 
 /** 걷는 사람: 어느 집의 누구인가 */
 export interface Who {
@@ -72,9 +73,14 @@ export interface Placed {
   /** 점 단위로 조금 옮겨 놓기(줄 맞춘 티가 나지 않게) */
   dx?: number;
   dy?: number;
+  /** 이 문(Gate의 id)에 딸린 문짝인가. 그 문이 닫힌 사람에게는 닫힌 모습(variant 1)으로 보인다. */
+  gate?: string;
 }
 
-/** 자리. 미션이나 덤으로 할 일이 벌어질 곳. */
+/**
+ * 자리. 미션이나 덤으로 할 일이 벌어질 곳의 이름과 칸뿐이다.
+ * 거기서 무슨 일이 벌어지는지(미션의 이름, 대화)는 이야기의 자료(Mission, Happening)에 있다.
+ */
 export interface Spot {
   id: string;
   /** 표시가 서는 칸 */
@@ -82,24 +88,24 @@ export interface Spot {
   /** 걸어가서 설 칸(걸을 수 있는 칸이어야 한다) */
   stand: [number, number];
   label: string;
-  /** 무슨 일이 있을 곳인지 한 줄(임시 창) */
-  about: string;
-  kind: 'must' | 'extra';
-  /** 할 일 쪽지에 적히는 이름과 한 줄 */
-  title: string;
-  goal: string;
-  /** 이 역할들에게만 보인다(없으면 모두) */
-  roles?: RoleId[];
 }
 
-/** 막힌 문과 길. 조건이 맞지 않으면 tiles를 지나갈 수 없고 까닭이 뜬다. */
+/**
+ * 막힌 문과 길. shut의 조건 가운데 처음 맞는 것이 있으면 그 사람에게 닫혀 있고 그 까닭이 뜬다.
+ * 조건은 엔진의 것(역할, 모습)을 그대로 쓴다.
+ */
 export interface Gate {
   id: string;
   label: string;
   /** 막히는 칸들(길을 가로지르는 줄) */
   tiles: [number, number][];
-  /** 이 사람에게 막혀 있으면 까닭을, 열려 있으면 null을 돌려준다 */
-  reason: (who: Who) => string | null;
+  shut: { when: Condition; reason: string }[];
+}
+
+/** 이 사람에게 막혀 있으면 까닭을, 열려 있으면 null을 돌려준다 */
+export function gateReason(gate: Gate, who: Who): string | null {
+  const facts = { role: who.role, look: who.look, stats: { living: 0, body: 0, trust: 0 }, flags: [], draw: null, items: [] };
+  return gate.shut.find((row) => meets(row.when, facts))?.reason ?? null;
 }
 
 export interface Zone {
@@ -121,6 +127,8 @@ export interface Dweller {
   id: string;
   /** 그림의 이름(src/pixel/people, animals) */
   sprite: string;
+  /** 이야기의 등장인물(Situation.people의 열쇠). 대화 장면에 서는 사람과 맵의 사람을 잇는다. */
+  person?: string;
   /** 남이 부르는 이름("농민 집 아주머니") */
   label: string;
   /** 어느 집 식구인가(식구가 아니면 비운다) */
@@ -129,6 +137,11 @@ export interface Dweller {
   kin?: string | { boy: string; girl: string };
   /** 어느 집 아이가 보느냐에 따라 달리 부르는 이름(노비 집 아이에게는 "주인댁 아가씨") */
   seenBy?: Partial<Record<House, string>>;
+  /**
+   * 이 조건이 맞을 때만 그 자리에 서 있다(이야기가 흘러 자리를 옮긴 사람 — "우리 논에서 기다리마").
+   * 조건은 엔진의 것이고, 맵 화면이 지금의 판으로 가려 준다. 없으면 늘 서 있다.
+   */
+  shows?: Condition;
   /** 무엇을 하고 있는지 한 줄(눌렀을 때 뜨는 임시 창) */
   about: string;
   at: [number, number];
@@ -165,8 +178,11 @@ export interface MapData {
   zones: Zone[];
   dwellers: Dweller[];
   notes: Note[];
-  /** 화면의 초점을 당기는 큰 볼거리(가까이 가면 화면이 그쪽으로 조금 쏠려 다 보이게 한다). 그림의 점 좌표. */
-  sights: { x: number; y: number; r: number }[];
+  /**
+   * 화면의 초점을 당기는 큰 볼거리. 그 마당(yard, 칸의 네모) 안에 들어서면 화면이 볼거리(x, y — 그림의 점)
+   * 쪽으로 천천히 쏠려 다 보이게 한다. 마당 밖을 지나가기만 할 때는 쏠리지 않는다.
+   */
+  sights: { x: number; y: number; yard: [number, number, number, number] }[];
   /** 역할마다 처음 서는 칸 */
   start: Record<RoleId, [number, number]>;
 }
@@ -175,11 +191,6 @@ export const idx = (map: { w: number }, x: number, y: number): number => y * map
 
 export function inMap(map: { w: number; h: number }, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < map.w && y < map.h;
-}
-
-/** 이 사람에게 보이는 자리(역할에 따라 꼭 푸는 미션의 자리가 다르다) */
-export function spotsFor(map: MapData, who: Who): Spot[] {
-  return map.spots.filter((s) => !s.roles || s.roles.includes(who.role));
 }
 
 /**

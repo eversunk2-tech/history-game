@@ -1,0 +1,626 @@
+/* 대화 장면(미연시 구도)과 일 놀이. 맵의 무대 위에 가득 얹힌다. 승인된 시안(docs/mockup-vn/)의 구도를 따른다.
+   대화 장면이 떠 있는 동안 위쪽 띠는 한 줄(약 56px)로 줄어 있다(band.css의 .band.compact).
+   크기 셈(spec 9.2, 1024×690 — 무대 1024×634): 본문 20px·줄 높이 32px, 대화창은 세 줄 96px + 안쪽 여백 = 약 150px,
+   글 너비 약 850px(한 줄 44~46자).
+   선택지가 뜨면 선 사람이 비켜선다(시안의 둘째 화면). 선택지 묶음의 너비는 --choices-w = min(36rem, 56%)이다
+   (1024 너비에서 573px — 26자 선택지와 30자 까닭 줄이 한 줄에 든다).
+     한 사람: 남은 왼쪽 칸의 가운데로 물러나고, 선택지는 오른쪽에 붙는다.
+     두 사람: 선택지 양옆에 남은 칸으로 하나씩 물러나고, 선택지는 가운데에 놓인다.
+   그래서 선택지가 몇 줄이 되든(잠긴 까닭 줄이 붙어도) 얼굴과 겹치지 않는다. */
+
+.talk {
+  --talk-ink: #1b1410;
+  --talk-paper: #f6efe2;
+  --talk-gold: #d9b872;
+  --talk-box-h: 9.4rem;
+  --talk-gap: 0.75rem;
+  --choices-w: min(36rem, 56%);
+
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  background: #1b1410;
+  color: var(--talk-paper);
+  cursor: pointer;
+}
+
+.talk.step-choose,
+.talk.step-play,
+.talk.step-note {
+  cursor: default;
+}
+
+/* 위아래를 살짝 눌러 글과 사람이 배경에서 떠 보이게 */
+.talk-shade,
+.talk-dim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.talk-shade {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0) 22%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.45));
+}
+
+/* 선택지가 뜨면 무대를 살짝 어둡게 */
+.talk-dim {
+  z-index: 1;
+  background: rgba(20, 16, 13, 0.36);
+}
+
+/* ── 선 사람(두 명까지) ── */
+
+.talk-cast {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.talk-slot {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 25%;
+  width: 50%;
+}
+
+.talk-slot.at-left {
+  left: 3%;
+}
+
+.talk-slot.at-right {
+  left: 47%;
+}
+
+/* 선택지가 뜨면 비켜선다(칸의 너비가 50%이므로 왼쪽 끝 = 설 자리의 가운데 - 25%) */
+.talk.step-choose.cast-1 .talk-slot {
+  left: calc((100% - var(--choices-w) - 0.9rem) / 2 - 25%);
+}
+
+/* 두 사람: 선택지 양옆에 남은 칸의 가운데에서 조금 안쪽(0.25가 한가운데). 좁은 화면에서 얼굴이 화면 끝에 붙지 않게. */
+.talk.step-choose.cast-2 .talk-slot.at-left {
+  left: calc((100% - var(--choices-w)) * 0.28 - 25%);
+}
+
+.talk.step-choose.cast-2 .talk-slot.at-right {
+  left: calc(100% - (100% - var(--choices-w)) * 0.28 - 25%);
+}
+
+/* 비켜설 때 한 걸음 물러난 듯 조금 작아진다(발치를 붙든 채 줄어 머리가 내려온다 — 위쪽 줄의 "나중에 할게요"가 머리를 덮지 않게) */
+.talk-slot .figure-img {
+  transform-origin: 50% 100%;
+}
+
+.talk.step-choose .talk-slot .figure-img {
+  transform: translateX(-50%) scale(0.95);
+}
+
+/* 비켜서는 움직임은 짧게. 움직임을 줄여 달라고 한 기기에서는 바로 옮겨 선다. */
+.talk-slot {
+  transition: left 0.22s ease-out;
+}
+
+.talk-slot .figure-img {
+  transition: transform 0.22s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .talk-slot,
+  .talk-slot .figure-img {
+    transition: none;
+  }
+}
+
+/* 그림 파일: 무릎 위까지, 화면 높이의 8할쯤. 무릎 아래는 대화창에 가려진다. */
+.talk-slot .figure-img {
+  position: absolute;
+  bottom: -22%;
+  left: 50%;
+  height: 114%;
+  width: auto;
+  max-width: none;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 0.5rem 0.7rem rgba(0, 0, 0, 0.35));
+}
+
+/* 그림 파일의 키는 모두 같다. 아이와 노인은 조금 작게 세운다. */
+.talk-slot.age-child .figure-img {
+  height: 100%;
+}
+
+.talk-slot.age-young .figure-img,
+.talk-slot.age-old .figure-img {
+  height: 107%;
+}
+
+/* 코드 그림: 맵의 도트 인물을 크게. 발이 대화창 위에 보이게 세운다. */
+.talk-slot .figure-sprite {
+  position: absolute;
+  bottom: calc(var(--talk-box-h) + var(--talk-gap) + 0.25rem);
+  left: 50%;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 0.3rem 0.25rem rgba(0, 0, 0, 0.35));
+}
+
+/* 말하지 않는 사람은 한 걸음 물러난 듯 살짝 어둡게(누가 말하는지는 이름표가 알려 준다) */
+.talk-slot.quiet .figure-img,
+.talk-slot.quiet .figure-sprite {
+  filter: brightness(0.82) drop-shadow(0 0.3rem 0.25rem rgba(0, 0, 0, 0.3));
+}
+
+/* ── 위쪽: "나중에 할게요"와 일의 이름표 ── */
+
+.talk-top {
+  position: absolute;
+  top: var(--talk-gap);
+  right: 0.9rem;
+  left: 0.9rem;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  pointer-events: none;
+}
+
+.talk-top > * {
+  pointer-events: auto;
+}
+
+.talk-later {
+  flex: none;
+  min-height: 3.5rem;
+  padding: 0 1.2rem;
+  border: 0.12rem solid rgba(233, 217, 180, 0.7);
+  border-radius: 2rem;
+  background: rgba(27, 20, 16, 0.8);
+  color: var(--talk-paper);
+  font-size: 1.25rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.talk-later:active {
+  background: rgba(27, 20, 16, 0.95);
+}
+
+.talk-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.talk-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 1rem;
+  border: 0.1rem solid rgba(233, 217, 180, 0.55);
+  border-radius: 2rem;
+  background: rgba(27, 20, 16, 0.78);
+  color: var(--talk-paper);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.talk-tag .icon {
+  width: 1.3rem;
+  height: 1.3rem;
+}
+
+/* ── 대화창 ── 어두운 반투명 바탕, 금빛 가는 테두리 */
+
+.talk-box {
+  position: absolute;
+  bottom: var(--talk-gap);
+  left: 0.9rem;
+  z-index: 2;
+  /* 글은 창의 위쪽부터 놓인다(단추는 내용을 가운데로 모으므로 따로 잡는다) */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: calc(100% - 1.8rem);
+  min-height: var(--talk-box-h);
+  padding: 1.5rem 2.2rem 1.4rem;
+  border: 0.1rem solid rgba(217, 184, 114, 0.85);
+  border-radius: 0.8rem;
+  background: linear-gradient(to bottom, rgba(20, 16, 13, 0.82), rgba(20, 16, 13, 0.92));
+  box-shadow:
+    inset 0 0 0 0.3rem rgba(20, 16, 13, 0.35),
+    inset 0 0 0 0.38rem rgba(217, 184, 114, 0.28);
+  color: var(--talk-paper);
+  font-size: 1.25rem;
+  font-weight: 500;
+  line-height: 2rem;
+  text-align: left;
+}
+
+button.talk-box {
+  cursor: pointer;
+}
+
+button.talk-box:focus-visible {
+  outline: 0.2rem solid var(--talk-gold);
+  outline-offset: 0.1rem;
+}
+
+/* 이름표: 사람의 말에만 붙는다. "나"의 이야기 줄에는 없다. */
+.talk-name {
+  position: absolute;
+  top: -1.3rem;
+  left: 1.6rem;
+  padding: 0 1.1rem;
+  border-radius: 0.5rem;
+  background: var(--talk-gold);
+  color: var(--talk-ink);
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 2.2rem;
+  white-space: nowrap;
+}
+
+/* 글 너비를 묶어 화면이 넓어져도 줄이 같은 자리에서 바뀌게 한다(한 창은 세 줄까지) */
+.talk-text {
+  display: block;
+  max-width: 53.5rem;
+}
+
+.talk-next {
+  position: absolute;
+  right: 1.4rem;
+  bottom: 0.6rem;
+  color: var(--talk-gold);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* 수치 변화: 화살표·글·숫자를 함께(색만으로 알리지 않는다) */
+.talk-changes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 24rem));
+  gap: 0 2.5rem;
+  width: 100%;
+  max-width: 53.5rem;
+}
+
+.talk-change {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-weight: 700;
+}
+
+.talk-change-arrow {
+  flex: none;
+  width: 1.3rem;
+  color: var(--talk-gold);
+  text-align: center;
+}
+
+.talk-change-nums {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── 선택지 ── 위쪽 줄("나중에 할게요"와 이름표) 아래부터 대화창 위까지의 칸에, 세로 가운데로.
+   두 사람이 섰거나 아무도 없으면 가로 가운데에, 한 사람이 섰으면 오른쪽에 붙는다(사람은 비켜서 있다). */
+
+.talk-choices {
+  position: absolute;
+  top: calc(var(--talk-gap) + 3.5rem + 0.5rem);
+  bottom: calc(var(--talk-box-h) + var(--talk-gap) * 2);
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: var(--choices-w);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.talk.cast-1 .talk-choices {
+  right: 0.9rem;
+  left: auto;
+  transform: none;
+}
+
+/* 세로 가운데(넘칠 만큼 길어지면 위에서부터 놓인다 — 첫 선택지가 위쪽 줄 밑으로 숨지 않게) */
+.talk-choices > li:first-child {
+  margin-top: auto;
+}
+
+.talk-choices > li:last-child {
+  margin-bottom: auto;
+}
+
+.talk-choices:focus {
+  outline: none;
+}
+
+.talk-choices > li {
+  display: flex;
+  pointer-events: auto;
+}
+
+.talk-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0.5rem 1.4rem;
+  border: 0.16rem solid var(--talk-gold);
+  border-radius: 0.8rem;
+  background: rgba(246, 239, 226, 0.96);
+  box-shadow: 0 0.3rem 0.8rem rgba(0, 0, 0, 0.3);
+  color: var(--talk-ink);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+}
+
+button.talk-choice {
+  cursor: pointer;
+}
+
+button.talk-choice:active {
+  background: #fff;
+  transform: translateY(0.06rem);
+}
+
+button.talk-choice:focus-visible {
+  outline: 0.25rem solid #fff;
+  outline-offset: 0.15rem;
+}
+
+/* 잠긴 선택지: 점선 테두리·자물쇠·흐린 글. 까닭 한 줄은 흐리게 하지 않는다. */
+.talk-choice.locked {
+  border-style: dashed;
+  background: rgba(40, 33, 28, 0.9);
+  box-shadow: none;
+}
+
+.talk-choice.locked .talk-choice-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgba(246, 239, 226, 0.64);
+}
+
+.talk-choice.locked .icon {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.talk-choice-reason {
+  display: block;
+  color: var(--talk-paper);
+  font-weight: 600;
+}
+
+/* ── 배움 쪽지와 새 카드 ── */
+
+.talk-note {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+}
+
+.note-paper {
+  width: 38rem;
+  gap: 0.7rem;
+}
+
+.note-text {
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.note-card {
+  padding: 0.5rem 0.9rem 0.6rem;
+  border: 0.14rem solid var(--ink);
+  border-radius: 0.7rem;
+  background: var(--paper);
+}
+
+.note-card.item {
+  border-style: dashed;
+}
+
+.note-card-title {
+  font-size: 1.375rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.note-card-text {
+  line-height: 1.5;
+}
+
+.note-go {
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.note-paper .btn {
+  align-self: flex-end;
+  flex: none;
+}
+
+/* ── 일 놀이 ── */
+
+.talk-play {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+}
+
+.play {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  width: 100%;
+  height: 100%;
+  padding: 0.6rem 0.9rem 0.7rem;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: default;
+}
+
+.play-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 1rem;
+}
+
+.play-title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.play-kicker {
+  margin-right: 0.6rem;
+  padding: 0.05rem 0.6rem;
+  border-radius: 0.5rem;
+  background: var(--ink);
+  color: var(--paper-light);
+  font-size: 1.125rem;
+  font-weight: 700;
+  vertical-align: 0.12em;
+}
+
+.play-rules {
+  flex: 1 1 20rem;
+  line-height: 1.45;
+}
+
+.play-field {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.play-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.play-status {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.play-foot .btn {
+  flex: none;
+}
+
+/* 이제 끝내면 되는 때: 끝내는 단추가 도드라진다(굵은 겹테와 "▶" — 색만으로 알리지 않는다). 잠깐 두근거린다. */
+.play-done.ready {
+  box-shadow:
+    0 0 0 0.18rem var(--paper),
+    0 0 0 0.42rem var(--ink);
+  animation: ready-beat 1.1s ease-in-out 3;
+}
+
+.play-done-go {
+  font-size: 1.125rem;
+}
+
+@keyframes ready-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-done.ready {
+    animation: none;
+  }
+}
+
+/* 볍씨 뿌리기 */
+.sow-box {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0.14rem solid var(--ink);
+  border-radius: 0.6rem;
+  background: #47677b;
+  overflow: hidden;
+}
+
+.sow-canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.sow-canvas:focus-visible {
+  outline: 0.2rem solid var(--focus);
+  outline-offset: -0.2rem;
+}
+
+.sow-basket {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.1rem 0.9rem;
+  font-weight: 800;
+}
+
+.sow-basket-gauge {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.sow-basket-cells {
+  display: flex;
+  gap: 0.14rem;
+}
+
+.sow-basket-cells .cell {
+  width: 0.8rem;
+  height: 1.1rem;
+}
+
+.sow-basket-say {
+  font-weight: 600;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+
+/* 다 뿌렸을 때의 한 줄은 먹빛으로 또렷하게 */
+.sow-basket-say.done {
+  color: var(--ink);
+  font-weight: 800;
+}

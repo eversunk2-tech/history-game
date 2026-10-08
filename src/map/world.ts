@@ -3,7 +3,7 @@
 
 import { clamp, rngOf } from '../pixel/px';
 import { cameraGoal, follow, type Camera } from './camera';
-import { closedGateAt, closedGateNear } from './gates';
+import { closedGateNear, closedGates, type ClosedGate } from './gates';
 import {
   boxFree,
   gridFor,
@@ -18,14 +18,43 @@ import {
   type Pt,
   type WalkGrid,
 } from './path';
-import { dwellerName, spotsFor, TILE, type Dir, type Dweller, type MapData, type Spot, type Who } from './types';
+import { dwellerName, TILE, type Dir, type Dweller, type MapData, type Spot, type Who } from './types';
 
 /** 주인공의 걸음(점/초). 초당 다섯 칸 — 맵의 서쪽 끝에서 동쪽 끝까지 19초쯤 걸린다(spec 9.1). */
 export const WALK_SPEED = 80;
 
+/**
+ * 맵에 떠 있는 표시 하나: 지금 할 수 있는 일(Happening)과 그 일이 벌어지는 자리.
+ * 무엇이 뜰지는 규칙 엔진이 정하고(openHappenings), 맵은 그 자리에 깃발이나 말풍선을 세울 뿐이다.
+ */
+export interface Mark {
+  /** 일(Happening)의 id */
+  id: string;
+  spot: Spot;
+  /** 꼭 푸는 미션의 일인가(깃발). 아니면 덤(말풍선). */
+  must: boolean;
+  /** 지금은 할 수 없는 일인가(해 ☀가 다 졌다). 표시가 엷게 보인다 — 닿으면 까닭이 뜬다. */
+  faded?: boolean;
+}
+
+export type DayLight = 'morning' | 'noon' | 'dusk';
+
+/** 남은 해 ☀로 하루의 때를 정한다: 하나도 쓰지 않았으면 아침, 다 썼으면 해거름, 그 사이는 한낮 */
+export function dayLight(sunsLeft: number, sunsAll: number): DayLight {
+  if (sunsAll <= 0 || sunsLeft >= sunsAll) return 'morning';
+  return sunsLeft <= 0 ? 'dusk' : 'noon';
+}
+
+/** 닫힌 문 위에 뜨는 표시 */
+export interface Lock {
+  closed: ClosedGate;
+  x: number;
+  y: number;
+}
+
 export type WorldEvent =
   | { type: 'gate'; label: string; reason: string }
-  | { type: 'spot'; spot: Spot }
+  | { type: 'mark'; mark: Mark }
   | { type: 'dweller'; dweller: Dweller; name: string }
   | { type: 'note'; text: string };
 
@@ -48,9 +77,11 @@ export interface Actor {
   held: boolean;
   /** 날아오른 높이(새) */
   lift: number;
+  /** 지금은 이 자리에 없다(이야기가 흘러 다른 곳에 가 있다). 그리지도, 말을 걸지도, 길을 막지도 않는다. */
+  hidden: boolean;
 }
 
-type Arrive = { kind: 'spot'; spot: Spot } | { kind: 'dweller'; actor: Actor } | null;
+type Arrive = { kind: 'mark'; mark: Mark } | { kind: 'dweller'; actor: Actor } | null;
 
 export interface World {
   map: MapData;
@@ -58,8 +89,19 @@ export interface World {
   grid: WalkGrid;
   player: Actor;
   actors: Actor[];
-  spots: Spot[];
+  /** 지금 떠 있는 표시(할 수 있는 일) */
+  marks: Mark[];
+  /** 닫힌 문의 표시 */
+  locks: Lock[];
+  /** 칸마다: 닫힌 문 너머라서 못 가는 칸이면 그 문의 차례(locks의), 아니면 -1 */
+  beyond: Int8Array;
   cam: Camera;
+  /** 큰 볼거리 쪽으로 화면이 쏠린 만큼(0~1). 천천히 차고 빠진다. */
+  pull: number;
+  /** 하루의 때: 해 ☀를 쓸 때마다 아침 → 한낮 → 해거름으로 바뀐다(맵 화면이 정해 준다) */
+  light: DayLight;
+  /** 지금 화면에 깔린 빛(0~1). light 쪽으로 천천히 바뀐다. */
+  glow: { morning: number; dusk: number };
   /** 화면에 보이는 넓이(그림의 점) */
   view: { w: number; h: number };
   time: number;
@@ -75,6 +117,8 @@ export interface World {
   shownGate: string | null;
   /** 닫힌 문 너머로 가려고 눌렀는가(지나가기만 할 때는 까닭을 띄우지 않는다) */
   wish: boolean;
+  /** 누른 곳에 다다라 멈춰 섰는지 볼 차례인가(문 앞에 멈춰 서면 까닭이 뜬다) */
+  settle: boolean;
   /** 화살표가 피해 갈 화면의 네모들(할 일 쪽지, 작은 지도). 기기 화소. */
   avoid: { x0: number; y0: number; x1: number; y1: number }[];
   shownNote: string | null;
@@ -111,12 +155,67 @@ function actorOf(d: Dweller): Actor {
     wait: 1 + ((d.at[0] * 13 + d.at[1] * 7) % 30) / 10,
     held: false,
     lift: 0,
+    hidden: false,
   };
 }
 
-export function createWorld(map: MapData, who: Who, heroSprite: string): World {
-  const [sx, sy] = map.start[who.role];
+/** 닫힌 문마다 그 너머(문만 열리면 갈 수 있는 칸)를 적는다 */
+function beyondOf(map: MapData, grid: WalkGrid, from: [number, number], locks: Lock[]): Int8Array {
+  const out = new Int8Array(map.w * map.h).fill(-1);
+  const reach = reachFrom(grid, from[0], from[1]);
+  locks.forEach((lock, index) => {
+    const queue: [number, number][] = [];
+    for (const [x, y] of lock.closed.gate.tiles) {
+      out[y * map.w + x] = index;
+      queue.push([x, y]);
+    }
+    while (queue.length > 0) {
+      const [x, y] = queue.pop() as [number, number];
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= map.w || ny >= map.h) continue;
+        const i = ny * map.w + nx;
+        // 맵에서 걸을 수 있는 칸인데 이 사람은 닿지 못하는 칸만 문 너머로 친다
+        if (out[i] !== -1 || map.blocked[i] === 1 || reach[i] > 0) continue;
+        out[i] = index;
+        queue.push([nx, ny]);
+      }
+    }
+  });
+  return out;
+}
+
+function locksOf(map: MapData, who: Who): Lock[] {
+  return closedGates(map, who).map((closed) => {
+    let sx = 0;
+    let sy = 0;
+    for (const [x, y] of closed.gate.tiles) {
+      sx += x;
+      sy += y;
+    }
+    const n = closed.gate.tiles.length;
+    return { closed, x: (sx / n) * TILE + 8, y: (sy / n) * TILE + 2 };
+  });
+}
+
+/**
+ * 맵에 주인공을 세운다. at을 주면 그 칸에서(이어 하기), 아니면 그 역할이 처음 서는 칸에서 시작한다.
+ * at이 걸을 수 없는 칸이면(맵이 바뀌었을 때) 처음 서는 칸으로 돌아간다.
+ */
+export function createWorld(map: MapData, who: Who, heroSprite: string, startAt?: [number, number]): World {
+  const grid = gridFor(map, who);
+  const first = map.start[who.role] ?? map.start[Object.keys(map.start)[0]];
+  const usable =
+    startAt && walkable(grid, startAt[0], startAt[1]) && reachFrom(grid, first[0], first[1])[startAt[1] * map.w + startAt[0]] > 0;
+  const [sx, sy] = usable && startAt ? startAt : first;
   const at = tileCenter(sx, sy);
+  const locks = locksOf(map, who);
   const player: Actor = {
     id: 'player',
     sprite: heroSprite,
@@ -131,15 +230,21 @@ export function createWorld(map: MapData, who: Who, heroSprite: string): World {
     wait: 0,
     held: false,
     lift: 0,
+    hidden: false,
   };
   const world: World = {
     map,
     who,
-    grid: gridFor(map, who),
+    grid,
     player,
     actors: map.dwellers.map(actorOf),
-    spots: spotsFor(map, who),
+    marks: [],
+    locks,
+    beyond: beyondOf(map, grid, first, locks),
     cam: { x: 0, y: 0 },
+    pull: 0,
+    light: 'noon',
+    glow: { morning: 0, dusk: 0 },
     view: { w: 336, h: 224 },
     time: 0,
     visited: new Uint8Array(map.w * map.h),
@@ -149,11 +254,13 @@ export function createWorld(map: MapData, who: Who, heroSprite: string): World {
     arrive: null,
     shownGate: null,
     wish: false,
+    settle: false,
     avoid: [],
     shownNote: null,
     paused: false,
-    rnd: rngOf(1395 + sx * 31 + sy),
+    rnd: rngOf(1395 + first[0] * 31 + first[1]),
   };
+  world.pull = pullGoal(world);
   snapCamera(world);
   reveal(world);
   return world;
@@ -164,23 +271,36 @@ export function createWorld(map: MapData, who: Who, heroSprite: string): World {
  * 큰 것이 화면에 다 들어오게 한다. 주인공이 화면 가장자리로 밀려나지는 않는다.
  */
 export function focusOf(world: World): Pt {
-  const { map, player, view } = world;
+  const { player, view } = world;
   const px = player.x;
   const py = player.y - 10;
   let fx = px;
   let fy = py;
-  for (const s of map.sights) {
-    const d = Math.hypot(px - s.x, py - s.y);
-    if (d >= s.r) continue;
-    // 반지름의 여섯 푼 안에서는 볼거리의 한가운데를 바라보고, 그 밖에서는 차츰 풀린다
-    const u = clamp((s.r - d) / (s.r * 0.42), 0, 1);
-    const k = u * u * (3 - 2 * u);
+  const s = sightOf(world);
+  if (s && world.pull > 0) {
+    const k = world.pull * world.pull * (3 - 2 * world.pull);
     fx += (s.x - px) * k;
     fy += (s.y - py) * k;
   }
   const mx = Math.max(0, view.w / 2 - 64);
   const my = Math.max(0, view.h / 2 - 50);
   return { x: clamp(fx, px - mx, px + mx), y: clamp(fy, py - my, py + my) };
+}
+
+/** 주인공이 지금 그 마당에 들어서 있는 볼거리 */
+function sightOf(world: World): MapData['sights'][number] | null {
+  const [tx, ty] = tileOf(world.player);
+  for (const s of world.map.sights) {
+    const [x0, y0, x1, y1] = s.yard;
+    if (tx >= x0 && tx <= x1 && ty >= y0 && ty <= y1) return s;
+  }
+  return world.pull > 0 ? (world.map.sights[0] ?? null) : null;
+}
+
+/** 화면이 쏠려야 하는 만큼: 볼거리의 마당 안에 서 있으면 1, 아니면 0(큰길을 지나가기만 할 때는 쏠리지 않는다) */
+function pullGoal(world: World): number {
+  const [tx, ty] = tileOf(world.player);
+  return world.map.sights.some((s) => tx >= s.yard[0] && tx <= s.yard[2] && ty >= s.yard[1] && ty <= s.yard[3]) ? 1 : 0;
 }
 
 export function snapCamera(world: World): void {
@@ -208,6 +328,45 @@ export function spotPoint(spot: Spot): Pt {
   return { x: spot.at[0] * TILE + TILE / 2, y: spot.at[1] * TILE + 4 };
 }
 
+/**
+ * 지금 자리에 없는 사람들을 정한다(맵의 사람 id). 제자리에 서서 길을 막던 사람이면 그 칸도 함께 트이고 막힌다.
+ * 주인공이 서 있는 칸에는 사람이 돌아와 서지 않는다(끼이지 않게 — 주인공이 비켜난 뒤에 다시 부르면 선다).
+ */
+export function setHidden(world: World, ids: ReadonlySet<string>): void {
+  const [px, py] = tileOf(world.player);
+  for (const a of world.actors) {
+    if (!a.def) continue;
+    const hide = ids.has(a.id);
+    const [tx, ty] = a.def.at;
+    if (!hide && a.hidden && a.def.solid && tx === px && ty === py) continue;
+    if (a.hidden === hide) continue;
+    a.hidden = hide;
+    if (hide) {
+      a.held = false;
+      if (world.arrive?.kind === 'dweller' && world.arrive.actor === a) world.arrive = null;
+    }
+    if (a.def.solid) world.grid.blocked[ty * world.grid.w + tx] = hide ? 0 : 1;
+  }
+}
+
+/**
+ * 떠 있는 표시를 바꾼다(일을 하나 마쳤을 때, 새 일이 열렸을 때).
+ * 한 자리에 일이 둘이면 꼭 푸는 미션의 것 하나만 남긴다.
+ */
+export function setMarks(world: World, marks: Mark[]): void {
+  const bySpot = new Map<string, Mark>();
+  for (const mark of marks) {
+    const had = bySpot.get(mark.spot.id);
+    if (!had || (mark.must && !had.must)) bySpot.set(mark.spot.id, mark);
+  }
+  world.marks = [...bySpot.values()];
+  if (world.arrive?.kind === 'mark') {
+    const id = world.arrive.mark.id;
+    if (!world.marks.some((m) => m.id === id)) world.arrive = null;
+  }
+  if (world.guide && !world.marks.some((m) => m.spot.id === world.guide)) world.guide = null;
+}
+
 function setRoute(world: World, to: [number, number], arrive: Arrive): boolean {
   const route = routeTo(world.grid, world.player, to);
   if (!route) return false;
@@ -218,10 +377,23 @@ function setRoute(world: World, to: [number, number], arrive: Arrive): boolean {
   return true;
 }
 
-/** 자리로 걸어간다(할 일 쪽지나 표시를 눌렀을 때) */
-export function walkToSpot(world: World, spot: Spot): void {
+/** 표시가 선 자리로 걸어간다(할 일 쪽지나 표시를 눌렀을 때). 다다르면 그 일이 열린다. */
+export function walkToMark(world: World, mark: Mark): void {
   if (world.paused) return;
-  setRoute(world, spot.stand, { kind: 'spot', spot });
+  world.wish = false;
+  world.settle = false;
+  setRoute(world, mark.spot.stand, { kind: 'mark', mark });
+}
+
+/** 닫힌 문 앞까지 걸어간다. 다다르면 까닭이 뜬다. */
+function walkToGate(world: World, lock: Lock): void {
+  const from = tileOf(world.player);
+  const to = nearestReachable(world.grid, from, lock.x / TILE, lock.y / TILE);
+  world.wish = true;
+  world.settle = true;
+  world.shownGate = null;
+  world.target = null;
+  setRoute(world, to, null);
 }
 
 /** 사람 곁의 빈 칸 가운데 걸어서 닿는 가장 가까운 칸 */
@@ -261,6 +433,28 @@ function besideOf(world: World, actor: Actor): [number, number] | null {
   return best;
 }
 
+/** (fx, fy)칸에서 `within`보다 가까운 문 너머의 칸이 있으면 그 문의 차례를, 없으면 -1을 돌려준다(세 칸 안에서만 찾는다) */
+function beyondNear(world: World, fx: number, fy: number, within: number): number {
+  const { map, beyond } = world;
+  const cx = Math.floor(fx);
+  const cy = Math.floor(fy);
+  let best = -1;
+  let bestD = Math.min(within, 3.5);
+  for (let y = cy - 3; y <= cy + 3; y++) {
+    for (let x = cx - 3; x <= cx + 3; x++) {
+      if (x < 0 || y < 0 || x >= map.w || y >= map.h) continue;
+      const index = beyond[y * map.w + x];
+      if (index < 0) continue;
+      const d = x === cx && y === cy ? 0 : Math.hypot(x + 0.5 - fx, y + 0.5 - fy);
+      if (d < bestD) {
+        bestD = d;
+        best = index;
+      }
+    }
+  }
+  return best;
+}
+
 /**
  * 맵의 한 곳을 눌렀다(점 좌표). 사람이나 표시를 누르면 그 앞까지 가서 말을 걸고,
  * 그 밖에는 그곳까지(갈 수 없으면 가장 가까운 곳까지) 걸어간다. 걷는 도중에 누르면 바로 바뀐다.
@@ -268,19 +462,29 @@ function besideOf(world: World, actor: Actor): [number, number] | null {
 export function tapWorld(world: World, wx: number, wy: number): void {
   if (world.paused) return;
   world.wish = false;
+  // 다시 누르면 문 앞의 까닭도 다시 뜬다
+  world.shownGate = null;
+  world.settle = true;
   // 표시(깃발, 말풍선)
-  for (const spot of world.spots) {
-    const p = spotPoint(spot);
+  for (const mark of world.marks) {
+    const p = spotPoint(mark.spot);
     if (Math.abs(wx - p.x) <= 12 && wy >= p.y - 34 && wy <= p.y + 14) {
-      walkToSpot(world, spot);
+      walkToMark(world, mark);
       world.target = null;
+      return;
+    }
+  }
+  // 막힌 길의 표시: 그 문을 누른 것으로 친다
+  for (const lock of world.locks) {
+    if (Math.abs(wx - lock.x) <= 12 && wy >= lock.y - 34 && wy <= lock.y + 10) {
+      walkToGate(world, lock);
       return;
     }
   }
   // 사람
   let hit: Actor | null = null;
   for (const a of world.actors) {
-    if (!a.def || a.def.animal) continue;
+    if (!a.def || a.def.animal || a.hidden) continue;
     if (Math.abs(wx - a.x) <= 9 && wy >= a.y - 28 && wy <= a.y + 4) {
       if (!hit || a.y > hit.y) hit = a;
     }
@@ -294,12 +498,12 @@ export function tapWorld(world: World, wx: number, wy: number): void {
   }
   const from = tileOf(world.player);
   const to = nearestReachable(world.grid, from, wx / TILE, wy / TILE);
-  // 닫힌 문의 칸이나 그 너머(문만 열리면 갈 수 있는 칸)를 눌렀는가
-  const wx0 = Math.floor(wx / TILE);
-  const wy0 = Math.floor(wy / TILE);
-  const { map } = world;
-  if (wx0 >= 0 && wy0 >= 0 && wx0 < map.w && wy0 < map.h && (to[0] !== wx0 || to[1] !== wy0)) {
-    world.wish = closedGateAt(map, world.who, wx0, wy0) !== null || map.blocked[wy0 * map.w + wx0] === 0;
+  // 닫힌 문의 칸이나 그 너머(문만 열리면 갈 수 있는 칸)를 눌렀으면 그 문 앞으로 간다.
+  // 문 너머의 지붕이나 담을 눌렀을 때도 그렇다: 누른 곳에서 갈 수 있는 칸보다 문 너머의 칸이 더 가까우면 문 너머를 누른 것이다.
+  const behind = beyondNear(world, wx / TILE, wy / TILE, Math.hypot(to[0] + 0.5 - wx / TILE, to[1] + 0.5 - wy / TILE));
+  if (behind >= 0) {
+    walkToGate(world, world.locks[behind]);
+    return;
   }
   if (setRoute(world, to, null)) {
     const p = tileCenter(to[0], to[1]);
@@ -309,6 +513,8 @@ export function tapWorld(world: World, wx: number, wy: number): void {
 
 /** 자판의 방향(−1, 0, 1). 누르는 동안 그쪽으로 걷는다. */
 export function setKeys(world: World, x: number, y: number): void {
+  // 자판을 새로 누르기 시작하면 문 앞의 까닭도 다시 뜰 수 있다(까닭이 사라진 뒤 다시 밀어 볼 때 — review 15번)
+  if (world.keys.x === 0 && world.keys.y === 0 && (x !== 0 || y !== 0)) world.shownGate = null;
   world.keys = { x, y };
 }
 
@@ -318,17 +524,19 @@ export function interact(world: World): WorldEvent | null {
   const p = world.player;
   let best: WorldEvent | null = null;
   let bestD = TILE * 1.9;
-  for (const spot of world.spots) {
-    const s = tileCenter(spot.stand[0], spot.stand[1]);
-    const at = tileCenter(spot.at[0], spot.at[1]);
+  for (const mark of world.marks) {
+    const s = tileCenter(mark.spot.stand[0], mark.spot.stand[1]);
+    const at = tileCenter(mark.spot.at[0], mark.spot.at[1]);
     const d = Math.min(Math.hypot(s.x - p.x, s.y - p.y), Math.hypot(at.x - p.x, at.y - p.y));
     if (d < bestD) {
       bestD = d;
-      best = { type: 'spot', spot };
+      best = { type: 'mark', mark };
     }
   }
+  // 표시가 선 자리에서는 사람보다 그 일이 먼저다(사람이 표시 바로 곁에 서 있을 때가 많다)
+  if (best) return best;
   for (const a of world.actors) {
-    if (!a.def || a.def.animal) continue;
+    if (!a.def || a.def.animal || a.hidden) continue;
     const d = Math.hypot(a.x - p.x, a.y - p.y);
     if (d < bestD) {
       bestD = d;
@@ -348,6 +556,7 @@ function stepPlayer(world: World, dt: number, events: WorldEvent[]): void {
     // 자판으로 걷기 시작하면 누른 곳으로 가던 길은 버린다
     p.route = [];
     world.wish = false;
+    world.settle = true;
     world.arrive = null;
     world.target = null;
     for (const a of world.actors) a.held = false;
@@ -386,10 +595,10 @@ function stepPlayer(world: World, dt: number, events: WorldEvent[]): void {
     if (p.route.length === 0) {
       const arrive = world.arrive;
       world.arrive = null;
-      if (arrive?.kind === 'spot') {
-        const at = tileCenter(arrive.spot.at[0], arrive.spot.at[1]);
+      if (arrive?.kind === 'mark') {
+        const at = tileCenter(arrive.mark.spot.at[0], arrive.mark.spot.at[1]);
         p.dir = dirOf(at.x - p.x, at.y - p.y, p.dir);
-        events.push({ type: 'spot', spot: arrive.spot });
+        events.push({ type: 'mark', mark: arrive.mark });
       } else if (arrive?.kind === 'dweller' && arrive.actor.def) {
         p.dir = dirOf(arrive.actor.x - p.x, arrive.actor.y - p.y, p.dir);
         if (arrive.actor.act !== 'work' && arrive.actor.act !== 'sit') arrive.actor.dir = OPPOSITE[p.dir];
@@ -406,12 +615,13 @@ function stepPlayer(world: World, dt: number, events: WorldEvent[]): void {
   }
   p.t += dt;
 
-  // 닫힌 문으로 가려 할 때 까닭이 뜬다(한 번 뜨면 멀어질 때까지 다시 뜨지 않는다).
-  // 문 앞을 지나가기만 할 때는 뜨지 않는다: 문 너머를 눌러 그 앞에 다다랐거나, 자판으로 문의 칸을 밀 때만.
+  // 닫힌 문 한 칸 안에 멈춰 서면 까닭이 뜬다. 문 앞을 지나가기만 할 때는 뜨지 않는다.
+  // 한 번 뜬 까닭은 다시 누르거나(tapWorld) 세 칸 넘게 물러났다 오면 다시 뜬다. 자판으로는 문의 칸을 밀 때도 뜬다.
   const [tx, ty] = tileOf(p);
   const near = closedGateNear(world.map, world.who, tx, ty, 1);
+  const still = p.route.length === 0 && keys.x === 0 && keys.y === 0;
   if (near) {
-    let trying = world.wish && p.route.length === 0;
+    let trying = still && (world.wish || world.settle);
     if (!trying && (keys.x !== 0 || keys.y !== 0)) {
       trying = near.gate.tiles.some(
         ([gx, gy]) => (gx === tx + keys.x && gy === ty + keys.y) || (gx === tx + keys.x && gy === ty) || (gx === tx && gy === ty + keys.y),
@@ -424,6 +634,7 @@ function stepPlayer(world: World, dt: number, events: WorldEvent[]): void {
   } else if (world.shownGate && !closedGateNear(world.map, world.who, tx, ty, 3)) {
     world.shownGate = null;
   }
+  if (still) world.settle = false;
   // 맵 끝의 길목
   const note = world.map.notes.find((n) => tx >= n.rect[0] && tx <= n.rect[2] && ty >= n.rect[1] && ty <= n.rect[3]);
   if (note) {
@@ -438,7 +649,7 @@ function stepPlayer(world: World, dt: number, events: WorldEvent[]): void {
 function stepActor(world: World, a: Actor, dt: number): void {
   a.t += dt;
   const def = a.def;
-  if (!def) return;
+  if (!def || a.hidden) return;
   const p = world.player;
   const nearPlayer = Math.hypot(p.x - a.x, p.y - a.y);
 
@@ -571,6 +782,16 @@ export function stepWorld(world: World, dt: number): WorldEvent[] {
     world.target.t += dt;
     if (world.player.route.length === 0 || world.target.t > 6) world.target = null;
   }
+  // 하루의 빛은 2초쯤에 걸쳐 바뀐다. 창이 떠 있는 동안에는 멈춰 있다가, 맵으로 돌아오면 눈앞에서 바뀐다.
+  if (!world.paused) {
+    const ease = (now: number, goal: number): number => (goal > now ? Math.min(goal, now + dt / 2) : Math.max(goal, now - dt / 2));
+    world.glow.morning = ease(world.glow.morning, world.light === 'morning' ? 1 : 0);
+    world.glow.dusk = ease(world.glow.dusk, world.light === 'dusk' ? 1 : 0);
+  }
+  // 화면의 쏠림은 한 번에 바뀌지 않고 1.4초쯤에 걸쳐 차고 빠진다
+  const want = pullGoal(world);
+  const rate = dt / 1.4;
+  world.pull = want > world.pull ? Math.min(want, world.pull + rate) : Math.max(want, world.pull - rate);
   const { map, view } = world;
   const f = focusOf(world);
   const goal = cameraGoal(f.x, f.y, view.w, view.h, map.w * TILE, map.h * TILE);

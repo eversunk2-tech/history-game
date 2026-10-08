@@ -1,139 +1,218 @@
-// 완주 시험: 농민 집으로 무작위 1,000판을 돌려 오류 0, 모든 "한 해 이름"이 한 번 이상 나오는지.
+// 완주 시험: 지금 할 수 있는 역할을 모습마다, 만들어진 계절을 아무렇게나 1,000번씩 해 본다(씨앗 고정).
+// 오류 0, 꼭 푸는 미션이 모두 풀림, 계절을 닫을 수 있음, 수치가 언제나 0~10.
+// 인심이 깎이는 길과 잠김을 만나는 길이 있는지 세어 찍는다(없어도 시험은 실패하지 않는다 — 찍어서 알린다).
+// 다만 ① 농민 집 아이의 봄은 인심이 깎이는 길이 있어야 하고(5.2의 9번), 덤의 작은 선택도 두 쪽이 다 나와야 한다.
 // 고르는 난수도 씨앗을 받으므로 이 시험은 돌릴 때마다 같은 결과가 나온다.
+// 역할과 계절이 늘면 이 시험도 따라 늘어난다(만들어진 계절까지만 간다).
 
 import { describe, expect, it } from 'vitest';
-import { packs } from '../src/content';
-import { errorsOf, validatePack } from '../src/content/validate';
-import { bundle } from '../src/content';
-import { advance, choose, newGame, openChoiceIds, playableRoles } from '../src/engine/game';
-import { reviewYear, type YearReview } from '../src/engine/review';
-import { drawValues } from '../src/engine/rng';
-import { SCENES_PER_YEAR, SEASONS, STATS, type GameState, type RoleId, type SituationPack } from '../src/engine/types';
-import { playRandom } from './fixtures';
+import { bundle, packs } from '../src/content';
+import { errorsOf, formatIssue, validatePack } from '../src/content/validate';
+import {
+  choiceViews,
+  closeSeason,
+  currentSeason,
+  missingMusts,
+  missionsOf,
+  newGame,
+  nextSeason,
+  openHappenings,
+  playableRoles,
+  roleOf,
+  seasonReady,
+} from '../src/engine/game';
+import { mulberry32 } from '../src/engine/rng';
+import { SEASONS, STATS, type GameState, type Look, type RoleId, type Season, type SituationPack } from '../src/engine/types';
+import { playSeasonRandom } from './fixtures';
 
 const RUNS = 1000;
 
-interface Tally {
-  games: GameState[];
-  reviews: YearReview[];
+interface Run {
+  /** 만들어진 마지막 계절을 닫은 뒤의 판 */
+  end: GameState;
+  /** 닫은 계절들 */
+  seasons: Season[];
+  /** 도중에 잠긴 선택지를 본 적이 있는가(그 일과 선택지) */
+  locksSeen: Set<string>;
+  /** 해 ☀가 모자라 할 수 없는 덤을 본 적이 있는가 */
+  sunShort: boolean;
 }
 
-function runMany(pack: SituationPack, role: RoleId): Tally {
-  const games: GameState[] = [];
-  const reviews: YearReview[] = [];
-  for (let seed = 1; seed <= RUNS; seed++) {
-    const end = playRandom(pack, role, seed);
-    games.push(end);
-    reviews.push(reviewYear(pack, end));
-  }
-  return { games, reviews };
-}
-
-/** 열린 선택지 가운데 언제나 n번째(없으면 마지막)를 고른다 */
-function playNth(pack: SituationPack, role: RoleId, seed: number, n: number): GameState {
-  let state = newGame(pack, role, seed);
-  while (state.phase !== 'done') {
-    if (state.phase === 'scene') {
-      const open = openChoiceIds(pack, state);
-      state = choose(pack, state, open[Math.min(n, open.length - 1)]);
-    } else {
-      state = advance(pack, state);
+/** 만들어진 계절을 차례로 아무렇게나 하고 닫는다. 다음 계절이 아직 없으면 거기서 멈춘다. */
+function playBuilt(pack: SituationPack, role: RoleId, look: Look, seed: number): Run {
+  const rng = mulberry32(seed * 7919 + 13);
+  const locksSeen = new Set<string>();
+  const seasons: Season[] = [];
+  let sunShort = false;
+  const watch = (state: GameState) => {
+    for (const view of openHappenings(pack, state)) {
+      if (view.noSun) sunShort = true;
+      for (const choice of choiceViews(pack, state, view.happening.id)) {
+        if (choice.locked) locksSeen.add(`${view.happening.id}/${choice.id}`);
+      }
     }
+  };
+  let state = newGame(pack, role, look, seed);
+  for (let turn = 0; turn < SEASONS.length; turn++) {
+    state = playSeasonRandom(pack, state, rng, watch);
+    seasons.push(currentSeason(state));
+    state = closeSeason(pack, state);
+    const upcoming = SEASONS[state.seasonIndex + 1];
+    if (!upcoming || !seasonReady(pack, role, upcoming)) break;
+    state = nextSeason(pack, state);
   }
-  return state;
+  return { end: state, seasons, locksSeen, sunShort };
 }
 
-// 지금 있는 상황과 할 수 있는 집을 모두 돌린다. 상황과 집이 늘면 이 시험도 따라 늘어난다.
-const combos = packs.flatMap((pack) => playableRoles(pack).map((role) => ({ pack, role })));
+// 지금 있는 이야기와 할 수 있는 역할, 그 역할이 될 수 있는 모습을 모두 돌린다.
+const combos = packs.flatMap((pack) =>
+  playableRoles(pack).flatMap((role) => roleOf(pack, role).looks.map((look) => ({ pack, role, look, name: `${pack.situation.id}/${role}/${look}` }))),
+);
 
 describe('완주', () => {
-  it('지금은 ① 1395년 농민 집 하나를 돌린다', () => {
-    expect(combos.map((c) => `${c.pack.situation.id}/${c.role}`)).toEqual(['s1395/farmer']);
+  it('할 수 있는 역할과 모습이 하나 이상 있다(① 농민 집 아이는 두 모습)', () => {
+    const names = combos.map((c) => c.name);
+    expect(names).toEqual(expect.arrayContaining(['s1395/farmer/boy', 's1395/farmer/girl']));
   });
 
-  describe.each(combos)('$pack.situation.id / $role', ({ pack, role }) => {
-    const { games, reviews } = runMany(pack, role);
+  describe.each(combos)('$name', ({ pack, role, look }) => {
+    const runs: Run[] = [];
+    const errors: string[] = [];
+    for (let seed = 1; seed <= RUNS; seed++) {
+      try {
+        runs.push(playBuilt(pack, role, look, seed));
+      } catch (error) {
+        errors.push(`씨앗 ${seed}: ${(error as Error).message}`);
+      }
+    }
+    const games = runs.map((run) => run.end);
+    const mine = pack.happenings.filter((h) => (!h.roles || h.roles.includes(role)) && runs[0]?.seasons.includes(h.season));
 
-    it(`무작위 ${RUNS}판이 모두 오류 없이 8장면에 끝난다`, () => {
-      expect(games).toHaveLength(RUNS);
-      for (const game of games) {
-        expect(game.phase).toBe('done');
-        expect(game.history).toHaveLength(SCENES_PER_YEAR);
-        expect(game.history.map((turn) => turn.season)).toEqual(SEASONS.flatMap((s) => [s, s]));
-        expect(game.flow).toHaveLength(SEASONS.length + 1);
+    it(`아무렇게나 ${RUNS}번을 해도 오류가 없다`, () => {
+      expect(errors).toEqual([]);
+      expect(runs).toHaveLength(RUNS);
+    });
+
+    it('꼭 푸는 미션이 모두 풀리고, 계절을 닫을 수 있다', () => {
+      for (const run of runs) {
+        expect(run.end.phase).toBe('seasonClose');
+        expect(run.end.closings.map((c) => c.season)).toEqual(run.seasons);
+        expect(run.seasons[0]).toBe('spring');
+        for (const season of run.seasons) {
+          const musts = missionsOf(pack, role, season).filter((m) => m.must && m.season === season);
+          expect(musts.length).toBeGreaterThan(0);
+          for (const m of musts) expect(run.end.solved).toContain(m.id);
+        }
+        expect(missingMusts(pack, run.end)).toEqual([]);
+        expect(run.end.flow).toHaveLength(run.seasons.length + 1);
       }
     });
 
-    it('수치는 언제나 0~10이고 선택 하나의 변화는 -3~+3이다', () => {
+    it('수치는 언제나 0~10이고, 변화는 미션의 일 ±3·덤으로 하는 일 ±1 안이다', () => {
       for (const game of games) {
-        for (const turn of game.history) {
+        for (const deed of game.history) {
           for (const stat of STATS) {
-            expect(turn.after[stat]).toBeGreaterThanOrEqual(0);
-            expect(turn.after[stat]).toBeLessThanOrEqual(10);
-            expect(Math.abs(turn.requested[stat])).toBeLessThanOrEqual(3);
-            expect(Math.abs(turn.delta[stat])).toBeLessThanOrEqual(Math.abs(turn.requested[stat]));
+            expect(deed.after[stat]).toBeGreaterThanOrEqual(0);
+            expect(deed.after[stat]).toBeLessThanOrEqual(10);
+            expect(Math.abs(deed.requested[stat])).toBeLessThanOrEqual(deed.sun === 1 ? 1 : 3);
+            expect(Math.abs(deed.delta[stat])).toBeLessThanOrEqual(Math.abs(deed.requested[stat]));
           }
+        }
+        for (const stats of game.flow) for (const stat of STATS) expect(stats[stat] >= 0 && stats[stat] <= 10).toBe(true);
+      }
+    });
+
+    it('덤으로 하는 일은 계절마다 해 ☀만큼만 한다', () => {
+      const suns = roleOf(pack, role).suns;
+      for (const run of runs) {
+        for (const season of run.seasons) {
+          const spent = run.end.history.filter((d) => d.season === season && d.sun === 1).length;
+          expect(spent).toBeLessThanOrEqual(suns);
+        }
+      }
+      // 덤을 하나도 하지 않은 판도, 해를 다 쓴 판도 있다
+      const counts = new Set(games.map((game) => game.history.filter((d) => d.sun === 1 && d.season === 'spring').length));
+      expect(counts.has(0)).toBe(true);
+      expect(counts.has(Math.min(suns, mine.filter((h) => h.season === 'spring' && h.cost === 1).length))).toBe(true);
+    });
+
+    it('같은 일을 두 번 하지 않고, 한 일의 기록이 차례대로 남는다', () => {
+      for (const game of games) {
+        expect(new Set(game.done).size).toBe(game.done.length);
+        expect(game.history.map((d) => d.happeningId)).toEqual(game.done);
+        const solved = game.history.flatMap((d) => d.solved);
+        expect(solved).toEqual(game.solved);
+        expect(new Set(solved).size).toBe(solved.length);
+      }
+    });
+
+    it('모든 일과 모든 선택지가 한 번 이상 나온다(늘 숨어 있거나 늘 잠겨 있는 것이 없다)', () => {
+      const did = new Set(games.flatMap((game) => game.history.map((d) => d.happeningId)));
+      const picked = new Set(games.flatMap((game) => game.history.filter((d) => d.choiceId).map((d) => `${d.happeningId}/${d.choiceId}`)));
+      const rescues = new Set(pack.missions.map((m) => m.rescue).filter(Boolean));
+      const never = mine.filter((h) => !rescues.has(h.id) && !did.has(h.id)).map((h) => h.id);
+      expect(never).toEqual([]);
+      const unpicked = mine.flatMap((h) =>
+        (h.choices ?? []).filter((c) => !c.only || c.only.includes(role)).map((c) => `${h.id}/${c.id}`).filter((id) => !picked.has(id)),
+      );
+      expect(unpicked).toEqual([]);
+      // 일 놀이는 끝난 모습이 모두 나온다
+      for (const h of mine.filter((one) => one.play)) {
+        const ends = new Set(games.flatMap((game) => game.history.filter((d) => d.happeningId === h.id).map((d) => d.play)));
+        expect([...ends].sort()).toEqual(Object.keys(h.play!.flags).sort());
+      }
+    });
+
+    it('인심이 깎이는 길과 잠김을 만나는 길이 있는지 센다(없으면 찍어서 알린다)', () => {
+      const trustLoss = games.filter((game) => game.history.some((d) => d.delta.trust < 0)).length;
+      const lockRuns = runs.filter((run) => run.locksSeen.size > 0).length;
+      const locks = new Set(runs.flatMap((run) => [...run.locksSeen]));
+      const sunOut = games.filter((game) => game.sunsLeft === 0).length;
+      const sunShort = runs.filter((run) => run.sunShort).length;
+      const lows = games.filter((game) => game.history.some((d) => STATS.some((stat) => d.after[stat] <= 1))).length;
+      // 덤으로 하는 일에서 고른 선택지(일/선택지 → 판 수)
+      const extraPicks = new Map<string, number>();
+      for (const game of games) {
+        for (const d of game.history) {
+          if (d.sun === 1 && d.choiceId) extraPicks.set(`${d.happeningId}/${d.choiceId}`, (extraPicks.get(`${d.happeningId}/${d.choiceId}`) ?? 0) + 1);
+        }
+      }
+      console.log(
+        [
+          `[완주] ${pack.situation.id}/${role}/${look} — ${RUNS}판, 닫은 계절: ${runs[0]?.seasons.join(', ')}`,
+          `  인심이 깎인 판: ${trustLoss}${trustLoss === 0 ? '  ← 없다! 인심이 쌓이기만 한다(5.2의 9번)' : ''}`,
+          `  잠긴 선택지를 만난 판: ${lockRuns}${lockRuns === 0 ? '  ← 없다! 아무렇게나 해서는 잠김을 만나지 못한다' : ` (${[...locks].join(', ')})`}`,
+          `  해 ☀를 다 쓴 판: ${sunOut}, 해가 모자라 못 하는 덤을 만난 판: ${sunShort}, 수치가 1 이하로 내려간 판: ${lows}`,
+          `  한 판에 한 일: ${Math.min(...games.map((g) => g.history.length))}~${Math.max(...games.map((g) => g.history.length))}개`,
+          `  덤에서 고른 것: ${[...extraPicks].sort().map(([id, count]) => `${id} ${count}판`).join(', ') || '없음'}`,
+        ].join('\n'),
+      );
+      expect(trustLoss).toBeGreaterThanOrEqual(0);
+      expect(lockRuns).toBeGreaterThanOrEqual(0);
+      if (pack.situation.id === 's1395' && role === 'farmer') {
+        // ①의 봄: "우리 집 봄 일부터 한다"로 인심이 깎이는 판이 있다
+        expect(trustLoss).toBeGreaterThan(0);
+        // 덤의 작은 선택(우물가·뒷산)은 두 쪽이 다 나오고, 어느 쪽을 골라도 덤의 변화는 -1~+1이다
+        const picked = [...extraPicks.keys()];
+        for (const id of ['s1395-spring-well/carry', 's1395-spring-well/listen', 's1395-spring-woods/plenty', 's1395-spring-woods/light']) {
+          expect(picked, id).toContain(id);
         }
       }
     });
 
-    it('모든 "한 해 이름"이 한 번 이상 나온다', () => {
-      const seen = new Set(reviews.map((review) => review.yearName.id));
-      expect([...seen].sort()).toEqual(pack.situation.endings.map((ending) => ending.id).sort());
-    });
-
-    it('올해의 바람은 이루어진 판도, 그렇지 않은 판도 있고 언제나 까닭이 붙는다', () => {
-      expect(reviews.some((review) => review.wish.fulfilled)).toBe(true);
-      expect(reviews.some((review) => !review.wish.fulfilled)).toBe(true);
-      for (const review of reviews) expect(review.wish.reason.length).toBeGreaterThan(0);
-      // 바람을 가리는 줄이 모두 한 번 이상 쓰인다
-      const reasons = new Set(reviews.map((review) => review.wish.reason));
-      expect(reasons.size).toBe(pack.situation.roles[role].wishOutcomes.length);
-    });
-
-    it('뽑기의 모든 값이 나오고, 뽑는 계절이 지난 판에는 언제나 뽑기 결과가 있다', () => {
-      const values = drawValues(pack.situation.draw.kind);
-      if (values.length === 0) return;
-      expect([...new Set(reviews.map((review) => review.draw))].sort()).toEqual([...values].sort());
-    });
-
-    it('모든 선택지가 한 번 이상 골라진다(늘 잠겨 있는 선택지가 없다)', () => {
-      const picked = new Set(games.flatMap((game) => game.history.map((turn) => `${turn.sceneId}/${turn.choiceId}`)));
-      const all = pack.scenes
-        .filter((scene) => scene.kind === 'world' || scene.role === role)
-        .flatMap((scene) => scene.choices.map((choice) => `${scene.id}/${choice.id}`));
-      expect(all.filter((id) => !picked.has(id))).toEqual([]);
-    });
-
-    it('갈린 결과가 모두 한 번 이상 나온다', () => {
-      const shown = new Set(games.flatMap((game) => game.history.map((turn) => turn.result)));
-      const all = pack.scenes
-        .filter((scene) => scene.kind === 'world' || scene.role === role)
-        .flatMap((scene) => scene.choices.flatMap((choice) => [choice.result, ...(choice.variants ?? []).map((v) => v.result)]));
-      expect(all.filter((result) => !shown.has(result))).toEqual([]);
-    });
-
-    it('수치가 0이 된 판도 끝까지 간다', () => {
-      const hitZero = games.filter((game) => game.history.some((turn) => STATS.some((stat) => turn.after[stat] === 0)));
-      expect(hitZero.length).toBeGreaterThan(0);
-      for (const game of hitZero) expect(game.history).toHaveLength(SCENES_PER_YEAR);
-    });
-
-    it('늘 첫 번째·마지막 선택지만 골라도 끝까지 간다', () => {
-      for (let seed = 1; seed <= 50; seed++) {
-        expect(playNth(pack, role, seed, 0).history).toHaveLength(SCENES_PER_YEAR);
-        expect(playNth(pack, role, seed, 99).history).toHaveLength(SCENES_PER_YEAR);
-      }
-    });
-
-    it('같은 씨앗으로 다시 돌리면 같은 판이 나온다', () => {
+    it('같은 씨앗으로 다시 하면 같은 판이 나온다', () => {
       for (const seed of [1, 250, 500, 999]) {
-        expect(playRandom(pack, role, seed)).toEqual(games[seed - 1]);
+        expect(playBuilt(pack, role, look, seed).end).toEqual(games[seed - 1]);
       }
     });
 
-    it('이 상황의 자료는 검사기를 통과한다', () => {
-      expect(errorsOf(validatePack(pack, bundle))).toEqual([]);
+    it('씨앗이 다르면 다른 판이 나온다', () => {
+      const shapes = new Set(games.map((game) => game.history.map((d) => `${d.happeningId}/${d.choiceId ?? ''}/${d.play ?? ''}`).join(' ')));
+      expect(shapes.size).toBeGreaterThan(50);
     });
+  });
+
+  it('돌린 이야기의 자료는 검사기를 통과한다', () => {
+    for (const pack of packs) expect(errorsOf(validatePack(pack, bundle)).map(formatIssue)).toEqual([]);
   });
 });

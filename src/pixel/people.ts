@@ -1196,6 +1196,8 @@ export const VILLAGERS: Record<string, Person> = {
     tool: 'axe',
     sash: CLOTH.hemp,
   },
+  // 농민 집 할머니: 삼베 저고리에 흙빛 치마. 마을 할머니(무명 저고리, 잿빛 치마)와 옷으로 가려진다.
+  farmerGranny: { ...base, build: 'elder', sex: 'f', bottom: 'skirt', hair: 'updo', hairColor: HAIR.white, top: CLOTH.hemp, lower: CLOTH.earth, skin: SKIN.tan },
   // 소를 모는 이웃: 머릿수건을 쓰고 흙빛 바지를 입었다
   plowman: { ...base, build: 'adult', sex: 'm', bottom: 'pants', hair: 'scarf', top: CLOTH.hemp, lower: CLOTH.earth, skin: SKIN.pale },
   // 양반 댁 식구

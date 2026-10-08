@@ -8,7 +8,7 @@
 // 1395년에는 볍씨를 논에 바로 뿌렸으므로 봄의 논은 갈아엎은 흙과 물 댄 논이다.
 // 같은 맵이 뒤 이야기에서 덧입혀진다(1795년에 장터가 서는 등). 그래서 한 칸씩 적지 않고 놓는 말로 짓는다.
 
-import type { RoleId } from '../../engine/types';
+import type { Condition, RoleId } from '../../engine/types';
 import { MapBuilder } from '../../map/build';
 import { T, type Dweller, type Gate, type MapData, type Note, type Spot, type Who, type Zone } from '../../map/types';
 import { vnoise } from '../../pixel/px';
@@ -343,7 +343,7 @@ function buildingsOf(b: MapBuilder): void {
   b.rowOf('wallH', 45, 60, 27, [52, 53]);
   b.colOf('wallV', 45, 17, 26);
   b.colOf('wallV', 60, 17, 26);
-  b.put('gate', 51, 27, { variant: 0 });
+  b.put('gate', 51, 27, { variant: 0, gate: 'manor' });
   b.put('manor', 48, 20);
   b.put('wing', 46, 25);
   b.put('jars', 57, 22, { variant: 0 });
@@ -660,6 +660,7 @@ const DWELLERS: Dweller[] = [
   // 마을 어귀
   {
     id: 'granny',
+    person: 'village-grandma',
     sprite: 'granny',
     label: '마을 할머니',
     about: '느티나무 그늘의 너럭돌에 앉아 쉬고 계세요.',
@@ -670,6 +671,7 @@ const DWELLERS: Dweller[] = [
   },
   {
     id: 'returned',
+    person: 'neighbor-elder',
     sprite: 'neighborMan',
     label: '이웃 어른',
     about: '겨울 공사에서 돌아와 마을 사람들과 인사를 나누고 있어요.',
@@ -677,9 +679,23 @@ const DWELLERS: Dweller[] = [
     facing: 'right',
     act: 'stand',
     solid: true,
+    // "우리 논에서 기다리마"라고 한 뒤에는 논에 가 있다
+    shows: { notFlags: ['return.help'] },
+  },
+  {
+    id: 'returnedAtPaddy',
+    person: 'neighbor-elder',
+    sprite: 'neighborMan',
+    label: '이웃 어른',
+    about: '밀린 논갈이를 하러 논에 나와 있어요.',
+    at: [45, 58],
+    facing: 'up',
+    act: 'stand',
+    shows: { flags: ['return.help'] },
   },
   {
     id: 'monk',
+    person: 'monk',
     sprite: 'monk',
     label: '뒷산 절의 스님',
     about: '먼 길을 떠날 채비를 하고 계세요.',
@@ -687,10 +703,13 @@ const DWELLERS: Dweller[] = [
     facing: 'right',
     act: 'stand',
     solid: true,
+    // "절 아래 길에서 짐을 꾸리고 있으마"라고 한 뒤에는 절 가는 길에 가 있다(그 길의 스님이 그분이다)
+    shows: { notFlags: ['return.give'] },
   },
   // 우물가와 마을 안
   {
     id: 'wellWoman',
+    person: 'well-neighbor',
     sprite: 'wellWoman',
     label: '이웃 아주머니',
     about: '우물에서 물을 긷고 있어요.',
@@ -709,29 +728,67 @@ const DWELLERS: Dweller[] = [
     act: 'roam',
     range: 2,
   },
+  // 이웃집 동무는 뒷산에서 나무를 한다(봄의 덤 "뒷산에서 나무하기"에서 만난다)
   {
     id: 'boyKid',
+    person: 'friend-boy',
     sprite: 'boyKid',
     label: '이웃집 동무',
-    about: '타작 마당에서 뛰어놀고 있어요.',
-    at: [49, 41],
-    facing: 'right',
+    about: '뒷산에서 마른 가지를 줍고 있어요.',
+    at: [41, 9],
+    facing: 'left',
     act: 'roam',
-    range: 3,
+    range: 1,
   },
   {
     id: 'girlKid',
     sprite: 'girlKid',
     label: '이웃집 동무',
-    about: '타작 마당에서 뛰어놀고 있어요.',
+    about: '타작 마당에서 누렁이와 뛰어놀고 있어요.',
     at: [51, 42],
     facing: 'left',
     act: 'roam',
     range: 3,
   },
+  // 뒷산 절의 스님들: 떠날 채비를 한다(절 마당에 한 분, 절 가는 길에 한 분, 마을 어귀에 한 분)
+  {
+    id: 'templeMonk',
+    person: 'monk',
+    sprite: 'monk',
+    label: '뒷산 절의 스님',
+    about: '절 마당에서 떠날 짐을 싸고 계세요.',
+    at: [70, 11],
+    facing: 'left',
+    act: 'stand',
+    solid: true,
+  },
+  {
+    id: 'roadMonk',
+    person: 'monk',
+    sprite: 'monk',
+    label: '뒷산 절의 스님',
+    about: '절 가는 길에서 짐을 꾸리고 계세요.',
+    at: [71, 18],
+    facing: 'left',
+    act: 'stand',
+    solid: true,
+  },
   // 우리 집(농민 집)과 논
   {
+    id: 'farmerGranny',
+    sprite: 'farmerGranny',
+    label: '농민 집 할머니',
+    house: 'farmer',
+    kin: '할머니',
+    about: '집 앞에 앉아 봄볕을 쬐고 계세요.',
+    at: [36, 33],
+    facing: 'down',
+    act: 'sit',
+    solid: true,
+  },
+  {
     id: 'mother',
+    person: 'mother',
     sprite: 'mother',
     label: '농민 집 아주머니',
     house: 'farmer',
@@ -744,6 +801,7 @@ const DWELLERS: Dweller[] = [
   },
   {
     id: 'father',
+    person: 'father',
     sprite: 'father',
     label: '농민 집 아저씨',
     house: 'farmer',
@@ -878,101 +936,22 @@ const DWELLERS: Dweller[] = [
   { id: 'ox', sprite: 'ox', label: '소', about: '', at: [31, 31], facing: 'right', act: 'stand', animal: true, solid: true },
 ];
 
+// 자리: 일이 벌어질 수 있는 곳의 이름과 칸. 거기서 무슨 일이 벌어지는지는 이야기의 자료(Mission, Happening)가 정한다.
 const SPOTS: Spot[] = [
-  {
-    id: 'tree',
-    at: [29, 35],
-    stand: [29, 36],
-    label: '마을 어귀 느티나무',
-    about: '겨울 공사에서 돌아온 이웃과 떠나는 스님들을 만나는 곳이에요.',
-    kind: 'must',
-    title: '돌아온 사람들, 떠나는 스님들',
-    goal: '느티나무 아래에서 겨울 공사 이야기를 듣는다',
-  },
-  {
-    id: 'ourPaddy',
-    at: [43, 54],
-    stand: [44, 54],
-    label: '우리 논',
-    about: '아버지와 볍씨를 어디에 뿌릴지 정하고 손수 뿌리는 곳이에요.',
-    kind: 'must',
-    title: '볍씨 뿌리기',
-    goal: '우리 논에서 볍씨를 어디에 뿌릴지 정한다',
-    roles: ['farmer'],
-  },
-  {
-    id: 'clanPaddy',
-    at: [57, 48],
-    stand: [56, 48],
-    label: '집안 논',
-    about: '한양에 가신 아버지 대신 일꾼들과 논을 살피는 곳이에요.',
-    kind: 'must',
-    title: '집안 논 살피기',
-    goal: '집안 논에서 일꾼들과 논을 살핀다',
-    roles: ['son'],
-  },
-  {
-    id: 'innerYard',
-    at: [53, 22],
-    stand: [53, 23],
-    label: '안마당',
-    about: '언니의 혼례를 앞두고 새 식구를 맞을 채비를 하는 곳이에요.',
-    kind: 'must',
-    title: '언니의 혼례',
-    goal: '안마당에서 새 식구를 맞을 채비를 한다',
-    roles: ['daughter'],
-  },
-  {
-    id: 'manorFront',
-    at: [51, 29],
-    stand: [52, 29],
-    label: '주인댁 대문 앞',
-    about: '아가씨의 혼례 날, 잔치 심부름을 받는 곳이에요.',
-    kind: 'must',
-    title: '아가씨의 혼례 날',
-    goal: '주인댁 대문 앞에서 잔치 심부름을 받는다',
-    roles: ['nobi'],
-  },
-  {
-    id: 'well',
-    at: [46, 32],
-    stand: [46, 34],
-    label: '우물가',
-    about: '물 길으러 온 이웃에게 겨울 궁궐 공사 이야기를 듣는 곳이에요.',
-    kind: 'extra',
-    title: '우물가 이웃의 이야기',
-    goal: '우물가에서 겨울 궁궐 공사 이야기를 듣는다',
-  },
-  {
-    id: 'temple',
-    at: [69, 11],
-    stand: [69, 12],
-    label: '뒷산 절',
-    about: '스님들이 떠나 조용해진 절이에요.',
-    kind: 'extra',
-    title: '스님이 떠난 뒷산 절',
-    goal: '뒷산 절에 올라가 본다',
-  },
-  {
-    id: 'granny',
-    at: [31, 34],
-    stand: [31, 35],
-    label: '느티나무 그늘',
-    about: '마을 할머니께 옛이야기를 듣는 곳이에요.',
-    kind: 'extra',
-    title: '할머니의 옛이야기',
-    goal: '느티나무 그늘에서 할머니의 옛이야기를 듣는다',
-  },
-  {
-    id: 'woods',
-    at: [39, 9],
-    stand: [39, 10],
-    label: '뒷산',
-    about: '땔나무를 하는 곳이에요. 힘은 들지만 살림에 보탬이 돼요.',
-    kind: 'extra',
-    title: '뒷산에서 나무하기',
-    goal: '뒷산에 올라 땔나무를 한다',
-  },
+  { id: 'tree', at: [29, 35], stand: [29, 36], label: '마을 어귀 느티나무' },
+  // 할머니가 앉은 너럭돌의 비스듬한 앞에 선다(바로 앞에 서면 할머니를 가린다)
+  { id: 'treeShade', at: [31, 34], stand: [32, 35], label: '느티나무 그늘' },
+  { id: 'home', at: [39, 33], stand: [39, 34], label: '우리 집 마당' },
+  { id: 'well', at: [46, 32], stand: [46, 34], label: '우물가' },
+  { id: 'ourPaddy', at: [43, 54], stand: [44, 54], label: '우리 논' },
+  { id: 'neighborPaddy', at: [45, 57], stand: [44, 57], label: '이웃집 논' },
+  { id: 'templeRoad', at: [70, 18], stand: [69, 18], label: '절 가는 길' },
+  { id: 'temple', at: [69, 11], stand: [69, 12], label: '뒷산 절' },
+  { id: 'woods', at: [39, 9], stand: [39, 10], label: '뒷산' },
+  // 다른 역할의 봄에 쓸 자리(다음 바퀴)
+  { id: 'clanPaddy', at: [57, 48], stand: [56, 48], label: '집안 논' },
+  { id: 'innerYard', at: [53, 22], stand: [53, 23], label: '안마당' },
+  { id: 'manorFront', at: [51, 29], stand: [52, 29], label: '주인댁 대문 앞' },
 ];
 
 // 구역. 좁은 것부터 적는다(겹치면 먼저 적힌 구역이 이긴다). 걸을 수 있는 칸은 모두 어느 구역에 든다.
@@ -1013,30 +992,36 @@ const START: Record<RoleId, [number, number]> = {
   nobi: [64, 27],
 };
 
+// 여자아이의 모습: 양반 집 딸이거나, 여자아이 모습을 고른 농민·노비 집 아이
+const GIRL: Condition = { anyOf: [{ roles: ['daughter'] }, { roles: ['farmer', 'nobi'], look: 'girl' }] };
+
+// 막힌 문과 길. shut의 조건 가운데 처음 맞는 것의 까닭이 뜬다. 맞는 것이 없으면 열려 있다.
+// 까닭은 사람 탓이 아니라 그때의 제도와 형편을 주어로 쓴다(spec 5.2의 2번).
 function gatesOf(b: MapBuilder): Gate[] {
   return [
     {
       id: 'hyanggyo',
       label: '향교 가는 길',
       tiles: b.walkableIn(3, 34, 3, 41),
-      reason: (who) => {
-        if (who.role === 'nobi') return '노비는 향교에 다닐 수 없었어요';
-        if (isGirl(who)) return '여자는 향교에 다닐 수 없었어요';
-        return null;
-      },
+      shut: [
+        { when: { roles: ['nobi'] }, reason: '노비는 향교에 다닐 수 없었어요' },
+        { when: GIRL, reason: '여자는 향교에 다닐 수 없었어요' },
+      ],
     },
     {
       id: 'hanyang',
       label: '한양 가는 길',
       tiles: b.walkableIn(20, 6, 31, 6),
-      reason: (who) =>
-        isGirl(who) ? '궁궐 공사에는 남자 어른들이 불려 갔어요' : '열다섯 살은 궁궐 공사에 불려 가지 않았어요',
+      shut: [
+        { when: GIRL, reason: '궁궐 공사에는 남자 어른들이 불려 갔어요' },
+        { when: {}, reason: '열다섯 살은 궁궐 공사에 불려 가지 않았어요' },
+      ],
     },
     {
       id: 'pass',
       label: '고갯길',
       tiles: b.walkableIn(93, 21, 93, 25),
-      reason: (who) => (who.role === 'nobi' ? '노비는 주인댁 심부름이 있을 때만 고개를 넘었어요' : null),
+      shut: [{ when: { roles: ['nobi'] }, reason: '노비는 주인댁 심부름이 있을 때만 고개를 넘었어요' }],
     },
     {
       id: 'manor',
@@ -1045,25 +1030,43 @@ function gatesOf(b: MapBuilder): Gate[] {
         [52, 27],
         [53, 27],
       ],
-      reason: (who) =>
-        who.role === 'farmer' || who.role === 'nobi' ? '양반 댁 안에는 부름이 있을 때만 들어갔어요' : null,
+      shut: [{ when: { roles: ['farmer', 'nobi'] }, reason: '양반 댁 안에는 부름이 있을 때만 들어갔어요' }],
     },
   ];
 }
 
-// 가까이 가면 화면이 쏠려 다 보이게 하는 큰 볼거리: 마을 어귀의 느티나무(나무갓의 한가운데)
-const SIGHTS: MapData['sights'] = [{ x: 28 * 16 + 24, y: 35 * 16 - 2 - 92, r: 180 }];
+// 나무 아래 마당에 들어서면 화면이 쏠려 다 보이게 하는 큰 볼거리: 마을 어귀의 느티나무(나무갓의 한가운데).
+// 마당 밖의 큰길을 지나가기만 할 때는 쏠리지 않는다.
+const SIGHTS: MapData['sights'] = [{ x: 28 * 16 + 24, y: 35 * 16 - 2 - 92, yard: [27, 32, 32, 36] }];
 
 let cached: MapData | null = null;
 
 /** 느티골의 봄 맵. 언제 불러도 같은 맵이 나온다. */
-export function buildNeutigol(): MapData {
+function compose(thick: readonly number[]): MapBuilder {
   const b = new MapBuilder(NEUTIGOL_W, NEUTIGOL_H, SEED);
   terrainOf(b);
+  for (const i of thick) b.terrain[i] = T.thicket;
   buildingsOf(b);
   // 제자리에 서 있는 사람은 그 칸을 막는다
   for (const d of DWELLERS) if (d.solid) b.solid[d.at[1] * b.w + d.at[0]] = 1;
   plantsOf(b);
+  return b;
+}
+
+/** 풀밭처럼 보이는 땅(이런 땅이 닿지 못하는 빈터로 남으면 빽빽한 숲으로 채운다) */
+const OPEN_GROUND: readonly number[] = [T.grass, T.meadow, T.forest, T.ridge];
+
+export function buildNeutigol(): MapData {
+  // 덤불과 바위를 흩어 놓다 보면 좁은 목이 막혀 그 너머가 닿지 못하는 빈터가 된다.
+  // 그런 칸은 빽빽한 숲으로 바꾸어 다시 짓는다(풀밭처럼 보이는데 못 들어가는 땅을 남기지 않는다).
+  let thick: number[] = [];
+  let b = compose(thick);
+  for (let round = 0; round < 4; round++) {
+    const more = b.sealedFrom(START.farmer[0], START.farmer[1]).filter((i) => OPEN_GROUND.includes(b.terrain[i]));
+    if (more.length === 0) break;
+    thick = thick.concat(more);
+    b = compose(thick);
+  }
   return b.finish(
     'neutigol',
     START,

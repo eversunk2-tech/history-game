@@ -3,7 +3,7 @@
 // 주인공의 자리는 발끝 가운데의 점 좌표다. 몸은 발 둘레의 작은 상자(가로 8, 세로 6)로 치고,
 // 이 상자가 막힌 칸에 걸치지 않는 곳만 설 수 있다. 상자가 칸보다 작아서 좁은 논둑길도 지나간다.
 
-import { inMap, TILE, type MapData, type Who } from './types';
+import { gateReason, inMap, TILE, type MapData, type Who } from './types';
 
 export interface WalkGrid {
   w: number;
@@ -34,7 +34,7 @@ export function gridFor(map: MapData, who: Who | null): WalkGrid {
   const blocked = map.blocked.slice();
   if (who) {
     for (const gate of map.gates) {
-      if (gate.reason(who) === null) continue;
+      if (gateReason(gate, who) === null) continue;
       for (const [x, y] of gate.tiles) if (inMap(map, x, y)) blocked[y * map.w + x] = 1;
     }
   }

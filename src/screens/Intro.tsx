@@ -1,27 +1,48 @@
-// 4. 나를 소개합니다 — 집과 식구, 시작 수치, 올해의 바람 한 가지.
+// 4. 나를 소개합니다 — 내가 누구이고 어디에 사는지, 식구, 시작 수치, 올해의 바람.
+// 이 화면이 떠 있는 동안 그 이야기의 그림을 뒤에서 미리 받는다(가게가 이야기를 열 때 시킨다).
 
 import type { JSX } from 'preact';
-import { Picture } from '../art/Picture';
-import { STATS, type GameState, type SituationPack } from '../engine/types';
-import { beginYear } from '../state/store';
+import { Figure } from '../art/Figure';
+import { Scenery } from '../art/Scenery';
+import { roleOf } from '../engine/game';
+import { STATS } from '../engine/types';
+import { beginYear, game, heroName, pack } from '../state/store';
 import { Meter } from '../ui/Meter';
-import { Split } from '../ui/Split';
+import { yearAndPlace } from '../ui/where';
 
-export function Intro({ pack, game }: { pack: SituationPack; game: GameState }): JSX.Element {
-  const { situation } = pack;
-  const role = situation.roles[game.role];
+export function Intro(): JSX.Element | null {
+  const p = pack.value;
+  const g = game.value;
+  if (!p || !g) return null;
+  const role = roleOf(p, g.role);
+  const hero = heroName(g.role, g.look);
   return (
-    <main class="screen intro">
-      <Split art={<Picture season="spring" place="yard" people={[game.role]} label={`${role.label}의 집 마당`} />}>
+    <main class="screen intro season-spring">
+      <div class="intro-art">
+        <Scenery story={p.situation.id} place="yard" season="spring" label={`${role.label}의 집 마당`} />
+        <div class="intro-hero">
+          <Figure story={p.situation.id} pic={hero} sprite={hero} fill={0.5} label={role.label} />
+        </div>
+      </div>
+      <section class="intro-panel">
         <p class="kicker">
-          {situation.year}년 느티골 · {role.label}
+          {yearAndPlace(p, g.role)} · {role.label}
         </p>
         <h1 class="screen-title">나를 소개합니다</h1>
         <p class="story">{role.intro}</p>
-        <div class="intro-meters" aria-label="한 해를 시작할 때의 형편">
-          {STATS.map((stat) => (
-            <Meter key={stat} stat={stat} value={game.stats[stat]} about />
-          ))}
+        {role.family && (
+          <p class="intro-family">
+            <span class="box-head">식구</span>
+            {role.family}
+          </p>
+        )}
+        <div class="intro-start">
+          <span class="box-head">한 해를 시작할 때의 형편</span>
+          <div class="intro-meters">
+            {STATS.map((stat) => (
+              <Meter key={stat} stat={stat} value={g.stats[stat]} about />
+            ))}
+          </div>
         </div>
         <div class="wish-box">
           <span class="box-head">올해의 바람</span>
@@ -30,7 +51,7 @@ export function Intro({ pack, game }: { pack: SituationPack; game: GameState }):
         <button type="button" class="btn primary push-down" onClick={beginYear}>
           한 해 시작하기
         </button>
-      </Split>
+      </section>
     </main>
   );
 }

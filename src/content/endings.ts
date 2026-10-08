@@ -9,7 +9,7 @@ export const commonEndings = {
   hard: {
     id: 'hard',
     title: '허리띠를 졸라맨 한 해',
-    line: '곳간이 바닥을 보였지만 식구들은 한 해를 끝까지 살아 냈어요.',
+    line: '집에 남은 곡식은 바닥을 보였지만 식구들은 한 해를 끝까지 살아 냈어요.',
     when: { max: { living: 1 } },
   },
   /** 기력이 바닥났을 때 */
@@ -29,8 +29,8 @@ export const commonEndings = {
   /** 살림을 넉넉히 남겼을 때 */
   full: {
     id: 'full',
-    title: '곳간이 든든한 한 해',
-    line: '부지런히 일하고 아껴서 곳간에 곡식이 넉넉히 남았어요.',
+    title: '곡식이 넉넉한 한 해',
+    line: '부지런히 일하고 아껴서 집에 곡식이 넉넉히 남았어요.',
     when: { min: { living: 6 } },
   },
   /** 그 밖의 모든 때. 목록의 마지막에 둔다. */

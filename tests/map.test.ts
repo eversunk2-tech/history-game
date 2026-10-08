@@ -20,7 +20,7 @@ import {
   walkable,
   type WalkGrid,
 } from '../src/map/path';
-import { dwellerName, houseOf, spotsFor, T, TILE, terrainWalkable, zoneAt, type Who } from '../src/map/types';
+import { dwellerName, gateReason, houseOf, T, TILE, terrainWalkable, zoneAt, type Who } from '../src/map/types';
 
 const WHO: Record<string, Who> = {
   farmerBoy: { role: 'farmer', look: 'boy' },
@@ -195,6 +195,15 @@ describe('화면 따라가기', () => {
     expect(scaleFor(2048, 1408, 2)).toBe(6);
     expect(scaleFor(1536, 939, 1.5)).toBe(4);
     expect(scaleFor(3840, 1980, 2)).toBe(8);
+    // 태블릿 너비에서는 무대가 낮아져도 세 배를 지킨다(위쪽 띠가 두 줄이 되거나 브라우저의 탭 줄이 떠도 그림이 작아지지 않는다).
+    // 1024 너비에서 무대 높이 520 아래로 내려가야 두 배가 된다(review 27번: 예전에는 588 아래에서 두 배였다).
+    for (const h of [640, 610, 588, 570, 560, 540, 520]) expect(scaleFor(1024, h), `1024×${h}`).toBe(3);
+    expect(scaleFor(1024, 519)).toBe(2);
+    expect(scaleFor(1080, 640)).toBe(3);
+    expect(scaleFor(1280, 630)).toBe(3);
+    expect(scaleFor(2048, 1040, 2)).toBe(6);
+    // 좁은 창(태블릿보다 작은 것)은 넓이로 정한다
+    expect(scaleFor(900, 560)).toBe(2);
     for (const [w, h, dpr] of [
       [1180, 756, 1],
       [1366, 586, 1],
@@ -303,37 +312,72 @@ describe('느티골 맵', () => {
     }
   });
 
-  it('봄의 자리: 꼭 푸는 미션은 역할마다 둘, 덤은 넷이다', () => {
-    for (const who of Object.values(WHO)) {
-      const spots = spotsFor(map, who);
-      expect(spots.filter((s) => s.kind === 'must').length, who.role).toBe(2);
-      expect(spots.filter((s) => s.kind === 'extra').map((s) => s.id).sort()).toEqual(['granny', 'temple', 'well', 'woods']);
-      expect(spots.some((s) => s.id === 'tree')).toBe(true);
+  // 농민 집 아이의 봄에 일이 벌어지는 자리(대본과 맞춘 이름)
+  const FARMER_SPOTS = ['tree', 'treeShade', 'home', 'well', 'ourPaddy', 'neighborPaddy', 'templeRoad', 'temple', 'woods'];
+
+  it('자리에는 이름과 칸만 있다: 미션의 글은 맵에 두지 않는다', () => {
+    const ids = map.spots.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of FARMER_SPOTS) expect(ids, id).toContain(id);
+    for (const spot of map.spots) {
+      expect(Object.keys(spot).sort(), spot.id).toEqual(['at', 'id', 'label', 'stand']);
     }
-    expect(spotsFor(map, WHO.farmerBoy).some((s) => s.title === '볍씨 뿌리기')).toBe(true);
-    expect(spotsFor(map, WHO.son).some((s) => s.title === '집안 논 살피기')).toBe(true);
-    expect(spotsFor(map, WHO.daughter).some((s) => s.title === '언니의 혼례')).toBe(true);
-    expect(spotsFor(map, WHO.nobiGirl).some((s) => s.title === '아가씨의 혼례 날')).toBe(true);
   });
 
-  it('누르기만으로 모든 자리에 갈 수 있다: 역할마다 보이는 자리는 처음 선 곳에서 걸어서 닿는다', () => {
-    for (const who of Object.values(WHO)) {
+  it('누르기만으로 모든 자리에 갈 수 있다: 농민 집 아이의 자리는 처음 선 곳에서 걸어서 닿는다', () => {
+    for (const who of [WHO.farmerBoy, WHO.farmerGirl]) {
       const grid = gridFor(map, who);
       const [sx, sy] = map.start[who.role];
       const reach = reachFrom(grid, sx, sy);
-      for (const spot of spotsFor(map, who)) {
+      for (const id of FARMER_SPOTS) {
+        const spot = map.spots.find((s) => s.id === id)!;
         expect(reach[spot.stand[1] * map.w + spot.stand[0]], `${who.role}/${who.look} → ${spot.id}`).toBeGreaterThan(0);
         const route = routeTo(grid, tileCenter(sx, sy), spot.stand);
         expect(route, `${who.role} → ${spot.id}`).not.toBeNull();
       }
     }
+    // 다른 집 아이의 자리(다음 바퀴에 쓴다)도 그 아이가 닿는 곳에 있다
+    for (const [who, id] of [
+      [WHO.son, 'clanPaddy'],
+      [WHO.daughter, 'innerYard'],
+      [WHO.nobiGirl, 'manorFront'],
+    ] as const) {
+      const spot = map.spots.find((s) => s.id === id)!;
+      const [sx, sy] = map.start[who.role];
+      expect(reachFrom(gridFor(map, who), sx, sy)[spot.stand[1] * map.w + spot.stand[0]], id).toBeGreaterThan(0);
+    }
   });
 
-  it('글의 한도: 자리 이름과 할 일 한 줄, 까닭이 길지 않다', () => {
+  it('맵의 사람은 이야기의 등장인물과 이어진다(대화 장면에 서는 사람이 맵에도 서 있다)', () => {
+    const linked = map.dwellers.filter((d) => d.person).map((d) => d.person);
+    for (const person of ['neighbor-elder', 'monk', 'father', 'mother', 'village-grandma', 'well-neighbor', 'friend-boy']) {
+      expect(linked, person).toContain(person);
+    }
+  });
+
+  it('이야기가 흘러 자리를 옮기는 사람: 조건은 자료이고, 옮겨 간 자리에 같은 사람이 선다', () => {
+    const moved = map.dwellers.filter((d) => d.shows);
+    expect(moved.map((d) => d.id).sort()).toEqual(['monk', 'returned', 'returnedAtPaddy']);
+    for (const d of moved) expect(JSON.parse(JSON.stringify(d.shows)), d.id).toEqual(d.shows);
+    const of = (id: string) => map.dwellers.find((d) => d.id === id)!;
+    // 이웃 어른: 논갈이를 거들기로 하면 느티나무 아래에서 이웃집 논으로
+    expect(of('returned').shows).toEqual({ notFlags: ['return.help'] });
+    expect(of('returnedAtPaddy').shows).toEqual({ flags: ['return.help'] });
+    expect(of('returnedAtPaddy').person).toBe('neighbor-elder');
+    const paddy = map.spots.find((s) => s.id === 'neighborPaddy')!;
+    expect(Math.max(Math.abs(of('returnedAtPaddy').at[0] - paddy.at[0]), Math.abs(of('returnedAtPaddy').at[1] - paddy.at[1]))).toBeLessThanOrEqual(3);
+    // 스님: 양식을 보태기로 하면 느티나무 아래를 떠난다(절 가는 길의 스님이 그분이다)
+    expect(of('monk').shows).toEqual({ notFlags: ['return.give'] });
+    const road = map.spots.find((s) => s.id === 'templeRoad')!;
+    expect(map.dwellers.some((d) => d.person === 'monk' && !d.shows && Math.abs(d.at[0] - road.at[0]) <= 3 && Math.abs(d.at[1] - road.at[1]) <= 3)).toBe(true);
+    // 자리를 옮기는 사람이 서는 칸은 걸을 수 있는 땅이다(길을 막는 사람이 아니면 칸이 막히지 않는다)
+    expect(map.blocked[of('returnedAtPaddy').at[1] * map.w + of('returnedAtPaddy').at[0]]).toBe(0);
+  });
+
+  it('글의 한도: 자리 이름과 까닭이 길지 않다', () => {
     for (const spot of map.spots) {
-      expect(spot.title.length, spot.title).toBeLessThanOrEqual(18);
-      expect(spot.goal.length, spot.goal).toBeLessThanOrEqual(40);
-      expect(spot.about.length, spot.about).toBeLessThanOrEqual(60);
+      expect(spot.label.length, spot.label).toBeGreaterThan(0);
+      expect(spot.label.length, spot.label).toBeLessThanOrEqual(10);
     }
     for (const who of Object.values(WHO)) {
       for (const { reason } of closedGates(map, who)) {
@@ -530,7 +574,7 @@ describe('막힌 문과 길(spec 6.3)', () => {
   });
 
   it('향교 가는 길: 양반 집 딸과 여자아이 모습의 농민 집 아이, 노비 집 아이에게 막힌다', () => {
-    const reason = (who: Who): string | null => map.gates.find((g) => g.id === 'hyanggyo')!.reason(who);
+    const reason = (who: Who): string | null => gateReason(map.gates.find((g) => g.id === 'hyanggyo')!, who);
     expect(reason(WHO.son)).toBeNull();
     expect(reason(WHO.farmerBoy)).toBeNull();
     expect(reason(WHO.daughter)).toBe('여자는 향교에 다닐 수 없었어요');
@@ -542,7 +586,7 @@ describe('막힌 문과 길(spec 6.3)', () => {
   });
 
   it('한양 가는 길: 모두에게 막히고 까닭은 모습에 따라 다르다', () => {
-    const reason = (who: Who): string | null => map.gates.find((g) => g.id === 'hanyang')!.reason(who);
+    const reason = (who: Who): string | null => gateReason(map.gates.find((g) => g.id === 'hanyang')!, who);
     expect(reason(WHO.son)).toBe('열다섯 살은 궁궐 공사에 불려 가지 않았어요');
     expect(reason(WHO.farmerBoy)).toBe('열다섯 살은 궁궐 공사에 불려 가지 않았어요');
     expect(reason(WHO.nobiBoy)).toBe('열다섯 살은 궁궐 공사에 불려 가지 않았어요');
@@ -567,7 +611,7 @@ describe('막힌 문과 길(spec 6.3)', () => {
   });
 
   it('고갯길은 노비 집 아이에게, 양반 댁 안은 농민·노비 집 아이에게 막힌다', () => {
-    const reason = (id: string, who: Who): string | null => map.gates.find((g) => g.id === id)!.reason(who);
+    const reason = (id: string, who: Who): string | null => gateReason(map.gates.find((g) => g.id === id)!, who);
     expect(reason('pass', WHO.nobiBoy)).toBe('노비는 주인댁 심부름이 있을 때만 고개를 넘었어요');
     expect(reason('manor', WHO.farmerGirl)).toBe('양반 댁 안에는 부름이 있을 때만 들어갔어요');
     for (const who of [WHO.son, WHO.daughter, WHO.farmerBoy, WHO.farmerGirl]) expect(reason('pass', who)).toBeNull();
@@ -613,7 +657,7 @@ describe('막힌 문과 길(spec 6.3)', () => {
       const reach = reachFrom(grid, sx, sy);
       for (const gate of map.gates) {
         const [x, y] = beyond[gate.id];
-        const open = gate.reason(who) === null;
+        const open = gateReason(gate, who) === null;
         expect(reach[y * map.w + x] > 0, `${who.role}/${who.look} ${gate.id}`).toBe(open);
       }
     }
@@ -637,6 +681,54 @@ describe('막힌 문과 길(spec 6.3)', () => {
     for (const gate of map.gates) {
       expect(gate.tiles.length, gate.id).toBeGreaterThan(0);
       for (const [x, y] of gate.tiles) expect(map.blocked[y * map.w + x], `${gate.id} ${x},${y}`).toBe(0);
+    }
+  });
+});
+
+describe('풀밭처럼 보이는데 못 들어가는 땅이 없다(review 30번)', () => {
+  it('걸을 수 있는 땅이고 세운 것도 없는데 막힌 칸은 없다', () => {
+    const map = buildNeutigol();
+    // 세운 것과 제자리에 선 사람이 차지한 칸을 다시 센다
+    const b = new MapBuilder(map.w, map.h, 1);
+    for (const o of map.objects) b.put(o.kind, o.tx, o.ty);
+    for (const d of map.dwellers) if (d.solid) b.solid[d.at[1] * map.w + d.at[0]] = 1;
+    const sealed: string[] = [];
+    for (let i = 0; i < map.w * map.h; i++) {
+      if (map.blocked[i] === 1 && terrainWalkable(map.terrain[i]) && b.solid[i] === 0) sealed.push(`${i % map.w},${Math.floor(i / map.w)}`);
+    }
+    expect(sealed).toEqual([]);
+  });
+
+  it('맵을 짓는 도구가 닿지 못하는 빈터를 찾아 준다', () => {
+    const b = new MapBuilder(8, 5, 1);
+    b.fill(0, 0, 7, 4, T.thicket);
+    b.fill(0, 0, 2, 4, T.grass);
+    b.fill(5, 1, 6, 2, T.grass); // 숲에 갇힌 빈터
+    expect(b.sealedFrom(0, 0).sort((x, y) => x - y)).toEqual([1 * 8 + 5, 1 * 8 + 6, 2 * 8 + 5, 2 * 8 + 6]);
+  });
+});
+
+describe('문에 딸린 문짝(review 25번)', () => {
+  it('문짝은 어느 문에 딸렸는지 적혀 있고, 그 문이 맵에 있다', () => {
+    const map = neutigol();
+    const doors = map.objects.filter((o) => o.kind === 'gate');
+    expect(doors.length).toBeGreaterThan(0);
+    for (const door of doors) {
+      expect(door.gate, `${door.tx},${door.ty}`).toBeDefined();
+      expect(map.gates.some((g) => g.id === door.gate), door.gate).toBe(true);
+    }
+  });
+
+  it('문의 조건은 자료다: 함수가 아니라 조건과 까닭의 줄이다', () => {
+    const map = neutigol();
+    for (const gate of map.gates) {
+      expect(Array.isArray(gate.shut), gate.id).toBe(true);
+      expect(gate.shut.length, gate.id).toBeGreaterThan(0);
+      for (const row of gate.shut) {
+        expect(typeof row.when, gate.id).toBe('object');
+        expect(typeof row.reason, gate.id).toBe('string');
+      }
+      expect(JSON.parse(JSON.stringify(gate)), gate.id).toEqual(gate);
     }
   });
 });

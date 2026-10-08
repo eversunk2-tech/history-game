@@ -1,170 +1,255 @@
-/* 화면마다의 모양 */
+/* 맵이 아닌 화면들의 모양: 제목, 이야기책, 누가 될까, 나를 소개합니다, 계절 닫기, "다음에 만들어요", 이어 갈 수 없을 때.
+   글은 1.25rem(20px)부터(이름표만 1.125rem), 누르는 것은 높이 3.5rem(56px)부터. */
 
 /* ── 1. 제목 ── */
 
 .title {
   display: grid;
-  grid-template-columns: minmax(0, 6fr) minmax(0, 4fr);
+  grid-template-columns: minmax(0, 55fr) minmax(0, 45fr);
 }
 
 .title-art {
   position: relative;
+  min-width: 0;
   overflow: hidden;
   border-right: 0.14rem solid var(--ink);
 }
 
 .title-box {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.9rem;
+  gap: 0.6rem;
   min-width: 0;
-  padding: 1.5rem 1.75rem;
+  min-height: 0;
+  padding: 1rem 1.75rem 1.9rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
 }
 
 .title-name {
-  font-size: 3rem;
+  font-size: 2.75rem;
   font-weight: 900;
   line-height: 1.2;
+}
+
+.title-lead {
+  line-height: 1.5;
+}
+
+.title-notice,
+.band-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  border: 0.14rem dashed var(--ink);
+  border-radius: 0.6rem;
+  background: var(--paper-deep);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.title-notice-mark,
+.band-notice-mark {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.15rem;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper-light);
+  font-size: 1.125rem;
+  font-weight: 900;
+  line-height: 1.5rem;
+  text-align: center;
 }
 
 .title-buttons {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
-  margin-top: 0.8rem;
-}
-
-/* ── 2. 시기와 상황 고르기 ── */
-
-.pick {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
   gap: 0.6rem;
-  padding: 1rem 1.5rem;
+  margin-top: 0.3rem;
 }
 
-.pick-head,
-.roledraw-head {
+.title-resume {
+  flex-direction: column;
+  gap: 0;
+  min-height: 4.25rem;
+}
+
+.title-saved {
+  font-size: 1.125rem;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.title-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.title-pair .btn {
+  flex-wrap: wrap;
+  padding: 0.4rem 0.5rem;
+}
+
+.title-small {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.title-small .btn {
+  color: var(--ink-soft);
+  border-color: var(--ink-faint);
+}
+
+.title-devbtn {
+  border-style: dashed;
+}
+
+.title-build {
+  position: absolute;
+  right: 0.8rem;
+  bottom: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* ── 2. 이야기책 ── */
+
+.book,
+.rolepick {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1rem 1.5rem 1.1rem;
+}
+
+.book {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.book-head,
+.role-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.pick-guide,
-.roledraw-guide {
+.book-guide,
+.role-guide {
   color: var(--ink-soft);
+  line-height: 1.45;
 }
 
-.pick-rows {
+.book-list {
   display: grid;
-  grid-template-rows: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(27rem, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 0.55rem 0.8rem;
   min-height: 0;
 }
 
-.pick-row {
-  display: grid;
-  grid-template-columns: 6rem minmax(0, 1fr);
-  gap: 0.75rem;
-  min-height: 0;
-}
-
-.pick-group {
+.book-list > li {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 0.14rem solid var(--ink);
-  border-radius: 0.75rem;
-  background: var(--paper-deep);
-  font-size: 1.375rem;
-  font-weight: 800;
-  line-height: 1.25;
-  text-align: center;
-}
-
-.pick-cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
   min-width: 0;
   min-height: 0;
 }
 
-.pick-card {
+.book-card {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.15rem;
+  gap: 0.1rem;
+  width: 100%;
   min-width: 0;
   min-height: 3.5rem;
-  padding: 0.45rem 0.9rem;
-  border: 0.14rem solid var(--ink);
-  border-radius: 0.75rem;
+  padding: 0.35rem 0.9rem;
+  border: 0.2rem solid var(--ink);
+  border-radius: 0.8rem;
   background: var(--paper-light);
   text-align: left;
 }
 
-button.pick-card {
+button.book-card {
   cursor: pointer;
-  border-width: 0.22rem;
 }
 
-.pick-card.soon-card {
-  border-style: dashed;
-  border-color: var(--ink-faint);
+button.book-card:active {
+  background: var(--season-soft);
+}
+
+.book-card.soon-card {
+  border: 0.14rem dashed var(--ink-faint);
   background: transparent;
   color: var(--ink-soft);
 }
 
-.pick-card-top {
+.book-top {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   column-gap: 0.5rem;
   font-size: 1.25rem;
   font-weight: 800;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
-.pick-blurb {
+.book-mark {
+  font-size: 1.375rem;
+}
+
+.book-year {
+  font-variant-numeric: tabular-nums;
+}
+
+.book-blurb {
   display: block;
   font-size: 1.25rem;
   font-weight: 500;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
-.pick-blurb .soon {
-  margin-right: 0.4rem;
+.book-tags {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 
-/* ── 3. 태어날 집 뽑기 ── */
+.book-open {
+  font-size: 1.125rem;
+  font-weight: 800;
+}
 
-.roledraw {
-  display: grid;
+/* ── 3. 누가 될까 ── */
+
+.rolepick {
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 0.9rem;
-  padding: 1rem 1.5rem;
 }
 
 .role-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--role-count, 4), minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
   gap: 1rem;
   min-height: 0;
 }
 
 .role-card {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   min-width: 0;
   min-height: 0;
-  padding: 0.9rem;
+  padding: 0.8rem 0.6rem;
   border: 0.14rem solid var(--ink);
   border-radius: 1rem;
   background: var(--paper-light);
@@ -172,6 +257,10 @@ button.pick-card {
 
 button.role-card {
   cursor: pointer;
+}
+
+button.role-card:active {
+  transform: translateY(0.06rem);
 }
 
 .role-card.back {
@@ -194,20 +283,55 @@ button.role-card {
 .role-face,
 .role-back {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   width: 100%;
   min-height: 0;
 }
 
-.role-figure {
-  flex: 1 1 auto;
+.role-back {
+  justify-content: center;
+}
+
+.role-back-art {
+  flex: 0 1 15rem;
   width: 100%;
   min-height: 0;
-  max-height: 17rem;
+}
+
+/* 그 집 아이의 모습(둘이면 나란히) */
+.role-figures {
+  display: grid;
+  flex: 1 1 0;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  width: 100%;
+  min-height: 0;
+  border-radius: 0.6rem;
+  background: var(--season-soft);
+}
+
+.role-figure,
+.look-figure {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.role-figure .figure-img,
+.look-figure .figure-img {
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: bottom;
 }
 
 .role-label {
@@ -220,41 +344,175 @@ button.role-card {
 
 .role-tag {
   flex: none;
-  padding: 0.1rem 0.7rem;
+  padding: 0.05rem 0.8rem;
   border-radius: 1rem;
   background: var(--ink);
   color: var(--paper-light);
   font-size: 1.125rem;
   font-weight: 700;
+  line-height: 1.6;
 }
 
-.roledraw-foot {
+/* 딱지가 없는 패도 같은 높이를 차지하게 */
+.role-tag-none {
+  flex: none;
+  height: 1.8rem;
+}
+
+.role-card .soon {
+  flex: none;
+}
+
+.role-foot {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: 1.2rem;
   min-height: 3.5rem;
 }
 
-.roledraw-wait {
+.role-say {
+  font-size: 1.375rem;
+  font-weight: 800;
+}
+
+.role-say.wait {
   color: var(--ink-soft);
+  font-size: 1.25rem;
   font-weight: 600;
+}
+
+/* 모습 고르기: 큰 도트 인물 둘 */
+.look-cards {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 22rem);
+  grid-template-rows: minmax(0, 1fr);
+  justify-content: center;
+  gap: 1.5rem;
+  min-height: 0;
+  grid-row: 2 / 4;
+}
+
+.look-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+  min-height: 0;
+  padding: 0.8rem;
+  border: 0.2rem solid var(--ink);
+  border-radius: 1rem;
+  background: var(--paper-light);
+  text-align: center;
+  cursor: pointer;
+}
+
+.look-card:active {
+  transform: translateY(0.06rem);
+}
+
+.look-figure {
+  flex: 1 1 0;
+  border-radius: 0.6rem;
+  background: var(--season-soft);
+}
+
+.look-label {
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.look-go {
+  padding: 0.5rem;
+  border-radius: 0.6rem;
+  background: var(--ink);
+  color: var(--paper-light);
+  font-size: 1.25rem;
+  font-weight: 700;
 }
 
 /* ── 4. 나를 소개합니다 ── */
 
-.intro-meters {
+.intro {
+  display: grid;
+  grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
+}
+
+.intro-art {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-right: 0.14rem solid var(--ink);
+}
+
+/* 주인공은 마당에 서 있다(그림 파일이 없으면 맵의 도트 인물을 크게) */
+.intro-hero {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 9%;
+}
+
+.intro-hero .figure-img {
+  height: 86%;
+  width: auto;
+  max-width: 96%;
+  object-fit: contain;
+  object-position: bottom;
+}
+
+.intro-hero .figure-sprite {
+  filter: drop-shadow(0 0.3rem 0.3rem rgba(0, 0, 0, 0.3));
+}
+
+.intro-panel {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.65rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 1rem 1.5rem 1.1rem;
+  overflow-x: hidden;
+  overflow-y: auto; /* 글이 넘칠 때의 안전망. 글자 수 한도 안에서는 넘치지 않는다 */
+  touch-action: pan-y;
+}
+
+.intro-family {
+  line-height: 1.5;
+}
+
+.intro-meters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.intro-meters .meter {
+  align-items: flex-start;
 }
 
 .intro-meters .meter-body {
   flex: 1 1 auto;
+  min-width: 0;
+}
+
+.intro-meters .meter-top {
+  flex-wrap: wrap;
+}
+
+.intro-meters .meter-about {
+  order: 3;
+  flex-basis: 100%;
+  font-size: 1.125rem;
 }
 
 .intro-meters .meter-cells {
-  gap: 0.2rem;
+  gap: 0.16rem;
+  margin: 0.15rem 0;
 }
 
 .intro-meters .cell {
@@ -262,231 +520,147 @@ button.role-card {
   width: auto;
 }
 
-/* ── 5. 계절 ── */
+/* ── 계절 닫기, "다음에 만들어요" ── 흐린 배경 위의 한지 빛 종이 */
 
-.season-title {
-  font-size: 3.5rem;
-  font-weight: 900;
-  line-height: 1.15;
+.closing-veil {
+  position: absolute;
+  inset: 0;
+  background: rgba(244, 236, 217, 0.62);
 }
 
-.choices {
+.closing-paper {
+  position: absolute;
+  inset: 1.1rem 1.75rem;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  padding: 1rem 1.5rem 1.1rem;
+  border: 0.14rem solid var(--ink);
+  border-radius: 1rem;
+  background: var(--paper-light);
+  box-shadow: 0 0.3rem 0 rgba(46, 41, 37, 0.3);
+}
+
+.closing-paper.narrow {
+  left: 50%;
+  right: auto;
+  width: min(46rem, calc(100% - 3.5rem));
+  transform: translateX(-50%);
+}
+
+.closing-head {
+  padding-bottom: 0.5rem;
+  border-bottom: 0.14rem solid var(--ink);
+}
+
+.next-lead {
+  margin-top: 0.3rem;
+  line-height: 1.5;
+}
+
+.closing-body {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 1.6rem;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+
+.closing-body.one {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.closing-col {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  margin-top: auto;
-}
-
-.choices-ask {
-  font-size: 1.125rem;
-  font-weight: 800;
-  color: var(--ink-soft);
-}
-
-.choice {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  min-height: 3.5rem;
-  padding: 0.5rem 0.9rem;
-  border: 0.14rem solid var(--ink);
-  border-radius: 0.75rem;
-  background: var(--paper-light);
-  font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1.35;
-  text-align: left;
-}
-
-button.choice {
-  cursor: pointer;
-}
-
-button.choice:active {
-  background: var(--season-soft);
-}
-
-.choice-text {
-  display: block;
+  gap: 0.45rem;
   min-width: 0;
 }
 
-.choice-label,
-.choice-reason {
-  display: block;
-}
-
-/* 잠긴 선택지: 흐린 단추 + 자물쇠 + 까닭 한 줄. 까닭은 흐리게 하지 않는다 */
-.choice.locked {
-  align-items: flex-start;
-  border-style: dashed;
-  border-color: var(--ink-faint);
-  background: transparent;
-}
-
-.choice.locked .choice-label {
+.closing-stats {
   display: flex;
-  align-items: flex-start;
-  gap: 0.4rem;
-  color: var(--ink-faint);
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
 }
 
-.choice.locked .icon {
-  width: 1.5rem;
-  height: 1.5rem;
-  margin-top: 0.08rem;
-  color: var(--ink-soft);
-}
-
-.choice-reason {
-  margin-top: 0.1rem;
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-.picked {
-  font-size: 1.25rem;
+.closing-stat {
+  display: grid;
+  grid-template-columns: auto 3.2rem 4.6rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  border: 0.1rem solid var(--ink-faint);
+  border-radius: 0.6rem;
+  background: var(--paper);
   font-weight: 700;
-  line-height: 1.4;
 }
 
-.picked .box-head {
-  display: inline;
-  margin-right: 0.5rem;
-  font-size: inherit;
+.closing-stat-name {
+  font-weight: 800;
 }
 
-.close-list li {
+.closing-stat-nums {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.closing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.closing-list li {
   position: relative;
   padding-left: 1.1rem;
-  font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-.close-list li::before {
+.closing-list li::before {
   position: absolute;
-  left: 0;
+  left: 0.1rem;
   content: '·';
   font-weight: 900;
 }
 
-/* ── 6. 한 해 돌아보기 ── */
-
-.review {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 0.8rem;
-  padding: 1rem 1.5rem;
+.closing-deed-head {
+  display: block;
+  font-weight: 800;
 }
 
-.review-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1.5rem;
-  padding-bottom: 0.7rem;
-  border-bottom: 0.14rem solid var(--ink);
+.closing-deed-text {
+  display: block;
 }
 
-.review-name {
-  min-width: 0;
-}
-
-.review-title {
-  font-size: 2.5rem;
-  font-weight: 900;
-  line-height: 1.25;
-}
-
-.review-flow {
-  flex: none;
-}
-
-.flow {
-  border-collapse: collapse;
-  font-size: 1.25rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.flow th,
-.flow td {
-  padding: 0.1rem 0.7rem;
-  border-bottom: 0.08rem solid var(--ink-faint);
-  text-align: center;
-  font-weight: 700;
-}
-
-.flow thead th {
-  font-size: 1.125rem;
+.closing-deed-tag {
+  margin-left: 0.6rem;
   color: var(--ink-soft);
-}
-
-.flow tbody th {
-  padding-left: 0;
-  text-align: left;
+  font-size: 1.125rem;
+  font-weight: 700;
   white-space: nowrap;
 }
 
-.flow .rowhead {
-  display: inline-flex;
+.closing-col .paper-chips {
+  margin-bottom: 0.3rem;
+}
+
+.closing-none {
+  color: var(--ink-soft);
+}
+
+.closing-foot {
+  display: flex;
   align-items: center;
-  gap: 0.3rem;
-}
-
-.flow .icon {
-  width: 1.4rem;
-  height: 1.4rem;
-}
-
-.review-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1.5rem;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-.review-col {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  min-width: 0;
-}
-
-.review-seasons {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.review-season {
-  display: grid;
-  grid-template-columns: 3.5rem minmax(0, 1fr);
-  gap: 0.7rem;
-  align-items: start;
-}
-
-.review-season-name {
-  padding: 0.1rem 0;
-  border: 0.14rem solid var(--ink);
-  border-radius: 0.6rem;
-  background: var(--season-soft);
-  font-size: 1.125rem;
-  font-weight: 800;
-  text-align: center;
-}
-
-.review-season li {
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.review-foot {
-  display: flex;
-  justify-content: center;
+  justify-content: space-between;
   gap: 1rem;
+}
+
+.closing-saved {
+  color: var(--ink-soft);
+  font-weight: 700;
 }
 
 /* ── 이야기를 이어 갈 수 없을 때 ── */
@@ -509,20 +683,4 @@ button.choice:active {
   border: 0.14rem solid var(--ink);
   border-radius: 1rem;
   background: var(--paper-light);
-}
-
-/* ── 높이가 낮은 화면 ── (맨 끝에 둔다: 위의 규칙들을 덮어야 한다)
-   주소 줄·탭 줄 때문에 높이가 768px에 못 미칠 때.
-   글자와 단추는 줄이지 않고(바탕 글자의 바닥 16px) 글 칸의 빈 곳만 조금 줄인다.
-   그래도 글이 다 들어가지 않으면 글 칸 안에서 세로로 넘겨 본다(.split-panel의 overflow-y: auto). 글은 잘리지 않는다. */
-@media (max-height: 767.98px) {
-  .split-panel {
-    gap: 0.6rem;
-    padding-top: 0.8rem;
-    padding-bottom: 0.8rem;
-  }
-
-  .choices {
-    gap: 0.45rem;
-  }
 }

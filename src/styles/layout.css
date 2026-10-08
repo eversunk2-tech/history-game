@@ -1,4 +1,5 @@
-/* 배치: 가로 화면. 위에 계절 띠와 수치 세 개, 왼쪽 6할 그림, 오른쪽 4할 글과 단추. */
+/* 배치의 뼈대: 화면 하나를 가득 채우는 무대와, 그 안의 화면.
+   가로 화면. 높이는 100dvh(주소 줄·탭 줄이 뜨고 지는 태블릿에서 화면에 보이는 높이). */
 
 .stage {
   position: relative;
@@ -15,42 +16,23 @@
 }
 
 .screen {
+  position: relative;
   width: 100%;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
-/* ── 계절을 사는 화면 ── */
-
-.play {
-  display: grid;
-  grid-template-rows: 4.75rem minmax(0, 1fr);
-}
-
-.hud {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  min-width: 0;
-  padding: 0 1rem;
-  border-bottom: 0.14rem solid var(--ink);
-  background: var(--paper-light);
-}
-
-.season-band {
-  display: flex;
-  flex: none;
-  gap: 0.25rem;
-}
-
+/* 계절 딱지(위쪽 띠) */
 .season-chip {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
-  min-width: 3rem;
+  gap: 0.2rem;
+  min-width: 3.25rem;
   height: 2.75rem;
-  padding: 0 0.4rem;
+  padding: 0 0.5rem;
   border: 0.1rem solid var(--ink-faint);
   border-radius: 0.6rem;
   color: var(--ink-soft);
@@ -59,14 +41,8 @@
   white-space: nowrap;
 }
 
-.season-chip.past {
-  color: var(--ink);
-  border-color: var(--ink-soft);
-  background: var(--paper-deep);
-}
-
 .season-chip.now {
-  border: 0.22rem solid var(--ink);
+  border: 0.2rem solid var(--ink);
   background: var(--season-soft);
   color: var(--ink);
   font-weight: 800;
@@ -79,85 +55,6 @@
 
 .season-mark:empty {
   display: none;
-}
-
-.hud-who {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  min-width: 0;
-  font-size: 1.125rem;
-  line-height: 1.25;
-}
-
-.hud-year {
-  font-weight: 800;
-}
-
-.hud-role {
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
-.hud-draw {
-  color: var(--ink);
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.hud-meters {
-  display: flex;
-  flex: none;
-  gap: 0.8rem;
-}
-
-.hud-home {
-  flex: none;
-  min-height: 3.5rem;
-  padding: 0 0.6rem;
-  border: 0.1rem solid var(--ink-faint);
-  border-radius: 0.6rem;
-  background: transparent;
-  color: var(--ink-soft);
-  font-size: 1.125rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* ── 그림 6 : 글 4 ── */
-
-.split {
-  display: grid;
-  grid-template-columns: minmax(0, 6fr) minmax(0, 4fr);
-  height: 100%;
-  min-height: 0;
-}
-
-.split-art {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  border-right: 0.14rem solid var(--ink);
-}
-
-.picture {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.split-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  min-width: 0;
-  min-height: 0;
-  padding: 1.1rem 1.25rem;
-  overflow-x: hidden;
-  overflow-y: auto; /* 글이 넘칠 때의 안전망. 1024×768에서는 넘치지 않게 글자 수 예산을 잡았다 */
 }
 
 /* 아래쪽에 붙이는 단추 */

@@ -1,31 +1,14 @@
-// 한 해 돌아보기: 계절마다 고른 일, 수치의 흐름, 올해의 바람, 한 해 이름, 뒷이야기.
-// 견주어 보기와 일기 글감은 뒤 바퀴에서 이 파일에 더한다.
+// 한 해 돌아보기: 푼 미션, 수치의 흐름, 올해의 바람, 한 해 이름. 화면·브라우저·시간을 모른다.
+// (한 해를 끝까지 만드는 것은 바퀴 1-라다. 지금은 봄만 있어 화면에서 쓰이지 않는다.)
 
 import { meets } from './conditions';
-import { factsOf } from './game';
-import {
-  SCENES_PER_SEASON,
-  SEASONS,
-  STATS,
-  type Ending,
-  type Facts,
-  type GameState,
-  type RoleDef,
-  type RoleId,
-  type Season,
-  type Situation,
-  type SituationPack,
-  type Stats,
-  type Turn,
-} from './types';
+import { deedsOfSeason, factsOf, roleOf } from './game';
+import { SEASONS, type Closing, type Deed, type Ending, type Facts, type GameState, type RoleDef, type RoleId, type Season, type Situation, type SituationPack, type Stats } from './types';
 
 export interface SeasonSummary {
   season: Season;
-  /** 그 계절에 고른 일(아직 다 고르지 않았으면 고른 것까지만) */
-  turns: Turn[];
-  start: Stats;
-  end: Stats;
-  delta: Stats;
+  deeds: Deed[];
+  closing?: Closing;
 }
 
 export interface WishResult {
@@ -41,6 +24,7 @@ export interface YearReview {
   /** 수치의 흐름: 처음 + 계절 넷 = 다섯 점 */
   flow: Stats[];
   final: Stats;
+  solved: string[];
   wish: WishResult;
   yearName: { id: string; title: string; line: string };
   epilogue: string;
@@ -48,18 +32,10 @@ export interface YearReview {
   draw: string | null;
 }
 
-/** 계절 하나를 간추린다. 계절 닫기 화면에서도 쓴다. */
+/** 계절 하나를 간추린다 */
 export function summarizeSeason(state: GameState, seasonIndex: number): SeasonSummary {
   const season = SEASONS[seasonIndex];
-  const turns = state.history.slice(
-    seasonIndex * SCENES_PER_SEASON,
-    (seasonIndex + 1) * SCENES_PER_SEASON,
-  );
-  const start = turns[0]?.before ?? state.flow[seasonIndex] ?? state.stats;
-  const end = turns[turns.length - 1]?.after ?? start;
-  const delta: Stats = { living: 0, body: 0, trust: 0 };
-  for (const stat of STATS) delta[stat] = end[stat] - start[stat];
-  return { season, turns, start, end, delta };
+  return { season, deeds: deedsOfSeason(state, season), closing: state.closings.find((c) => c.season === season) };
 }
 
 /** 한 해 이름: 위에서부터 처음 맞는 것. 맞는 것이 없으면 마지막 줄. */
@@ -88,7 +64,8 @@ export function reviewYear(pack: SituationPack, state: GameState): YearReview {
     seasons: SEASONS.map((_, index) => summarizeSeason(state, index)),
     flow: state.flow,
     final: state.stats,
-    wish: judgeWish(pack.situation.roles[state.role], facts),
+    solved: state.solved,
+    wish: judgeWish(roleOf(pack, state.role), facts),
     yearName: { id: ending.id, title: ending.title, line: ending.line },
     epilogue: pack.situation.epilogue,
     cards: state.cards,

@@ -16,7 +16,12 @@ export interface Camera {
  * 기기 화소 비율(dpr)이 1보다 크면 그만큼 곱하되 끝수는 버려 정수로 맞춘다.
  */
 export function scaleFor(deviceW: number, deviceH: number, dpr = 1): number {
-  const css = Math.max(2, Math.round(Math.sqrt(((deviceW / dpr) * (deviceH / dpr)) / 100000)));
+  const w = deviceW / dpr;
+  const h = deviceH / dpr;
+  let css = Math.max(2, Math.round(Math.sqrt((w * h) / 100000)));
+  // 태블릿 너비(960 이상)에서는 탭 줄이 떠서 높이가 조금 줄어도 세 배를 지킨다(그림이 갑자기 작아지지 않게).
+  // 무대 높이가 520 아래로 아주 낮아졌을 때만 두 배로 내려간다.
+  if (css < 3 && w >= 960 && h >= 520) css = 3;
   return Math.max(2, Math.round(css * dpr - 0.01));
 }
 

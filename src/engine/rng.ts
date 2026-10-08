@@ -64,7 +64,8 @@ export function shuffle<T>(rng: Rng, list: readonly T[]): T[] {
 }
 
 /**
- * 뽑기 표. 날씨는 가뭄 3 · 보통 5 · 풍년 2 (5절 5번, 가정).
+ * 뽑기 표. 날씨는 궂은 해 3 · 평소 같은 해 5 · 비가 알맞게 온 해 2 (5.2의 4번, 가정).
+ * 값의 이름은 1-가 그대로다(drought = 궂은 해, normal = 평소, bumper = 알맞음). 궂은 해가 어떤 해인지는 이야기가 정한다.
  * 전쟁 뽑기("군대가 지나가는가")는 3바퀴에서 더한다.
  */
 export const DRAW_TABLES: Partial<Record<DrawKind, readonly Weighted[]>> = {
