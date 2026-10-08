@@ -1,3 +1,6 @@
 node_modules
 dist
 .DS_Store
+
+# 만들고 검증하며 찍은 화면(수백 장, 수십 MB). 저장소에는 올리지 않는다
+docs/shots/

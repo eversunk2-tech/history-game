@@ -8,10 +8,23 @@ import { computed, signal } from '@preact/signals';
 import { getPack } from '../content';
 import { advance, choose, lastTurn, newGame, playableRoles } from '../engine/game';
 import { reviewYear, type YearReview } from '../engine/review';
-import type { GameState, RoleId, SituationPack } from '../engine/types';
+import type { GameState, RoleId, Season, SituationPack } from '../engine/types';
+import { SEASONS } from '../engine/types';
+import type { Look } from '../map/types';
 import { loadSaved, withCards, withPlay, writeSaved, type Saved } from './storage';
 
-export type Screen = 'title' | 'pick' | 'roleDraw' | 'intro' | 'play' | 'review' | 'trouble';
+export type Screen =
+  | 'title'
+  | 'pick'
+  | 'roleDraw'
+  | 'intro'
+  | 'play'
+  | 'review'
+  | 'trouble'
+  // 바퀴 1-나: 맵 걸어 보기
+  | 'walkPick'
+  | 'walk'
+  | 'sheet';
 
 export const screen = signal<Screen>('title');
 export const situationId = signal<string | null>(null);
@@ -177,6 +190,75 @@ export function playAgain(): void {
   screen.value = 'roleDraw';
 }
 
+// ── 맵 걸어 보기(바퀴 1-나) ─────────────────────────────────────
+// 규칙 엔진과는 아직 이어지지 않는다. 누가 될지 고르고 느티골을 걸어 다닌다.
+
+export interface Walker {
+  /** 주인공 그림의 이름 */
+  hero: string;
+  role: RoleId;
+  look: Look;
+  /** 고르는 화면에 보이는 이름 */
+  label: string;
+  lookLabel: string;
+}
+
+export const WALKERS: Walker[] = [
+  { hero: 'farmer-boy', role: 'farmer', look: 'boy', label: '농민 집 아이', lookLabel: '남자아이 모습' },
+  { hero: 'farmer-girl', role: 'farmer', look: 'girl', label: '농민 집 아이', lookLabel: '여자아이 모습' },
+  { hero: 'son', role: 'son', look: 'boy', label: '양반 집 아들', lookLabel: '남자아이' },
+  { hero: 'daughter', role: 'daughter', look: 'girl', label: '양반 집 딸', lookLabel: '여자아이' },
+  { hero: 'nobi-boy', role: 'nobi', look: 'boy', label: '노비 집 아이', lookLabel: '남자아이 모습' },
+  { hero: 'nobi-girl', role: 'nobi', look: 'girl', label: '노비 집 아이', lookLabel: '여자아이 모습' },
+];
+
+export const walker = signal<Walker | null>(null);
+/** 그림 견본 화면과 맵의 계절(이번 바퀴의 맵은 봄만 제대로 만들었다) */
+export const artSeason = signal<Season>('spring');
+
+export function goWalkPick(): void {
+  if (tooSoon()) return;
+  screen.value = 'walkPick';
+}
+
+export function startWalk(hero: string): void {
+  const found = WALKERS.find((w) => w.hero === hero);
+  if (!found) return;
+  if (tooSoon()) return;
+  walker.value = found;
+  screen.value = 'walk';
+}
+
+export function goSheet(): void {
+  if (tooSoon()) return;
+  screen.value = 'sheet';
+}
+
+/**
+ * 주소로 바로 들어가기(만드는 사람이 화면을 찍어 볼 때 쓴다. 개발 서버에서만 먹는다).
+ *   ?view=walk&who=farmer-girl   맵 걸어 보기
+ *   ?view=sheet&season=autumn    그림 견본
+ */
+export function openFromUrl(): void {
+  // 빌드본에서는 먹지 않는다(문을 건너뛰어 들어갈 수 있으므로)
+  if (!import.meta.env.DEV) return;
+  try {
+    const q = new URLSearchParams(window.location.search);
+    const view = q.get('view');
+    const season = q.get('season') as Season | null;
+    if (season && SEASONS.includes(season)) artSeason.value = season;
+    if (view === 'sheet') screen.value = 'sheet';
+    else if (view === 'pick') screen.value = 'walkPick';
+    else if (view === 'walk') {
+      const found = WALKERS.find((w) => w.hero === q.get('who')) ?? WALKERS[0];
+      walker.value = found;
+      screen.value = 'walk';
+    }
+  } catch {
+    // 주소를 읽지 못하면 제목 화면에서 시작한다
+  }
+}
+
 export function askHome(): void {
   askingHome.value = true;
 }
@@ -189,6 +271,7 @@ export function goHome(): void {
   askingHome.value = false;
   game.value = null;
   situationId.value = null;
+  walker.value = null;
   screen.value = 'title';
   lastMove = Date.now();
 }

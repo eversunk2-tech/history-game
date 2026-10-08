@@ -14,7 +14,10 @@ import { SeasonOpen } from '../screens/SeasonOpen';
 import { Title } from '../screens/Title';
 import { Trouble } from '../screens/Trouble';
 import { YearReview } from '../screens/YearReview';
-import { askingHome, cancelHome, game, goHome, pack, review, screen, seed } from '../state/store';
+import { MapScreen } from '../screens/MapScreen';
+import { Sheet } from '../screens/Sheet';
+import { WalkPick } from '../screens/WalkPick';
+import { askingHome, cancelHome, game, goHome, pack, review, screen, seed, walker } from '../state/store';
 import { Hud } from '../ui/Hud';
 
 function Play(): JSX.Element | null {
@@ -37,10 +40,10 @@ function HomeConfirm(): JSX.Element {
     <div class="veil" role="dialog" aria-modal="true" aria-label="처음으로 돌아가기">
       <div class="veil-box">
         <p class="veil-ask">처음 화면으로 돌아갈까요?</p>
-        <p class="veil-note">지금 살던 한 해는 여기서 멈춰요.</p>
+        <p class="veil-note">{walker.value ? '걸어 다닌 자리는 남지 않아요.' : '지금 살던 한 해는 여기서 멈춰요.'}</p>
         <div class="veil-buttons">
           <button type="button" class="btn primary" onClick={cancelHome}>
-            계속 살기
+            {walker.value ? '계속 걷기' : '계속 살기'}
           </button>
           <button type="button" class="btn" onClick={goHome}>
             처음으로
@@ -73,6 +76,15 @@ function Current(): JSX.Element | null {
     }
     case 'trouble':
       return <Trouble onHome={goHome} />;
+    case 'walkPick':
+      return <WalkPick />;
+    case 'walk': {
+      const w = walker.value;
+      // key: 다른 사람으로 바꾸면 맵을 새로 연다
+      return w ? <MapScreen key={w.hero} walker={w} /> : <WalkPick />;
+    }
+    case 'sheet':
+      return <Sheet />;
   }
 }
 

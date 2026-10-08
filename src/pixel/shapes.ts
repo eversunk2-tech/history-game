@@ -1,0 +1,315 @@
+// 그림을 이루는 덩어리들: 잎 뭉치(나무갓), 줄기, 돌, 널빤지.
+// 빛은 왼쪽 위에서 온다. 그늘은 오른쪽 아래에 진다. 모든 그림이 이 약속을 지킨다.
+
+import type { Ramp } from './palette';
+import { Px, clamp, hash2, vnoise, type Color } from './px';
+
+/** 세운 것 한 가지의 그림 */
+export interface SpriteDef {
+  /** 움직이는 장들(흔들림). 한 장뿐이면 가만히 있는 그림이다. */
+  frames: Px[];
+  /** 그림 안에서 발치(놓이는 자리)에 해당하는 점 */
+  ax: number;
+  ay: number;
+  /** 바닥 그림자(발치에서의 어긋남과 크기) */
+  shades?: ShadeSpec[];
+  /** 앞뒤 가림의 기준 줄을 발치에서 옮긴다(위로 −) */
+  sort?: number;
+  /** 장을 넘기는 차례(없으면 0,1,2…). 흔들림은 0,1,0,2로 오간다. */
+  seq?: number[];
+  /** 굴뚝 끝(그림 안의 점). 여기서 연기가 피어오른다. */
+  smoke?: { x: number; y: number };
+}
+
+/**
+ * 바닥 그림자. 둥근 얼룩(나무, 돌)이거나, 집의 꼴을 따라 오른쪽 아래로 드리운 그림자(cast).
+ * cast: 벽의 아랫줄이 발치에서 x0~x1에 있고 처마 높이가 h인 집이, 오른쪽으로 side만큼·아래로 depth만큼 그늘을 드리운다.
+ */
+export interface ShadeSpec {
+  dx: number;
+  dy: number;
+  rx: number;
+  ry: number;
+  /** 나뭇잎 사이로 빛이 새는 얼룩 그림자 */
+  dapple?: boolean;
+  /** 큰 나무: 얼룩의 덩어리가 크고 가장자리에만 빛이 샌다 */
+  broad?: boolean;
+  strength?: number;
+  cast?: { x0: number; x1: number; h: number; side: number; depth: number; ragged?: boolean };
+}
+
+// 빛이 오는 쪽(왼쪽 위, 보는 사람 쪽으로 조금)
+const LX = -0.5;
+const LY = -0.72;
+const LZ = 0.48;
+
+export interface Blob {
+  x: number;
+  y: number;
+  r: number;
+  /** 위아래로 눌린 정도(1이면 둥글다) */
+  squash?: number;
+  /** 앞으로 나온 정도(클수록 다른 덩어리를 덮는다) */
+  lift?: number;
+  /** 이 덩어리만 다른 빛깔 단계로(꽃 뭉치) */
+  ramp?: Ramp;
+  /** 이 덩어리만 밝게(+) 어둡게(−) — 뒤쪽 층은 어둡다 */
+  shade?: number;
+}
+
+export interface CanopyOpts {
+  seed: number;
+  /** 잎 뭉치 하나의 크기(점) */
+  clump?: [number, number];
+  /** 가장자리가 삐죽한 정도(솔잎) */
+  spiky?: number;
+  /** 뭉치마다 이 단계로 바뀔 몫(0~1) — 꽃나무의 꽃 뭉치, 새순 */
+  accent?: { ramp: Ramp; share: number };
+  /** 전체를 밝게(+) 또는 어둡게(−) */
+  bias?: number;
+  /** 뭉치 사이 그늘 골의 깊이(기본 0.26). 꽃 뭉치는 얕게 한다. */
+  crease?: number;
+  /** 낱낱이 반짝이는 점의 몫(꽃잎) */
+  sparkle?: number;
+}
+
+/**
+ * 잎 뭉치로 된 나무갓. 덩어리(공)들을 겹쳐 큰 모양을 만들고, 그 위에 작은 잎 뭉치의 결을 얹는다.
+ * 뭉치마다 왼쪽 위가 밝고 오른쪽 아래에 그늘 골이 진다.
+ */
+export function canopy(px: Px, blobs: readonly Blob[], ramp: Ramp, opts: CanopyOpts): void {
+  const n = ramp.length - 1;
+  const [cw, ch] = opts.clump ?? [5, 4];
+  let top = Infinity;
+  let bot = -Infinity;
+  for (const b of blobs) {
+    top = Math.min(top, b.y - b.r * (b.squash ?? 1));
+    bot = Math.max(bot, b.y + b.r * (b.squash ?? 1));
+  }
+  const span = Math.max(1, bot - top);
+  const w = px.w;
+  const h = px.h;
+  const toneAt = new Float32Array(w * h).fill(-1);
+  const rampAt: (Ramp | null)[] = new Array(w * h).fill(null);
+
+  // 가장 가까운 잎 뭉치의 가운데
+  const nearest = (x: number, y: number): [number, number, number] => {
+    const gx = Math.floor(x / cw);
+    const gy = Math.floor(y / ch);
+    let best = Infinity;
+    let bx = 0;
+    let by = 0;
+    let id = 0;
+    for (let j = -1; j <= 1; j++) {
+      for (let i = -1; i <= 1; i++) {
+        const cx = (gx + i + 0.15 + hash2(gx + i, gy + j, opts.seed + 1) * 0.7) * cw;
+        const cy = (gy + j + 0.15 + hash2(gx + i, gy + j, opts.seed + 2) * 0.7) * ch;
+        const d = (x - cx) * (x - cx) + (y - cy) * (y - cy) * 1.5;
+        if (d < best) {
+          best = d;
+          bx = cx;
+          by = cy;
+          id = (gx + i) * 7919 + (gy + j) * 104729;
+        }
+      }
+    }
+    return [bx, by, id];
+  };
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let bestH = -Infinity;
+      let nx = 0;
+      let ny = 0;
+      let nz = 0;
+      let own: Ramp | undefined;
+      let extra = 0;
+      for (const b of blobs) {
+        const sq = b.squash ?? 1;
+        let r = b.r;
+        if (opts.spiky) r += (hash2(x, y, opts.seed + 9) - 0.5) * opts.spiky;
+        const dx = (x + 0.5 - b.x) / r;
+        const dy = (y + 0.5 - b.y) / (r * sq);
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= 1) continue;
+        const z = Math.sqrt(1 - d2);
+        const hgt = z * b.r + (b.lift ?? 0);
+        if (hgt > bestH) {
+          bestH = hgt;
+          nx = dx;
+          ny = dy;
+          nz = z;
+          own = b.ramp;
+          extra = b.shade ?? 0;
+        }
+      }
+      if (bestH === -Infinity) continue;
+      const diff = nx * LX + ny * LY + nz * LZ;
+      const g = (y - top) / span;
+      let tone = 0.52 + 0.5 * diff - 0.34 * (g - 0.4) + (opts.bias ?? 0) + extra;
+      // 뭉치의 모양이 비늘처럼 고르게 늘어서지 않게, 찾는 자리를 조금씩 휘어 준다
+      const wx = x + (vnoise(x / 6.3, y / 6.3, opts.seed + 40) - 0.5) * cw * 1.5;
+      const wy = y + (vnoise(x / 6.3 + 9.1, y / 6.3 + 3.7, opts.seed + 41) - 0.5) * ch * 1.5;
+      const [cx, cy, id] = nearest(wx, wy);
+      const local = clamp((-(wx - cx) * 0.55 - (wy - cy) * 0.85) / (ch * 0.9), -1, 1);
+      tone += 0.2 * local;
+      // 뭉치의 오른쪽 아래 가장자리는 그늘 골(뭉치 몇은 골 없이 이웃과 이어진다)
+      const [, , idR] = nearest(wx + 1, wy + 1);
+      if (idR !== id && hash2(id, 5, opts.seed + 42) > 0.3) tone -= opts.crease ?? 0.26;
+      if (opts.sparkle) {
+        const sp = hash2(x, y, opts.seed + 31);
+        if (sp < opts.sparkle) tone += 0.28;
+        else if (sp > 1 - opts.sparkle * 0.6) tone -= 0.16;
+      }
+      toneAt[y * w + x] = tone;
+      let use: Ramp | null = own ?? null;
+      if (!use && opts.accent && hash2(id, 3, opts.seed + 5) < opts.accent.share) use = opts.accent.ramp;
+      rampAt[y * w + x] = use;
+    }
+  }
+
+  const filled = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < w && y < h && toneAt[y * w + x] >= 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const tone = toneAt[y * w + x];
+      if (tone < 0) continue;
+      const use = rampAt[y * w + x] ?? ramp;
+      const m = use.length - 1;
+      let v = clamp(Math.round(1 + clamp(tone, 0, 1) * (m - 1)), 1, m);
+      // 테두리: 그늘 쪽은 가장 어둡게, 빛 쪽은 한 단계만 어둡게
+      const openDown = !filled(x, y + 1) || !filled(x + 1, y);
+      const openUp = !filled(x, y - 1) || !filled(x - 1, y);
+      if (openDown) v = 0;
+      else if (openUp) v = Math.max(1, v - 1);
+      px.set(x, y, use === ramp ? ramp[clamp(v, 0, n)] : use[clamp(v, 0, m)]);
+    }
+  }
+}
+
+/** 나무갓을 바람에 흔든다: 위쪽 줄일수록 옆으로 밀린다. bottomHeavy면 아래쪽(늘어진 가지)이 흔들린다. */
+export function sway(src: Px, amount: number, y0: number, y1: number, bottomHeavy = false): Px {
+  const out = new Px(src.w, src.h);
+  for (let y = 0; y < src.h; y++) {
+    let k = clamp((y - y0) / Math.max(1, y1 - y0), 0, 1);
+    k = bottomHeavy ? k : 1 - k;
+    const shift = Math.round(amount * k);
+    for (let x = 0; x < src.w; x++) {
+      const c = src.d[y * src.w + x];
+      if (c !== 0) out.set(x + shift, y, c);
+    }
+  }
+  return out;
+}
+
+export interface TrunkOpts {
+  /** 밑동 가운데 */
+  x: number;
+  yTop: number;
+  yBot: number;
+  wTop: number;
+  wBot: number;
+  /** 위로 갈수록 옆으로 휘는 정도(점) */
+  lean?: number;
+  /** 구불거림 */
+  curve?: number;
+  roots?: boolean;
+  seed: number;
+}
+
+/** 나무 줄기. 왼쪽이 밝고 오른쪽이 어둡다. 껍질의 세로 결이 있다. */
+export function trunk(px: Px, ramp: Ramp, o: TrunkOpts): void {
+  const n = ramp.length - 1;
+  const len = Math.max(1, o.yBot - o.yTop);
+  for (let y = o.yTop; y <= o.yBot; y++) {
+    const t = (o.yBot - y) / len; // 0 밑동 → 1 위
+    let wd = o.wBot + (o.wTop - o.wBot) * t;
+    if (o.roots && t < 0.14) wd += (0.14 - t) * 28;
+    const cx = o.x + (o.lean ?? 0) * t + Math.sin(t * 3.4 + o.seed) * (o.curve ?? 0);
+    const x0 = Math.round(cx - wd / 2);
+    const x1 = Math.round(cx + wd / 2) - 1;
+    for (let x = x0; x <= x1; x++) {
+      const u = wd <= 1 ? 0.5 : (x - x0) / Math.max(1, x1 - x0);
+      let v = u < 0.22 ? n - 1 : u < 0.5 ? n - 2 : u < 0.8 ? n - 3 : n - 4;
+      const grain = hash2(x, Math.floor(y / 3), o.seed + 21);
+      if (grain < 0.2) v -= 1;
+      else if (grain > 0.88) v += 1;
+      px.set(x, y, ramp[clamp(v, 0, n)]);
+    }
+  }
+  if (o.roots) {
+    // 땅으로 뻗은 뿌리
+    const base = o.yBot;
+    const half = Math.round(o.wBot / 2 + 3);
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 4; k++) {
+        const x = Math.round(o.x + side * (half + k));
+        px.set(x, base, ramp[side < 0 ? n - 1 : 1]);
+        if (k < 2) px.set(x, base - 1, ramp[side < 0 ? n - 2 : 1]);
+      }
+    }
+  }
+}
+
+/** 가지 하나(줄기에서 나무갓 속으로 뻗는다) */
+export function branch(px: Px, ramp: Ramp, x0: number, y0: number, x1: number, y1: number, thick: number): void {
+  const n = ramp.length - 1;
+  const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / Math.max(1, steps);
+    const x = Math.round(x0 + (x1 - x0) * t);
+    const y = Math.round(y0 + (y1 - y0) * t);
+    const wd = Math.max(1, Math.round(thick * (1 - t * 0.6)));
+    for (let k = 0; k < wd; k++) px.set(x + k, y, ramp[clamp(k === 0 ? n - 2 : n - 3 - (k > 1 ? 1 : 0), 0, n)]);
+  }
+}
+
+/** 울퉁불퉁한 돌. 위와 왼쪽 면이 밝고 오른쪽 아래가 어둡다. */
+export function rock(px: Px, ramp: Ramp, cx: number, cy: number, rx: number, ry: number, seed: number, moss?: Ramp): void {
+  const n = ramp.length - 1;
+  const inside = (x: number, y: number): number => {
+    const ang = Math.atan2(y - cy, x - cx);
+    const wob = 1 + (vnoise(ang * 1.7 + seed, seed * 0.37, seed) - 0.5) * 0.36;
+    const dx = (x + 0.5 - cx) / (rx * wob);
+    const dy = (y + 0.5 - cy) / (ry * wob);
+    return dx * dx + dy * dy;
+  };
+  for (let y = Math.floor(cy - ry - 2); y <= Math.ceil(cy + ry + 2); y++) {
+    for (let x = Math.floor(cx - rx - 2); x <= Math.ceil(cx + rx + 2); x++) {
+      const d = inside(x, y);
+      if (d > 1) continue;
+      const ux = (x - cx) / rx;
+      const uy = (y - cy) / ry;
+      // 면을 나눈다: 윗면, 왼쪽 면, 오른쪽 아래 면
+      const facet = vnoise(x / 3.4 + seed, y / 3.4, seed + 3);
+      let v = 3.1 - ux * 1.2 - uy * 1.9 + (facet - 0.5) * 1.5;
+      if (uy > 0.45) v -= 0.8;
+      if (d > 0.72 && (ux > 0.1 || uy > 0.1)) v = Math.min(v, 1);
+      if (hash2(x, y, seed + 5) < 0.04) v -= 1;
+      let c: Color = ramp[clamp(Math.round(v), 1, n)];
+      if (moss && uy < -0.15 && vnoise(x / 2.3, y / 2.3, seed + 7) > 0.6) c = moss[clamp(Math.round(3 - ux * 1.5), 2, 4)];
+      px.set(x, y, c);
+    }
+  }
+  // 아래 테두리는 가장 어둡게
+  for (let y = Math.floor(cy); y <= Math.ceil(cy + ry + 2); y++) {
+    for (let x = Math.floor(cx - rx - 2); x <= Math.ceil(cx + rx + 2); x++) {
+      if (px.get(x, y) !== 0 && px.get(x, y + 1) === 0) px.set(x, y, ramp[0]);
+    }
+  }
+}
+
+/** 그림 둘레에 테두리를 두르되, 위와 왼쪽(빛 쪽)은 부드러운 빛으로, 아래와 오른쪽은 짙은 빛으로 */
+export function rim(px: Px, dark: Color, soft: Color): void {
+  const src = px.d.slice();
+  const { w, h } = px;
+  const has = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < w && y < h && src[y * w + x] !== 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (src[y * w + x] !== 0) continue;
+      const below = has(x, y - 1) || has(x - 1, y); // 그림이 위나 왼쪽에 있다 → 이 점은 그늘 쪽 테두리
+      const above = has(x, y + 1) || has(x + 1, y);
+      if (below) px.d[y * w + x] = dark;
+      else if (above) px.d[y * w + x] = soft;
+    }
+  }
+}
