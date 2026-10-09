@@ -98,6 +98,15 @@ function inputFor(game: GameState, id: string, pick = 0): DoInput {
   return { id, choiceId: open.length > 0 ? open[Math.min(pick, open.length - 1)] : undefined, play: h.play ? Object.keys(h.play.flags)[0] : undefined };
 }
 
+/** "미션이 풀림" 종이를 다 넘긴다. 종이가 닫히지 않으면(판이 나아가지 않으면) 멈추지 않고 실패한다. */
+function closePapers(s: Store): void {
+  for (let n = 0; s.missionQueue.value.length > 0; n++) {
+    if (n > 20) throw new Error('"미션이 풀림" 종이가 닫히지 않는다');
+    later();
+    s.closeMissionDone();
+  }
+}
+
 /** 맵에서 일 하나를 한다: 자리에 닿아 대화 장면이 열리고, 고르고, 닫고, "미션이 풀림" 종이를 넘긴다 */
 function doOne(s: Store, id: string, pick = 0): void {
   later();
@@ -106,10 +115,7 @@ function doOne(s: Store, id: string, pick = 0): void {
   const deed = s.commitTalk(inputFor(s.game.value!, id, pick));
   expect(deed?.happeningId).toBe(id);
   s.closeTalk();
-  while (s.missionQueue.value.length > 0) {
-    later();
-    s.closeMissionDone();
-  }
+  closePapers(s);
 }
 
 /** 꼭 할 일을 다 한다(덤은 하지 않는다). 한 일의 수를 돌려준다. */
@@ -279,13 +285,23 @@ describe('대화 장면과 미션이 풀림', () => {
         expect(s.mapBusy.value).toBe(true);
         expect(saved()?.current?.solved).toEqual(expect.arrayContaining(deed!.solved));
       }
-      while (s.missionQueue.value.length > 0) {
-        later();
-        s.closeMissionDone();
-      }
+      closePapers(s);
       expect(s.mapBusy.value).toBe(false);
     }
     expect(solvedSeen).toBe(true);
+  });
+
+  it('대화 장면을 닫을 때도 저장한다: 그때 서 있던 자리가 적힌다("나중에 할게요"로 닫아도)', async () => {
+    const s = await boot();
+    startSpring(s);
+    const first = openHappenings(PACK, s.game.value!).find((v) => v.must)!.happening.id;
+    s.markPlace('29,36', ['village'], 'ff');
+    expect(saved()?.current?.at).toBeUndefined();
+    s.openTalk(first);
+    s.closeTalk();
+    expect(saved()?.current?.at).toBe('29,36');
+    expect(saved()?.walked).toBe('ff');
+    expect(saved()?.current?.done).toEqual([]);
   });
 
   it('봇짐과 지난 이야기는 맵 위에 뜨고, 대화 중에는 열리지 않는다', async () => {
@@ -715,7 +731,7 @@ describe('저장이 안 되거나 읽을 수 없을 때', () => {
     expect(saved()?.current?.phase).toBe('seasonClose');
   });
 
-  it('없는 역할이나 될 수 없는 모습의 저장: "이어 하기"를 누르면 그 해만 내려놓고 제목에서 알린다(되풀이되지 않는다)', async () => {
+  it('없는 역할이나 될 수 없는 모습의 저장: 열자마자 그 해만 내려놓고 제목에서 알린다("이어 하기"가 보이지 않는다)', async () => {
     for (const hurt of [{ role: '없는 집' }, { role: 'son', look: 'girl' }]) {
       env.data.clear();
       let s = await boot();
@@ -725,12 +741,13 @@ describe('저장이 안 되거나 읽을 수 없을 때', () => {
       const text = JSON.stringify({ ...raw, current: { ...raw.current, ...hurt } });
       env.data.set(SAVE_KEY, text);
       s = await boot();
-      expect(s.canContinue.value).toBe(true);
-      later();
-      s.continueGame();
+      // "이어 하기"를 내놓기 전에(열자마자) 그 해를 내려놓고 알린다 — 눌러야 알게 되지 않는다
       expect(s.screen.value).toBe('title');
       expect(s.loadStatus.value).toBe('yearLost');
       expect(s.canContinue.value).toBe(false);
+      later();
+      s.continueGame();
+      expect(s.screen.value).toBe('title');
       expect(s.game.value).toBeNull();
       // 카드는 남고, 내려놓기 전의 글자가 한 벌 남는다
       expect(saved()?.current).toBeUndefined();
@@ -766,6 +783,21 @@ describe('저장이 안 되거나 읽을 수 없을 때', () => {
     s.continueGame();
     expect(s.screen.value).toBe('map');
     expect(s.game.value!.sunsLeft).toBe(PACK.situation.roles.find((r) => r.id === 'farmer')!.suns);
+  });
+
+  it('덤을 하나 한 뒤의 저장에 해 ☀가 터무니없이 적혀 있으면: 역할의 해에서 쓴 해를 뺀 만큼으로 묶는다("3/4"로 뜨지 않게)', async () => {
+    let s = await boot();
+    startSpring(s);
+    const extra = openHappenings(PACK, s.game.value!).find((v) => !v.must && !v.noSun)!.happening.id;
+    doOne(s, extra);
+    const suns = PACK.situation.roles.find((r) => r.id === 'farmer')!.suns;
+    expect(s.game.value!.sunsLeft).toBe(suns - 1);
+    const raw = saved()!;
+    env.data.set(SAVE_KEY, JSON.stringify({ ...raw, current: { ...raw.current, sunsLeft: 999 } }));
+    s = await boot();
+    later();
+    s.continueGame();
+    expect(s.game.value!.sunsLeft).toBe(suns - 1);
   });
 
   it('같은 저장으로 거듭 멈추면 그 해를 내려놓는다(이어 하기 → 멈춤 → 처음으로가 되풀이되지 않게)', async () => {
@@ -925,10 +957,7 @@ describe.runIf(import.meta.env.VITE_MAKE_SAVES === '1')('저장 견본 만들기
         s.saveNow();
         write(`schema${SCHEMA}-spring-paper.json`);
         s.closeTalk();
-        while (s.missionQueue.value.length > 0) {
-          later();
-          s.closeMissionDone();
-        }
+        closePapers(s);
         break;
       }
       s.closeTalk();

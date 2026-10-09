@@ -660,7 +660,9 @@ describe('순수 함수', () => {
       const rng = mulberry32(seed);
       let state = deepFreeze(newGame(structuredClone(testPack), 'farmer', seed % 2 ? 'boy' : 'girl', seed));
       const pack = deepFreeze(structuredClone(testPack));
-      while (state.phase !== 'done') {
+      // 판이 나아가지 않는 잘못이 들어오면 멈추지 않고 실패하게 걸음 수에 끝을 둔다
+      for (let step = 0; state.phase !== 'done'; step++) {
+        if (step > 400) throw new Error('한 해가 끝나지 않는다');
         const moves = movesOf(pack, state);
         if (canCloseSeason(pack, state) && (moves.length === 0 || rng() < 0.3)) {
           state = deepFreeze(nextSeason(pack, deepFreeze(closeSeason(pack, state))));

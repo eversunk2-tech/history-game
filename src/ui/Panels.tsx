@@ -4,12 +4,13 @@
 //   지난 이야기 — 이 계절에 한 일들의 대화를 다시 읽는다(여는 대화, 고른 것, 결과 대화, 배움 쪽지).
 
 import type { JSX } from 'preact';
-import { useState } from 'preact/hooks';
+import type { ComponentChildren } from 'preact';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { cardById } from '../content/cards';
 import { itemById } from '../content/items';
 import { seasonLabels, statLabels } from '../content/labels';
 import { currentSeason, deedsOfSeason, happeningOf } from '../engine/game';
-import { STATS, type Deed, type Happening, type Line, type SituationPack } from '../engine/types';
+import { STATS, TIRED_AT, type Deed, type Happening, type Line, type SituationPack } from '../engine/types';
 import { closePanel, game, pack } from '../state/store';
 import { ClothIcon, SackIcon, StatIcon, SunIcon } from './icons';
 import { Paper } from './Paper';
@@ -20,6 +21,35 @@ export function goodsOf(living: number): { sacks: number; cloth: number } {
   const all = Math.max(0, Math.round(living));
   const sacks = Math.ceil(all * 0.6);
   return { sacks, cloth: all - sacks };
+}
+
+/**
+ * 종이 안에서 넘기는 칸. 내용이 아래로 넘치면 "아래에 더 있어요 ▼"가 붙는다(넘길 수 있다는 것을 알리려고 — review 34번).
+ */
+function ScrollBox({ children }: { children: ComponentChildren }): JSX.Element {
+  const ref = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  const measure = (): void => {
+    const el = ref.current;
+    setMore(Boolean(el && el.scrollHeight - el.scrollTop - el.clientHeight > 6));
+  };
+  useEffect(measure);
+  useEffect(() => {
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+  return (
+    <>
+      <div class="paper-scroll" ref={ref} onScroll={measure}>
+        {children}
+      </div>
+      {more && (
+        <p class="paper-below" aria-hidden="true">
+          아래에 더 있어요 ▼
+        </p>
+      )}
+    </>
+  );
 }
 
 export function BagPanel(): JSX.Element | null {
@@ -34,7 +64,7 @@ export function BagPanel(): JSX.Element | null {
           닫기
         </button>
       </header>
-      <div class="paper-scroll">
+      <ScrollBox>
         <section class="paper-part">
           <h3 class="paper-head">지금 나의 형편</h3>
           <ul class="bag-about">
@@ -53,6 +83,12 @@ export function BagPanel(): JSX.Element | null {
               <span class="bag-about-text">덤 하나에 하나씩 져요</span>
             </li>
           </ul>
+          {/* 기력이 무엇에 쓰이는지: 낮으면 다음 계절에 할 수 있는 덤이 준다(엔진의 규칙 — TIRED_AT) */}
+          <p class={`paper-small bag-tired${g.stats.body <= TIRED_AT ? ' now' : ''}`}>
+            {g.stats.body <= TIRED_AT
+              ? `기력이 낮아요(${TIRED_AT} 이하). 이대로면 다음 계절에는 해 ☀가 하나 줄어요.`
+              : `기력이 ${TIRED_AT} 이하로 떨어지면 다음 계절에는 해 ☀가 하나 줄어요.`}
+          </p>
         </section>
         <section class="paper-part">
           <h3 class="paper-head">살림 {g.stats.living}</h3>
@@ -80,7 +116,7 @@ export function BagPanel(): JSX.Element | null {
               )}
             </div>
           )}
-          <p class="paper-small">이때는 쌀과 베로 값을 치렀어요. 살림을 쌀 자루와 베로 그려 보았어요.</p>
+          <p class="paper-small">이때는 물건을 살 때 돈 대신 쌀과 베를 냈어요. 살림을 쌀 자루와 베로 그려 보았어요.</p>
         </section>
         <section class="paper-part">
           <h3 class="paper-head">얻은 물건</h3>
@@ -118,7 +154,7 @@ export function BagPanel(): JSX.Element | null {
             </ul>
           )}
         </section>
-      </div>
+      </ScrollBox>
     </Paper>
   );
 }

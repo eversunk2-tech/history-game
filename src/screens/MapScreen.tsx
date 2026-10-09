@@ -53,9 +53,11 @@ import { Talk } from './Talk';
 interface Toast {
   head: string;
   text: string;
-  /** 덧붙이는 한 줄(해 ☀가 무엇인지 등) */
+  /** 덧붙이는 한 줄(해 ☀가 다 져서 못 한다는 것 등) */
   sub?: string;
   locked: boolean;
+  /** 무대의 위쪽(띠 바로 밑)에 띄울 것인가: 주인공이 무대 아래쪽에 서 있을 때(알림이 주인공을 가리지 않게) */
+  top?: boolean;
 }
 
 /** 차례를 기다리는 알림: 앞의 알림이 사라지면 뜬다. when이 거짓이 되었으면 건너뛴다. */
@@ -235,10 +237,26 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       world.avoid = out;
     };
 
+    /** 주인공이 무대의 아래쪽에 서 있는가(느티나무 아래에서는 화면이 쏠려 주인공이 아래 5분의 1에 선다) */
+    const heroLow = (): boolean => {
+      const world = session?.world;
+      return Boolean(world && (world.player.y - world.cam.y) / world.view.h > 0.56);
+    };
+    let shown: Toast | null = null;
+    let wasBusy = false;
     const say = (next: Toast, ms: number, gate = false): void => {
-      setToast(next);
+      shown = { ...next, top: heroLow() };
+      setToast(shown);
       toastUntil = performance.now() + ms;
       toastGate = gate;
+    };
+    /** 알림이 떠 있는 동안 주인공이 그 밑으로 걸어 들어오면(또는 벗어나면) 알림의 자리를 바꾼다 */
+    const moveToast = (): void => {
+      if (!shown || toastUntil === 0) return;
+      const top = heroLow();
+      if (top === shown.top) return;
+      shown = { ...shown, top };
+      setToast(shown);
     };
     const sayLater = (next: Toast, ms: number, when?: () => boolean): void => {
       waiting.push({ toast: next, ms, when });
@@ -256,26 +274,41 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
         const now = game.peek();
         if (!now) continue;
         const seasonNow = seasonLabels[currentSeason(now)].label;
-        let sub: string | undefined;
-        let tellsSun = false;
-        if (view.noSun) sub = `해 ☀가 다 져서 이번 ${seasonNow}에는 할 수 없어요.`;
-        else if (!sunTold && deedsOfSeason(now, currentSeason(now)).every((deed) => deed.sun === 0)) {
-          sub = `말풍선은 덤으로 할 일이에요. 하나 하면 해 ☀가 하나 져요. ${seasonNow}의 해는 ${countWord(now.sunsLeft)}이에요.`;
-          tellsSun = true;
-        }
+        const noSunLine = view.noSun ? `해 ☀가 다 져서 이번 ${seasonNow}에는 할 수 없어요.` : undefined;
+        // 해 ☀가 무엇인지는 처음 한 번, 한마디와 따로 띄운다(한꺼번에 세 줄을 읽게 하지 않는다 — review 30번)
+        const tellsSun = !view.noSun && !sunTold && deedsOfSeason(now, currentSeason(now)).every((deed) => deed.sun === 0);
         const lure = view.happening.lure;
-        if (!lure && !sub) continue;
+        if (!lure && !noSunLine && !tellsSun) continue;
         lured.add(mark.id);
-        if (tellsSun) sunTold = true;
         const id = mark.id;
-        sayLater({ head: `${mark.spot.label} · 덤으로 할 일`, text: lure ?? '들러 볼 수 있어요.', sub, locked: false }, sub ? 9000 : 6000, () => {
-          // 차례가 왔을 때 이미 멀어졌거나 그 일을 마쳤으면 건너뛴다(다음에 다가오면 다시 알린다)
+        const stillNear = (): boolean => {
           const still = world.marks.find((m) => m.id === id);
-          if (still && nearOf(world, still)) return true;
-          lured.delete(id);
-          if (tellsSun) sunTold = false;
-          return false;
-        });
+          return Boolean(still && nearOf(world, still));
+        };
+        if (lure || noSunLine) {
+          sayLater({ head: `${mark.spot.label} · 덤으로 할 일`, text: lure ?? '들러 볼 수 있어요.', sub: noSunLine, locked: false }, noSunLine ? 9000 : 7000, () => {
+            // 차례가 왔을 때 이미 멀어졌거나 그 일을 마쳤으면 건너뛴다(다음에 다가오면 다시 알린다)
+            if (stillNear()) return true;
+            lured.delete(id);
+            return false;
+          });
+        }
+        if (tellsSun) {
+          sunTold = true;
+          // 44자쯤이다. 소리 내어 읽는 빠르기(분당 200자쯤)로도 다 읽게 14초 띄운다.
+          sayLater(
+            { head: '해 ☀', text: `말풍선은 덤으로 할 일이에요. 하나 하면 해 ☀가 하나 져요. ${seasonNow}의 해는 ${countWord(now.sunsLeft)}이에요.`, locked: false },
+            14000,
+            () => {
+              const g0 = game.peek();
+              const fresh = Boolean(g0 && g0.phase === 'season' && deedsOfSeason(g0, currentSeason(g0)).every((deed) => deed.sun === 0));
+              if (!fresh) return false;
+              if (stillNear()) return true;
+              sunTold = false;
+              return false;
+            },
+          );
+        }
       }
     };
 
@@ -398,6 +431,7 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
         if (tick % 8 === 0) drawMini(world, session.mini);
         if (tick % 12 === 0) measureAvoid(world);
         if (tick % 20 === 0 && !world.paused) lureNear(world);
+        if (tick % 15 === 0) moveToast();
       }
       if (tick % 45 === 0 && !world.paused) tellPlace(world);
       tick++;
@@ -406,10 +440,20 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       // 까닭 한 줄은 문에서 멀어지면 바로, 가만히 있어도 얼마 뒤에는 사라진다
       if (toastUntil !== 0 && (now > toastUntil || (toastGate && world.shownGate === null && !world.paused))) {
         toastUntil = 0;
+        shown = null;
         setToast(null);
       }
-      // 뜬 알림이 없으면 차례를 기다리던 것을 하나 띄운다(창이 떠 있는 동안에는 기다린다)
-      if (toastUntil === 0 && waiting.length > 0 && !world.paused) {
+      // 대화 장면이나 창에서 맵으로 돌아온 순간: 그 전에 떠 있던 알림은 낡았을 수 있으니 지운다
+      // (해 ☀ 풀이가 뜬 채 덤을 하고 돌아오면 "해는 셋이에요"가 남아 있지 않게 — review 5번). 막힌 길의 까닭은 그대로 둔다.
+      const busyNow = overlaid();
+      if (wasBusy && !busyNow && toastUntil !== 0 && !toastGate) {
+        toastUntil = 0;
+        shown = null;
+        setToast(null);
+      }
+      wasBusy = busyNow;
+      // 뜬 알림이 없으면 차례를 기다리던 것을 하나 띄운다. 창이 떠 있는 동안에는(이 장에서 막 열린 대화 장면도) 기다린다.
+      if (toastUntil === 0 && waiting.length > 0 && !world.paused && !busyNow) {
         const next = waiting.shift() as Waiting;
         if (!next.when || next.when()) say(next.toast, next.ms);
       }
@@ -756,9 +800,11 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
   /** 덤 미션: 풀렸으면 "해냄", 아니면 어디까지 했는지(셋 가운데 하나) */
   const sideRow = (m: MissionView): JSX.Element => {
     const progress = missionProgress(m.mission, g);
-    let line = m.mission.goal;
+    // 한 줄로 짧게(쪽지가 길어지지 않게): 어디까지 했는지만 적는다. 무엇을 하는 미션인지는 이름이 말해 준다.
+    let line = '아직 시작하지 않았어요.';
     if (m.solved) line = '해냄';
     else if (progress && progress.have > 0) line = `${countWord(progress.need)} 가운데 ${countWord(progress.have)}${progress.have === 1 ? '를' : '을'} 했어요.`;
+    else if (!progress) line = m.mission.goal;
     return (
       <li key={m.mission.id} class={`todo-row still side${m.solved ? ' done' : ''}`}>
         <span class="todo-text">
@@ -791,25 +837,26 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
             </button>
             {noteOpen && (
               <div class="todo-body" ref={bodyRef} onScroll={measureBody}>
-                {/* 한 번에 한 묶음만 펴진다(낮은 화면에서 쪽지가 화면 밖으로 나가지 않게) */}
-                {extrasOpen ? (
-                  <button type="button" class="todo-more" aria-expanded={false} onClick={() => setExtrasOpen(false)}>
-                    <span class="todo-mark must" aria-hidden="true" /> 꼭 할 일 {mustsLeft > 0 ? `${countWord(mustsLeft)} 남음` : '다 했어요'} ▼
+                {/* 묶음 둘을 나란한 두 단추로 고른다. 한 번에 한 묶음만 보인다(낮은 화면에서도 덤의 줄이 다 들어오게 — review 33번). */}
+                <div class="todo-tabs" role="tablist" aria-label="할 일의 묶음">
+                  <button type="button" role="tab" class={`todo-tab${extrasOpen ? '' : ' on'}`} aria-selected={!extrasOpen} onClick={() => setExtrasOpen(false)}>
+                    <span class="todo-mark must" aria-hidden="true" />
+                    <span>
+                      꼭 할 일{' '}
+                      <span class="todo-tab-n">{mustsLeft > 0 ? `${countWord(mustsLeft)} 남음` : '다 했어요'}</span>
+                    </span>
                   </button>
-                ) : (
-                  <>
-                    <p class="todo-kind">
-                      <span class="todo-mark must" aria-hidden="true" /> 꼭 할 일
-                    </p>
-                    <ul>{musts.map(missionRow)}</ul>
-                  </>
-                )}
-                <button type="button" class="todo-more" aria-expanded={extrasOpen} onClick={() => setExtrasOpen(!extrasOpen)}>
-                  <span class="todo-mark extra" aria-hidden="true" /> 덤으로 할 일 {extras.length}가지 {extrasOpen ? '▲' : '▼'}
-                </button>
+                  <button type="button" role="tab" class={`todo-tab${extrasOpen ? ' on' : ''}`} aria-selected={extrasOpen} onClick={() => setExtrasOpen(true)}>
+                    <span class="todo-mark extra" aria-hidden="true" />
+                    <span>
+                      덤 <span class="todo-tab-n">{extras.length}가지</span>
+                    </span>
+                  </button>
+                </div>
+                {!extrasOpen && <ul>{musts.map(missionRow)}</ul>}
                 {extrasOpen && (
                   <>
-                    <p class="todo-tip">{noSuns ? '해 ☀가 다 져서 덤은 더 할 수 없어요.' : `하나 하면 해 ☀가 하나 져요. 남은 해는 ${countWord(g.sunsLeft)}.`}</p>
+                    <p class="todo-tip">{noSuns ? '해 ☀가 다 져서 덤은 더 할 수 없어요.' : `하나 하면 해 ☀가 하나 져요. 남은 해 ${countWord(g.sunsLeft)}.`}</p>
                     <ul>
                       {extras.map(extraRow)}
                       {sideMissions.map(sideRow)}
@@ -850,7 +897,7 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
         </div>
 
         {toast && !busy && (
-          <p class={`map-toast${toast.locked ? ' locked' : ''}${noteOpen ? (extrasOpen ? ' beside wide' : ' beside') : ''}`} role="status">
+          <p class={`map-toast${toast.locked ? ' locked' : ''}${toast.top ? ' top' : noteOpen ? (extrasOpen ? ' beside wide' : ' beside') : ''}`} role="status">
             {toast.head && (
               <span class="toast-head">
                 {toast.locked && <span class="toast-lock" aria-hidden="true" />}

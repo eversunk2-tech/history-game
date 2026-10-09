@@ -8,7 +8,7 @@ import { Scenery } from '../art/Scenery';
 import { cardById } from '../content/cards';
 import { seasonLabels, statLabels } from '../content/labels';
 import { deedsOfSeason, happeningOf, lastClosing, roleOf } from '../engine/game';
-import { SEASONS, STATS, type Deed, type GameState, type SituationPack } from '../engine/types';
+import { SEASONS, STATS, TIRED_AT, type Deed, type GameState, type SituationPack } from '../engine/types';
 import { game, goNextSeason, nextSeasonReady, pack, saveFailed } from '../state/store';
 import { StatIcon } from '../ui/icons';
 import { spotLabel, yearAndPlace } from '../ui/where';
@@ -120,6 +120,13 @@ export function SeasonClose(): JSX.Element | null {
                 );
               })}
             </ul>
+            {/* 기력이 무엇에 쓰이는지(review 32번): 낮은 채로 계절을 넘기면 다음 계절의 해 ☀가 하나 준다 */}
+            {upcoming && after.body <= TIRED_AT && (
+              <p class="closing-tired">
+                <span aria-hidden="true">▼ </span>
+                기력이 낮아서({TIRED_AT} 이하) {seasonLabels[upcoming].label}에는 해 ☀가 하나 줄어요.
+              </p>
+            )}
             {closing && closing.lines.length > 0 && (
               <>
                 <h2 class="paper-head">{name}의 끝에 생긴 일</h2>

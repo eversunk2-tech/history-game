@@ -2,7 +2,7 @@
 // 귀퉁이에 게임의 판 번호. 저장을 읽은 결과에 따라 쉬운 말의 알림이 뜬다.
 
 import type { JSX } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Scenery } from '../art/Scenery';
 import { getPack } from '../content';
 import { seasonLabels } from '../content/labels';
@@ -10,7 +10,10 @@ import { seasonReady } from '../engine/game';
 import { SEASONS } from '../engine/types';
 import { BUILD, type LoadStatus } from '../state/storage';
 import { canContinue, continueGame, dropCurrent, goBook, goSheet, loadStatus, save, wipeAll } from '../state/store';
+import { inTabOnTablet, standalone } from '../state/device';
 import { Ask } from '../ui/Ask';
+import { DeviceInfo } from '../ui/DeviceInfo';
+import { InstallGuide } from '../ui/InstallGuide';
 
 /** 저장을 읽은 결과를 알리는 말(없으면 알리지 않는다) */
 const NOTICES: Partial<Record<LoadStatus, string>> = {
@@ -38,8 +41,22 @@ function savedLine(): string {
   return `${p.situation.year}년 ${seasonLabels[SEASONS[index]].label}${tail}`;
 }
 
+// 이 창에서(다시 불러오기 전까지) 안내를 이미 닫았는가, 탭에서 시작한다는 것을 이미 알렸는가
+let guideClosed = false;
+let tabWarned = false;
+
 export function Title(): JSX.Element {
-  const [ask, setAsk] = useState<'restart' | 'wipe' | 'wipeAgain' | null>(null);
+  const [ask, setAsk] = useState<'restart' | 'wipe' | 'wipeAgain' | 'tab' | null>(null);
+  // 홈 화면에 추가하는 법: 브라우저 탭으로 연 태블릿이면 저절로 뜬다(auto). 닫아도 아래 단추로 다시 볼 수 있다(manual).
+  const [guide, setGuide] = useState<'auto' | 'manual' | null>(null);
+  const [info, setInfo] = useState(false);
+  useEffect(() => {
+    if (inTabOnTablet() && !guideClosed) setGuide('auto');
+  }, []);
+  const closeGuide = (): void => {
+    guideClosed = true;
+    setGuide(null);
+  };
   const status = loadStatus.value;
   const notice = NOTICES[status];
   // 코드보다 새 꼴의 저장을 만났으면 저장을 건드리지 않게 시작을 막는다
@@ -47,10 +64,15 @@ export function Title(): JSX.Element {
   const resume = canContinue.value;
   const inYear = Boolean(save.value.current);
 
-  const start = (): void => {
-    if (blocked) return;
+  const begin = (): void => {
     if (inYear) setAsk('restart');
     else goBook();
+  };
+  const start = (): void => {
+    if (blocked) return;
+    // 탭으로 연 태블릿에서 새로 시작하려 하면 한 번 더 알린다(탭의 기록은 홈 화면의 게임으로 넘어가지 않을 수 있다)
+    if (inTabOnTablet() && !tabWarned) setAsk('tab');
+    else begin();
   };
 
   return (
@@ -97,6 +119,11 @@ export function Title(): JSX.Element {
             <button type="button" class="btn small" disabled={blocked} onClick={() => setAsk('wipe')}>
               모두 지우고 처음부터
             </button>
+            {!standalone.value && (
+              <button type="button" class="btn small" onClick={() => setGuide('manual')}>
+                홈 화면에 추가
+              </button>
+            )}
             {import.meta.env.DEV && (
               <button type="button" class="btn small title-devbtn" onClick={goSheet}>
                 그림 견본(개발용)
@@ -104,9 +131,38 @@ export function Title(): JSX.Element {
             )}
           </div>
         </div>
-        <p class="title-build">판 {BUILD}</p>
+        <button type="button" class="title-build" onClick={() => setInfo(true)} aria-label={`판 ${BUILD}. 이 기기의 정보 보기`}>
+          판 {BUILD} · 이 기기
+        </button>
       </div>
 
+      {guide && !ask && !info && <InstallGuide auto={guide === 'auto'} onClose={closeGuide} />}
+      {info && (
+        <DeviceInfo
+          onClose={() => setInfo(false)}
+          onGuide={() => {
+            setInfo(false);
+            setGuide('manual');
+          }}
+        />
+      )}
+      {ask === 'tab' && (
+        <Ask
+          ask="이 창에서 시작할까요?"
+          note="이 창에서 한 기록은 홈 화면의 게임으로 넘어가지 않을 수 있어요. 먼저 홈 화면에 추가하면 기록이 안전해요."
+          yes="이 창에서 시작하기"
+          no="추가하는 법 보기"
+          onNo={() => {
+            setAsk(null);
+            setGuide('manual');
+          }}
+          onYes={() => {
+            tabWarned = true;
+            setAsk(null);
+            begin();
+          }}
+        />
+      )}
       {ask === 'restart' && (
         <Ask
           ask="처음부터 다시 할까요?"

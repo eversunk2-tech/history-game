@@ -86,7 +86,7 @@
 
 /* 접힌 쪽지에는 화살표가 가리키는 미션의 이름이 남는다. 긴 이름은 잘리지 않고 두 줄로 넘어간다. */
 .todo-going {
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--ink-soft);
   word-break: keep-all;
@@ -142,8 +142,7 @@
   color: var(--ink-soft);
 }
 
-.todo-row,
-.todo-more {
+.todo-row {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -155,12 +154,6 @@
   background: var(--paper-light);
   text-align: left;
   cursor: pointer;
-}
-
-.todo-more {
-  border-style: dashed;
-  font-size: 1.25rem;
-  font-weight: 700;
 }
 
 /* 해낸 미션과 아직 갈 곳이 없는 미션은 누르는 것이 아니다(테두리가 점선이고 바탕이 없다). 해낸 것은 "해냄"이라는 글로 알린다. */
@@ -206,6 +199,49 @@
   line-height: 1.3;
   color: var(--ink-soft);
   word-break: keep-all;
+}
+
+/* 묶음을 고르는 나란한 두 단추(꼭 할 일 / 덤) */
+.todo-tabs {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 0.3rem;
+}
+
+.todo-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 3.5rem;
+  padding: 0.3rem 0.4rem;
+  border: 0.1rem dashed var(--ink-faint);
+  border-radius: 0.6rem;
+  background: transparent;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: left;
+  word-break: keep-all;
+  cursor: pointer;
+}
+
+/* 고른 묶음: 실선 테와 찬 바탕, 굵은 글(색만으로 알리지 않는다) */
+.todo-tab.on {
+  border: 0.14rem solid var(--ink);
+  background: var(--paper-light);
+  font-weight: 800;
+}
+
+.todo-tab-n {
+  white-space: nowrap;
+}
+
+/* 덤의 줄은 위아래 틈을 줄인다(두 줄이 되어도 넷이 한 화면에 들어오게) */
+.todo-row.extra,
+.todo-row.side {
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
 }
 
 /* 덤의 줄: "우물가 — 아주머니가 한양 이야기를 한다더라" */
@@ -332,6 +368,17 @@
 .map-toast.beside {
   left: calc(50% + 3.3rem);
   max-width: calc(100% - 35rem);
+}
+
+/* 주인공이 무대 아래쪽에 서 있을 때는 위쪽(띠 바로 밑, 쪽지의 오른쪽)에 뜬다 — 알림이 주인공을 가리지 않게 */
+.map-toast.top {
+  top: 0.75rem;
+  bottom: auto;
+  left: 23.5rem;
+  right: 0.75rem;
+  transform: none;
+  margin-inline: auto;
+  max-width: min(34rem, calc(100% - 24.25rem));
 }
 
 /* 덤을 펴서 쪽지가 넓어졌을 때 */

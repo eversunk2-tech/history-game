@@ -539,6 +539,10 @@ export function stateKey(state: GameState): string {
   ].join('|');
 }
 
+/** 한 계절의 걷기에 두는 끝: 걸음의 깊이와 살피는 형편의 수(지금의 견본과 실제 봄은 이보다 훨씬 작다) */
+export const EXPLORE_DEPTH = 60;
+export const EXPLORE_STATES = 200000;
+
 export interface Explored {
   /** 그 계절 안에서 닿을 수 있는 모든 형편(처음 포함) */
   all: GameState[];
@@ -555,17 +559,20 @@ export interface Explored {
 export function explore(pack: SituationPack, start: GameState): Explored {
   const good = new Map<string, boolean>();
   const out: Explored = { all: [], leaves: [], stuck: [] };
-  const visit = (state: GameState): boolean => {
+  // 판이 나아가지 않는 잘못(한 일이 적히지 않는다, 다른 계절의 일이 섞여 든다)이 들어오면 멈추지 않고 실패하게 끝을 둔다
+  const visit = (state: GameState, depth = 0): boolean => {
+    if (depth > EXPLORE_DEPTH) throw new Error(`한 계절에 ${EXPLORE_DEPTH}걸음을 넘게 걸었다: 판이 나아가지 않는다`);
     const key = stateKey(state);
     const known = good.get(key);
     if (known !== undefined) return known;
+    if (out.all.length >= EXPLORE_STATES) throw new Error(`살핀 형편이 ${EXPLORE_STATES}가지를 넘었다: 걷기가 끝나지 않는다`);
     good.set(key, false);
     out.all.push(state);
     let ok = canCloseSeason(pack, state);
     const moves = movesOf(pack, state);
     if (moves.length === 0) out.leaves.push(state);
     for (const move of moves) {
-      if (visit(doHappening(pack, state, move))) ok = true;
+      if (visit(doHappening(pack, state, move), depth + 1)) ok = true;
     }
     good.set(key, ok);
     if (!ok) out.stuck.push(state);

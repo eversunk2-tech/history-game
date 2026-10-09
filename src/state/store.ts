@@ -12,6 +12,7 @@ import {
   canCloseSeason,
   closeSeason,
   currentSeason,
+  deedsOfSeason,
   doHappening,
   lastDeed,
   newGame,
@@ -154,6 +155,20 @@ export function walkedText(): string {
   return walkedNow;
 }
 
+// 읽은 저장의 해가 지금의 이야기에 없는 역할이나 될 수 없는 모습이면, "이어 하기"를 내놓기 전에 그 해만 내려놓는다
+// (눌러야 알게 되지 않게). 깬 기록과 카드는 그대로이고, 내려놓기 전의 글자는 한 벌 남긴다.
+{
+  const cur = loaded.save.current;
+  const p = cur ? getPack(cur.situationId) : undefined;
+  const role = cur && p ? p.situation.roles.find((r) => r.id === cur.role) : undefined;
+  if (cur && p && (!role || !role.looks.includes(cur.look))) {
+    keepBackup();
+    walkedNow = '';
+    persist(withCurrent(save.value, undefined));
+    loadStatus.value = 'yearLost';
+  }
+}
+
 // 화면이 가려질 때 저장한다(태블릿을 덮거나 다른 앱으로 갈 때). beforeunload에는 기대지 않는다.
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
@@ -230,8 +245,10 @@ export function continueGame(): void {
       cards: new Set(allCards.map((c) => c.id)),
       items: new Set(allItems.map((i) => i.id)),
     });
-    // 남은 해 ☀는 그 역할의 해를 넘지 못한다
-    const next = kept.sunsLeft > role.suns ? { ...kept, sunsLeft: role.suns } : kept;
+    // 남은 해 ☀는 그 역할의 해에서 이 계절에 이미 쓴 해를 뺀 것을 넘지 못한다(띠에 "3/4"처럼 뜨지 않게)
+    const used = deedsOfSeason(kept, currentSeason(kept)).reduce((sum, deed) => sum + deed.sun, 0);
+    const cap = Math.max(0, role.suns - used);
+    const next = kept.sunsLeft > cap ? { ...kept, sunsLeft: cap } : kept;
     // 그 판으로 화면을 그릴 수 있는지 미리 본다(엔진이 던지면 여기서 잡힌다)
     if (next.phase === 'season' && seasonReady(p, next.role, currentSeason(next))) {
       openHappenings(p, next);

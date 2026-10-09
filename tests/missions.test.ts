@@ -67,6 +67,8 @@ function pathsOf(mission: Mission, from: GameState): { state: GameState; steps: 
   const out: { state: GameState; steps: string[] }[] = [];
   const seen = new Set<string>();
   const visit = (state: GameState, steps: string[]) => {
+    // 한 일이 적히지 않는 잘못이 들어오면 같은 일을 끝없이 되풀이한다. 멈추지 않고 실패하게 끝을 둔다.
+    if (steps.length > 12 || out.length > 5000) throw new Error(`「${mission.title}」의 길이 끝나지 않는다: ${steps.slice(0, 6).join(' > ')} …`);
     const key = `${stateKey(state)}#${steps.join('>')}`;
     if (seen.has(key)) return;
     seen.add(key);
@@ -687,11 +689,11 @@ describe('① 봄 · 농민 집 아이: 덤의 한마디와 작은 선택', () =
     }
   });
 
-  it('뒷산: 나무를 넉넉히 하면 기력 -1·살림 +1, 한 짐만 하고 쉬면 그대로다. 쪽지는 어느 쪽이든 같다', () => {
+  it('뒷산: 나무를 넉넉히 하면 기력 -1·살림 +1, 한 짐만 하고 쉬면 기력 +1이다(해를 쓰고 남는 것이 없는 선택이 없다). 쪽지는 어느 쪽이든 같다', () => {
     const plenty = lastDeed(doHappening(pack, start('girl'), { id: ID.woods, choiceId: 'plenty' })) as Deed;
     const light = lastDeed(doHappening(pack, start('girl'), { id: ID.woods, choiceId: 'light' })) as Deed;
     expect(plenty.requested).toEqual(delta({ body: -1, living: 1 }));
-    expect(light.requested).toEqual(ZERO);
+    expect(light.requested).toEqual(delta({ body: 1 }));
     for (const deed of [plenty, light]) {
       expect(deed.newCards).toEqual([]);
       expect(deed.note).toBe(happeningOf(pack, ID.woods).note);

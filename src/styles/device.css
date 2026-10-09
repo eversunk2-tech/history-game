@@ -1,0 +1,293 @@
+/* 태블릿과 홈 화면: 홈 화면에 추가하는 법, "이 기기", 세로 안내.
+   글자는 1.25rem(20px)부터, 누르는 것은 높이 3.5rem(56px)부터. */
+
+/* ── 홈 화면에 추가하는 법 ── */
+
+.guide-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 40rem;
+  max-width: calc(100% - 2rem);
+  max-height: calc(100% - 1.5rem);
+  padding: 1.1rem 1.4rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.guide-head {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.guide-icon {
+  flex: none;
+  width: 4rem;
+  height: 4rem;
+  border: 0.14rem solid var(--ink);
+  border-radius: 0.9rem;
+  image-rendering: auto;
+}
+
+.guide-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.3;
+  word-break: keep-all;
+}
+
+.guide-lead {
+  font-size: 1.25rem;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.guide-lists {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.guide-lists.two {
+  grid-template-columns: 1fr 1fr;
+}
+
+.guide-kind {
+  margin-bottom: 0.3rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem 0.8rem;
+  border: 0.1rem solid var(--ink-faint);
+  border-radius: 0.7rem;
+  background: var(--paper);
+  list-style: none;
+  text-align: left;
+}
+
+.guide-steps li {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.guide-num {
+  flex: none;
+  font-weight: 800;
+}
+
+.guide-one {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.guide-after,
+.guide-done {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.guide-wifi {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  border: 0.14rem dashed var(--ink);
+  border-radius: 0.6rem;
+  background: var(--paper-deep);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.guide-wifi-mark {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.15rem;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper-light);
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.5rem;
+  text-align: center;
+}
+
+.guide-buttons {
+  margin-top: 0.3rem;
+}
+
+/* ── 이 기기 ── */
+
+.device-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 34rem;
+  max-width: calc(100% - 2rem);
+  max-height: calc(100% - 1.5rem);
+  padding: 1.1rem 1.4rem;
+  overflow-y: auto;
+}
+
+.device-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.device-row {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: 0.6rem;
+  padding: 0.25rem 0;
+  border-bottom: 0.08rem dashed var(--ink-faint);
+  font-size: 1.25rem;
+  line-height: 1.4;
+}
+
+.device-row dt {
+  font-weight: 800;
+}
+
+.device-row dd {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* 제목 화면 귀퉁이의 판 번호: 누르면 "이 기기"가 열린다 */
+button.title-build {
+  position: static;
+  align-self: flex-end;
+  min-height: 2.75rem;
+  margin-top: -0.2rem;
+  padding: 0.3rem 0.2rem 0.3rem 0.8rem;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+/* ── 세로 안내 ── */
+
+.turn {
+  display: none;
+}
+
+@media (orientation: portrait) {
+  .is-tablet .turn {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: var(--paper);
+  }
+}
+
+.turn-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  text-align: center;
+}
+
+/* 세로로 선 태블릿 그림(옆의 굽은 화살표는 글이 대신한다) */
+.turn-tablet {
+  width: 5rem;
+  height: 7rem;
+  border: 0.3rem solid var(--ink);
+  border-radius: 0.8rem;
+  background: var(--paper-light);
+  box-shadow: inset 0 -0.9rem 0 var(--paper-deep);
+  transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .turn-tablet {
+    animation: turn-over 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes turn-over {
+  0%,
+  25% {
+    transform: rotate(0deg);
+  }
+  60%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+.turn-ask {
+  /* 세로로 들면 화면 너비가 좁아 rem이 작아진다. 글자가 20px 아래로 내려가지 않게 바닥을 둔다. */
+  font-size: max(1.75rem, 28px);
+  font-weight: 800;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+
+.turn-note {
+  font-size: max(1.25rem, 20px);
+  line-height: 1.5;
+}
+
+/* ── 종이 안에서 넘길 것이 더 있을 때(봇짐) ── */
+
+.paper-below {
+  flex: none;
+  margin: -0.2rem -1.4rem -1.1rem;
+  padding: 0.25rem 0.6rem 0.35rem;
+  border-top: 0.1rem solid var(--ink-faint);
+  border-radius: 0 0 0.85rem 0.85rem;
+  background: var(--paper-deep);
+  font-size: 1.25rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* 기력이 낮을 때의 한 줄은 도드라진다(점선 테와 굵은 글 — 색만으로 알리지 않는다) */
+.bag-tired {
+  margin-top: 0.3rem;
+}
+
+.bag-tired.now {
+  padding: 0.3rem 0.6rem;
+  border: 0.12rem dashed var(--ink);
+  border-radius: 0.5rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+/* 계절 닫기: 기력이 낮아 다음 계절의 해가 준다는 한 줄 */
+.closing-tired {
+  margin-top: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border: 0.12rem dashed var(--ink);
+  border-radius: 0.5rem;
+  font-weight: 800;
+  line-height: 1.45;
+  word-break: keep-all;
+}

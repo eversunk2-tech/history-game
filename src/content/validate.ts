@@ -1206,6 +1206,12 @@ export function findAllLocked(h: Happening, who: { role: RoleId; look: Look }, d
 
 /** 한 번의 걸어 보기에서 살피는 상태 수의 한도(넘으면 알림을 남기고 멈춘다) */
 const WALK_CAP = 40000;
+/**
+ * 한 계절에 걸을 수 있는 걸음의 한도. 일 하나는 한 번만 하므로 한 계절의 걸음은 그 계절의 일의 수를 넘지 못한다.
+ * 이것을 넘으면 판이 나아가지 않는 것이다(엔진이 한 일을 적지 않는다, 다른 계절의 일이 끝없이 열린다 …).
+ * 그때는 걷기를 그만두고 잘못으로 알린다(검사와 시험이 끝나지 않고 멈춰 있지 않게).
+ */
+const WALK_DEPTH = 80;
 /** 다음 계절로 넘기는 "앞선 선택"의 가짓수 한도 */
 const CARRY_CAP = 48;
 
@@ -1254,6 +1260,8 @@ interface WalkOut {
   /** 계절을 보낼 수 있게 된 형편들 */
   ends: GameState[];
   capped: boolean;
+  /** 걸음이 끝없이 이어져 그만두었는가(판이 나아가지 않는다) */
+  runaway: boolean;
 }
 
 /**
@@ -1270,7 +1278,7 @@ function walk(
   allow?: (happeningId: string) => boolean,
 ): WalkOut {
   const memo = new Map<string, boolean>();
-  const out: WalkOut = { states: 0, dead: [], thrown: [], ends: [], capped: false };
+  const out: WalkOut = { states: 0, dead: [], thrown: [], ends: [], capped: false, runaway: false };
   const reported = new Set<string>();
   const addDead = (dead: DeadEnd) => {
     const key = keyOf(dead.state);
@@ -1280,6 +1288,12 @@ function walk(
   };
 
   const visit = (state: GameState, path: string[]): boolean => {
+    if (out.runaway) return true;
+    if (path.length > WALK_DEPTH) {
+      out.runaway = true;
+      out.thrown.push(`한 계절에 ${WALK_DEPTH}걸음을 넘게 걸었다(판이 나아가지 않는다): ${path.slice(0, 4).join(' → ')} …`);
+      return true;
+    }
     const key = keyOf(state);
     const known = memo.get(key);
     if (known !== undefined) return known;
@@ -1504,6 +1518,9 @@ export function walkRole(pack: SituationPack, roleId: RoleId): { walks: number; 
       }
       for (const thrown of out.thrown.slice(0, 3)) err('walk-throw', where, `걷다가 엔진이 멈췄다 — ${from}: ${thrown}`);
       if (out.capped) gap('walk-capped', where, `길이 너무 많아 ${WALK_CAP}가지 형편까지만 걸어 보았다`);
+      // 판이 나아가지 않거나 길이 한도를 넘게 많으면 다른 처음 형편으로 걸어 보아도 같다. 이 역할의 걷기를 그만둔다
+      // (한 번에 한도까지 걷는 일을 수십 번 되풀이하지 않게 — 검사와 시험이 멈춰 있지 않게).
+      if (out.runaway || out.capped) return false;
       return true;
     };
 
@@ -1609,9 +1626,11 @@ export function measureSeason(pack: SituationPack, role: RoleId, look: Look, fro
   type Span = { min: [number, number, number]; max: [number, number, number] } | null;
   const measure = (mustOnly: boolean): Span => {
     const memo = new Map<string, Span>();
-    const visit = (state: GameState): Span => {
+    const visit = (state: GameState, depth = 0): Span => {
+      if (depth > WALK_DEPTH) throw new Error(`한 계절에 ${WALK_DEPTH}걸음을 넘게 걸었다(판이 나아가지 않는다)`);
       const key = keyOf(state);
       if (memo.has(key)) return memo.get(key) ?? null;
+      if (memo.size >= WALK_CAP) throw new Error(`길이 너무 많아 셀 수 없다(${WALK_CAP}가지 형편을 넘는다)`);
       memo.set(key, null);
       const closable = canCloseSeason(pack, state);
       let span: Span = null;
@@ -1622,7 +1641,7 @@ export function measureSeason(pack: SituationPack, role: RoleId, look: Look, fro
         if (moves.length === 0 && closable) span = { min: [0, 0, 0], max: [0, 0, 0] };
         for (const move of moves) {
           const next = doHappening(pack, state, move);
-          const rest = visit(next);
+          const rest = visit(next, depth + 1);
           if (!rest) continue;
           const chars = charsOfStep(pack, state, move, next);
           const play = happeningOf(pack, move.id).play ? 1 : 0;

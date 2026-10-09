@@ -4,8 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="조선의 한 마을에서 열다섯 살로 한 해를 살아 보는 역할 이야기 놀이" />
-    <!-- 아이콘 파일이 없다. 브라우저가 favicon.ico를 찾다 404를 남기지 않게 빈 아이콘을 준다 -->
-    <link rel="icon" href="data:," />
+    <!-- 홈 화면에 추가(매니페스트와 아이콘). 아이콘은 이 게임의 느티나무 도트 그림이다(scripts/make-icons.mjs가 뜬다). 서비스 워커는 없다. -->
+    <meta name="theme-color" content="#f4ecd9" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+    <!-- 아이패드: 홈 화면 아이콘과 그 밑의 이름 -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="조선 한 해" />
     <title>조선에서 한 해 살기</title>
   </head>
   <body>

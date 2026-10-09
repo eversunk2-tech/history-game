@@ -16,6 +16,7 @@ import { Title } from '../screens/Title';
 import { Trouble } from '../screens/Trouble';
 import { askingHome, cancelHome, game, goHome, noteTrouble, pack, screen, seed, situationId } from '../state/store';
 import { Ask } from '../ui/Ask';
+import { TurnNotice } from '../ui/TurnNotice';
 
 /** "처음으로"를 눌렀을 때 한 번 묻는다. 하던 해는 저장되어 있어 "이어 하기"로 돌아올 수 있다. */
 function HomeConfirm(): JSX.Element {
@@ -99,6 +100,7 @@ export function App(): JSX.Element {
         <Current />
         {askingHome.value && <HomeConfirm />}
       </Guard>
+      <TurnNotice />
     </div>
   );
 }
