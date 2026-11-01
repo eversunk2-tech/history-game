@@ -1,0 +1,210 @@
+/* 일 놀이(김매기, 값 치르기, 가을걷이와 나라 몫, 베 짜기)의 모양. 볍씨 뿌리기는 talk.css에 있다.
+   틀(.play, .play-head, .play-field, .play-foot)은 talk.css의 것을 그대로 쓴다. 여기에는 놀이판과 아래 줄의 조각만 둔다.
+   글은 1.25rem(20px)부터, 누르는 것은 높이 3.5rem(56px)부터. 뜻은 글과 모양으로 전한다(색만으로 알리지 않는다). */
+
+/* ── 틀(talk.css의 것)에 덧대는 것 ──
+   "어른께 맡긴다"와 끝내기 단추 사이를 넓힌다(손가락으로 잘못 누르지 않게 — 틈이 13px이던 것을 50px쯤으로).
+   "일 놀이" 딱지와 끝내기 단추의 "▶"도 20px로 맞춘다. */
+
+.play-foot .play-leave {
+  margin-right: 2.4rem;
+}
+
+.play-kicker,
+.play-done-go {
+  font-size: 1.25rem;
+}
+
+/* ── 도트 놀이판 ── */
+
+.play-box {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0.14rem solid var(--ink);
+  border-radius: 0.6rem;
+  background: #3f6a62;
+  overflow: hidden;
+}
+
+.play-box.autumn {
+  background: #63503f;
+}
+
+.play-box.yard {
+  background: #b08d67;
+}
+
+.play-box.room {
+  background: #3a2c22;
+}
+
+.play-canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  /* 놀이판을 쓸거나 끌 때 화면이 끌리지 않게 */
+  touch-action: none;
+  cursor: pointer;
+}
+
+.play-canvas:focus-visible {
+  outline: 0.2rem solid var(--focus);
+  outline-offset: -0.2rem;
+}
+
+/* ── 아래 줄 ── */
+
+.play-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.1rem 0.9rem;
+  font-weight: 800;
+}
+
+.play-gauge {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.play-gauge-cells {
+  display: flex;
+  gap: 0.14rem;
+}
+
+.play-gauge-cells .cell {
+  width: 0.8rem;
+  height: 1.1rem;
+}
+
+.play-say {
+  flex: 1 1 14rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+
+/* 다 했을 때의 한 줄은 먹빛으로 또렷하게 */
+.play-say.strong {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+/* 그림과 이름을 나란히: "벼 / 풀" */
+.play-legend {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.play-legend-item {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.2rem;
+  padding: 0.1rem 0.45rem 0.1rem 0.3rem;
+  border: 0.1rem solid var(--ink-faint);
+  border-radius: 0.5rem;
+  background: #4d7a6c;
+  color: #fbf6e9;
+  line-height: 1.3;
+}
+
+.play-icon {
+  display: block;
+  flex: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* 놀이판 위에 얹는 이름 딱지("나라 몫", "북" …). 그림 속에 글씨를 그리지 않고 글자로 얹는다. */
+.play-tag {
+  position: absolute;
+  z-index: 1;
+  transform: translateX(-50%);
+  padding: 0.05rem 0.6rem;
+  border: 0.1rem solid var(--ink);
+  border-radius: 0.5rem;
+  background: var(--paper-light);
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ── 쌀과 베로 값 치르기 ── 놀이판(위)과 얹기·덜기 단추 줄(아래) */
+
+.pay-wrap {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0.4rem;
+}
+
+.pay-wrap .play-box {
+  position: relative;
+  inset: auto;
+  min-height: 0;
+}
+
+.pay-bar {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pay-act {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+}
+
+/* 지금은 할 수 없는 일(쌀이 떨어졌다, 이미 끊었다 …): 점선 테와 흐린 글. 눌러도 아무 일이 없다. */
+.pay-act.off {
+  border-style: dashed;
+  border-color: var(--ink-faint);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+/* 상대의 말: 놀이판 오른쪽 위, 그 사람 머리 위에 뜬다 */
+.pay-bubble {
+  position: absolute;
+  z-index: 1;
+  top: 3%;
+  right: 1.5%;
+  max-width: 54%;
+  padding: 0.3rem 0.8rem 0.4rem;
+  border: 0.14rem solid var(--ink);
+  border-radius: 0.9rem 0.9rem 0.2rem 0.9rem;
+  background: var(--paper-light);
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.pay-bubble-who {
+  display: block;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.pay-tag-mine {
+  top: 5%;
+  left: 13%;
+}
+
+/* "되: 쌀을 되는 그릇" — 놀이판 위, 되 바로 밑(자리는 놀이가 정한다) */
+.pay-tag-measure {
+  font-weight: 700;
+}

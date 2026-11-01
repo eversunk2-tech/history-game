@@ -19,6 +19,8 @@ import {
   guideKinds,
   guideShape,
 } from '../src/ui/InstallGuide';
+import { guardKeys, holdKeys, keysAreHeld, swallowIfHeld } from '../src/ui/focus';
+import { OPEN_GAP_MS, TAP_GAP_MS, TapGate } from '../src/ui/taps';
 import { turnNeeded } from '../src/ui/TurnNotice';
 
 const UA = {
@@ -274,5 +276,198 @@ describe('매니페스트와 아이콘', () => {
     for (const [path, text] of Object.entries(SOURCES)) {
       expect(/serviceWorker\s*\.\s*register|navigator\.serviceWorker/.test(text), path).toBe(false);
     }
+  });
+});
+
+// 태블릿 바퀴 Review의 9번: 세로 안내가 떠 있는 동안에는 어떤 창(대화 장면·종이·물음)이 떠 있어도 자판이 통하지 않는다.
+// 얹힌 창은 뜰 때 창 전체의 자판을 먼저 잡는 자리(window의 capture)에 걸어 두므로, 문지기는 그보다 먼저 걸려 있어야 하고,
+// 늦게 걸렸더라도 얹힌 창의 처리가 스스로 물러나야 한다. 브라우저 없이 EventTarget으로 본다.
+describe('세로 안내가 떠 있는 동안의 자판', () => {
+  const press = (target: EventTarget, kind = 'keydown'): Event => {
+    const ev = new Event(kind, { cancelable: true });
+    target.dispatchEvent(ev);
+    return ev;
+  };
+
+  it('막혀 있지 않으면 문지기는 아무것도 하지 않는다', () => {
+    holdKeys(false);
+    const target = new EventTarget();
+    const off = guardKeys(target);
+    const seen: string[] = [];
+    target.addEventListener('keydown', () => seen.push('창'), true);
+    const ev = press(target);
+    expect(seen).toEqual(['창']);
+    expect(ev.defaultPrevented).toBe(false);
+    off();
+  });
+
+  it('막혀 있으면 뒤에 걸린 것(얹힌 창, 맵)이 누름을 받지 못한다 — 누름·뗌 모두', () => {
+    const target = new EventTarget();
+    const off = guardKeys(target);
+    const seen: string[] = [];
+    // 얹힌 창은 문지기보다 나중에 걸린다(대화 장면이 뜰 때)
+    target.addEventListener('keydown', () => seen.push('창'), true);
+    target.addEventListener('keydown', () => seen.push('맵'));
+    target.addEventListener('keyup', () => seen.push('맵 뗌'));
+    holdKeys(true);
+    expect(keysAreHeld()).toBe(true);
+    expect(press(target).defaultPrevented).toBe(true);
+    expect(press(target, 'keyup').defaultPrevented).toBe(true);
+    expect(seen).toEqual([]);
+    // 가로로 돌아오면 다시 받는다
+    holdKeys(false);
+    press(target);
+    press(target, 'keyup');
+    expect(seen).toEqual(['창', '맵', '맵 뗌']);
+    off();
+  });
+
+  it('문지기보다 먼저 걸린 창이 있어도, 그 창의 처리가 스스로 물러난다(swallowIfHeld)', () => {
+    const target = new EventTarget();
+    const seen: string[] = [];
+    // 얹힌 창의 자판 처리와 같은 꼴: 막혀 있으면 삼키고 아무것도 하지 않는다
+    target.addEventListener('keydown', (ev) => {
+      if (swallowIfHeld(ev)) return;
+      seen.push('창이 넘김');
+    }, true);
+    target.addEventListener('keydown', () => seen.push('밑의 화면'));
+    const off = guardKeys(target);
+    holdKeys(true);
+    expect(press(target).defaultPrevented).toBe(true);
+    expect(seen).toEqual([]);
+    holdKeys(false);
+    press(target);
+    expect(seen).toEqual(['창이 넘김', '밑의 화면']);
+    off();
+  });
+
+  it('삼킨 누름은 true, 막혀 있지 않은 누름은 false를 돌려준다', () => {
+    const calls: string[] = [];
+    const fake = { stopImmediatePropagation: () => calls.push('stop'), preventDefault: () => calls.push('prevent') };
+    holdKeys(false);
+    expect(swallowIfHeld(fake)).toBe(false);
+    expect(calls).toEqual([]);
+    holdKeys(true);
+    expect(swallowIfHeld(fake)).toBe(true);
+    expect(calls).toEqual(['stop', 'prevent']);
+    holdKeys(false);
+  });
+
+  it('거둔 문지기는 더 삼키지 않는다', () => {
+    const target = new EventTarget();
+    const off = guardKeys(target);
+    off();
+    holdKeys(true);
+    const seen: string[] = [];
+    target.addEventListener('keydown', () => seen.push('창'));
+    press(target);
+    expect(seen).toEqual(['창']);
+    holdKeys(false);
+  });
+
+  it('얹힌 창의 자판 처리(focus.ts)와 세로 안내(TurnNotice.tsx)가 이 막기를 쓴다', () => {
+    const focus = SOURCES[Object.keys(SOURCES).find((path) => path.endsWith('/ui/focus.ts')) ?? ''] ?? '';
+    const turn = SOURCES[Object.keys(SOURCES).find((path) => path.endsWith('/ui/TurnNotice.tsx')) ?? ''] ?? '';
+    // 창 밖에서 생긴 누름과 창 안에서 생긴 누름, 두 곳 모두에서 먼저 물러난다
+    expect((focus.match(/if \(swallowIfHeld\(ev\)\) return;/g) ?? []).length).toBe(2);
+    // 세로가 되는 그 자리에서 막고, 문지기는 파일이 불릴 때(창이 뜨기 전에) 건다
+    expect(turn).toMatch(/holdKeys\(need\)/);
+    expect(turn).toMatch(/^if \(typeof window !== 'undefined'\) guardKeys\(window\);/m);
+  });
+});
+
+// Review 1-라 6번: 일 놀이를 끝낸 바로 뒤의 첫 결과 창("벼는 그대로 두고 풀만 말끔히 뽑았구나")이 보이지도 않고 넘어갔다.
+// 자판 Enter로 놀이를 끝내면 그 누름이 대화 장면에 닿고, 끝내기 단추를 0.17~0.37초 사이에 두 번 누르면 둘째가 닿았다.
+// 대화 장면은 결과를 띄울 때 누름의 문(TapGate)을 다시 막는다 — 열 때와 같은 틈.
+describe('대화 장면 — 잇달아 누르기와 놀이 뒤의 첫 결과 창', () => {
+  it('틈: 잇달아 누름은 0.26초, 새 창이 뜬 뒤는 0.38초', () => {
+    expect(TAP_GAP_MS).toBe(260);
+    expect(OPEN_GAP_MS).toBe(380);
+    expect(OPEN_GAP_MS).toBeGreaterThan(TAP_GAP_MS);
+  });
+
+  it('대화가 열린 바로 뒤 0.38초는 누름을 받지 않는다(맵을 누른 손가락이 첫 창을 넘기지 않게)', () => {
+    const gate = new TapGate(1000);
+    expect(gate.pass(1000)).toBe(false);
+    expect(gate.pass(1379)).toBe(false);
+    expect(gate.pass(1380)).toBe(true);
+  });
+
+  it('잇달아 누름: 받은 누름에서 0.26초 안의 누름은 하나로 친다', () => {
+    const gate = new TapGate(0);
+    expect(gate.pass(5000)).toBe(true);
+    expect(gate.pass(5100)).toBe(false);
+    expect(gate.pass(5259)).toBe(false);
+    expect(gate.pass(5260)).toBe(true);
+  });
+
+  it('놀이를 끝낸 그 누름(자판 Enter)과 0.17~0.37초 뒤의 둘째 누름이 첫 결과 창을 넘기지 않는다', () => {
+    const gate = new TapGate(0);
+    expect(gate.pass(4000)).toBe(true); // 선택지를 고른다 → 일 놀이(1분쯤, 그동안 대화 장면에는 누름이 없다)
+    const end = 64_000;
+    gate.hold(end); // 놀이를 끝내 결과의 첫 창이 뜬다
+    expect(gate.pass(end)).toBe(false); // 놀이를 끝낸 Enter가 그대로 대화 장면에 닿는다
+    for (const later of [170, 250, 300, 370, 379]) expect(gate.pass(end + later), `${later}ms`).toBe(false);
+    expect(gate.pass(end + OPEN_GAP_MS)).toBe(true); // 그 뒤에는 넘긴다
+  });
+
+  it('다시 막지 않으면(고치기 전처럼) 둘째 누름이 첫 결과 창을 넘긴다 — 위의 시험이 잘못을 잡는다', () => {
+    const gate = new TapGate(0);
+    expect(gate.pass(4000)).toBe(true);
+    expect(gate.pass(64_000)).toBe(true);
+    expect(gate.pass(64_170)).toBe(false);
+    const fresh = new TapGate(0);
+    fresh.pass(4000);
+    expect(fresh.pass(64_170)).toBe(true);
+  });
+
+  it('이미 더 길게 막혀 있으면 막는 것을 줄이지 않는다', () => {
+    const gate = new TapGate(10_000); // 10.38초까지 막혀 있다
+    gate.hold(9_000);
+    expect(gate.pass(10_200)).toBe(false);
+    expect(gate.pass(10_380)).toBe(true);
+  });
+
+  it('Talk.tsx는 일을 마치고 결과를 띄울 때 문을 다시 막는다', () => {
+    const talk = SOURCES[Object.keys(SOURCES).find((path) => path.endsWith('/screens/Talk.tsx')) ?? ''] ?? '';
+    const commit = talk.slice(talk.indexOf('const commit = '), talk.indexOf('const afterChoice = '));
+    expect(commit).toMatch(/commitTalk\(/);
+    expect(commit).toMatch(/gate\.current\?\.hold\(Date\.now\(\)\)/);
+    // 막는 것이 결과를 띄우기(setDeed) 앞에 있다
+    expect(commit.indexOf('hold(')).toBeLessThan(commit.indexOf('setDeed('));
+    // 누름을 받을지 가르는 것은 이 문 하나다
+    expect(talk).toMatch(/const tooSoon = \(\): boolean => !\(gate\.current as TapGate\)\.pass\(Date\.now\(\)\);/);
+  });
+});
+
+// Review 1-라 37번 ㉠: 같은 일을 하는 함수가 따로 있지 않다 — 수를 우리말로 세는 countWord는 src/ui/words.ts의 하나뿐이다.
+describe('코드 — 하나만 있어야 하는 것', () => {
+  it('countWord는 src/ui/words.ts에만 있다(다른 곳은 불러 쓴다)', () => {
+    const defining = Object.entries(SOURCES)
+      .filter(([, text]) => /(function countWord\s*\(|const countWord\s*=)/.test(text))
+      .map(([path]) => path.replace(/^.*\/src\//, 'src/'));
+    expect(defining).toEqual(['src/ui/words.ts']);
+  });
+});
+
+// Review 1-라 28번 ㉡㉢: 선택지가 뜬 바로 뒤의 자판, 세로 안내가 걷힌 뒤의 초점
+describe('자판 — 선택지의 첫 자리와 세로 안내 뒤의 초점', () => {
+  const source = (end: string): string => SOURCES[Object.keys(SOURCES).find((path) => path.endsWith(end)) ?? ''] ?? '';
+
+  it('Tab의 첫 자리는 창이 정한 data-first-tab(대화 장면에서는 첫 열린 선택지)이다', () => {
+    expect(source('/ui/focus.ts')).toMatch(/root\.querySelector<HTMLElement>\('\[data-first-tab\]'\) \?\? items\[0\]/);
+    expect(source('/screens/Talk.tsx')).toMatch(/data-first-tab=\{view\.id === firstOpen \? true : undefined\}/);
+  });
+
+  it('선택지 묶음에서 Enter는 첫 선택지로 옮길 뿐 고르지 않는다', () => {
+    const talk = source('/screens/Talk.tsx');
+    expect(talk).toMatch(/document\.activeElement === list/);
+    expect(talk).toMatch(/querySelector<HTMLElement>\('button\.talk-choice'\)\?\.focus\(\)/);
+  });
+
+  it('세로 안내가 걷히면 지우기 전의 초점으로 돌아간다', () => {
+    const turn = source('/ui/TurnNotice.tsx');
+    expect(turn).toMatch(/const kept = /);
+    expect(turn).toMatch(/kept\.focus\(\{ preventScroll: true \}\)/);
   });
 });

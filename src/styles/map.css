@@ -38,6 +38,16 @@
   cursor: pointer;
 }
 
+/* 자판으로 걸으면 맵에도 다른 단추와 같은 초점 테를 두른다(무대가 넘치는 것을 자르므로 안쪽에 그린다).
+   누르기와 손가락으로 걸을 때는 두르지 않는다(맵 화면이 keyed를 붙이고 뗀다). */
+.map-canvas:focus {
+  outline: none;
+}
+.map-canvas.keyed:focus {
+  outline: 0.2rem solid var(--focus);
+  outline-offset: -0.2rem;
+}
+
 .map-loading {
   position: absolute;
   inset: 0;

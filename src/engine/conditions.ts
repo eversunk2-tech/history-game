@@ -30,6 +30,7 @@ export function meets(cond: Condition | undefined, facts: Facts): boolean {
   if (cond.flags && !cond.flags.every((flag) => facts.flags.includes(flag))) return false;
   if (cond.notFlags && cond.notFlags.some((flag) => facts.flags.includes(flag))) return false;
   if (cond.items && !cond.items.every((item) => facts.items.includes(item))) return false;
+  if (cond.cardCount !== undefined && (facts.cards?.length ?? 0) < cond.cardCount) return false;
   if (cond.anyOf && cond.anyOf.length > 0 && !cond.anyOf.some((one) => meets(one, facts))) return false;
   return true;
 }

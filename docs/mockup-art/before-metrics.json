@@ -1,0 +1,101 @@
+{
+  "note": "지금 그림(1배, 타일 16점). 그림 점 단위로 잰다.",
+  "groundOrphans": {
+    "perTileAvg": 7.09,
+    "perTileMax": 23,
+    "per1000": 27.68
+  },
+  "groundChecker": 4.51,
+  "groundHarsh": 7.65,
+  "groundHarshChecker": 1.92,
+  "warmth": {
+    "greenHue": 100,
+    "warmth": 49.3,
+    "darkWarmth": 8.6,
+    "darkShare": 6,
+    "lum": 0.53
+  },
+  "monotony": {
+    "grass": {
+      "blocks": 588,
+      "lumaStd": 5.57,
+      "warmStd": 3.68,
+      "tones": 7,
+      "flatPct": 18.5
+    },
+    "dirt": {
+      "blocks": 625,
+      "lumaStd": 5.43,
+      "warmStd": 4.43,
+      "tones": 8,
+      "flatPct": 35.9
+    }
+  },
+  "sceneColors": 68,
+  "thingOrphansPer1000": {
+    "gate": 13.9,
+    "blossom": 37.3,
+    "jars": 33,
+    "well": 22.4,
+    "oak": 59.5,
+    "choga": 33.5
+  },
+  "thingHarshPer1000": {
+    "gate": 12.19,
+    "blossom": 14.22,
+    "jars": 20.73,
+    "well": 9.93,
+    "oak": 28.02,
+    "choga": 4.06
+  },
+  "thingGrime": {
+    "gate": {
+      "grimePct": 30.1,
+      "rough": 7.3
+    },
+    "choga": {
+      "grimePct": 21.9,
+      "rough": 6.47
+    },
+    "wall": {
+      "grimePct": 24.3,
+      "rough": 8.51
+    }
+  },
+  "blotch": {
+    "grass": 3.7,
+    "dirt": 3.46
+  },
+  "people": {
+    "hero": {
+      "outlineShare": 0.548,
+      "orphansPer1000": 17.6,
+      "edgeContrast": 0.416,
+      "body": 0.601,
+      "edge": 0.194,
+      "ground": 0.575,
+      "bodyMinusGround": 0.026,
+      "groundMinusEdge": 0.382
+    },
+    "elder": {
+      "outlineShare": 0.226,
+      "orphansPer1000": 99.7,
+      "edgeContrast": 0.428,
+      "body": 0.686,
+      "edge": 0.222,
+      "ground": 0.608,
+      "bodyMinusGround": 0.078,
+      "groundMinusEdge": 0.386
+    },
+    "woman": {
+      "outlineShare": 0.561,
+      "orphansPer1000": 66.9,
+      "edgeContrast": 0.398,
+      "body": 0.571,
+      "edge": 0.202,
+      "ground": 0.577,
+      "bodyMinusGround": -0.006,
+      "groundMinusEdge": 0.375
+    }
+  }
+}

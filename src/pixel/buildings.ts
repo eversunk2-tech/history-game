@@ -14,6 +14,8 @@ function thatchRoof(px: Px, x0: number, y0: number, w: number, h: number, pal: P
   // 새로 이은 지붕은 누런 볏짚 빛, 묵은 지붕은 비바람에 잿빛이 돈다
   const ramp = old ? pal.thatchOld : pal.thatch;
   const n = ramp.length - 1;
+  const winter = pal.season === 'winter';
+  const snow = pal.snow;
   const half = w / 2;
   const cx = x0 + half;
   const ridgeY = y0 + Math.round(h * 0.2);
@@ -47,6 +49,18 @@ function thatchRoof(px: Px, x0: number, y0: number, w: number, h: number, pal: P
       if (hash2(x, y, seed + 5) < 0.03) tone += 0.16;
       // 처마 끝은 두껍고 어둡다
       const fromEave = eave - y;
+      if (winter) {
+        // 겨울: 지붕에 눈이 덮였다. 처마 끝과, 눈이 흘러내린 자리에만 짚이 보인다.
+        const slip = 2.4 + vnoise(x / 6.5, seed * 0.31, seed + 9) * 3.6 + (hash2(x, 3, seed + 10) < 0.12 ? 2 : 0);
+        if (fromEave >= slip) {
+          let sv = 3.4 + (tone - 0.62) * 3.4;
+          if (hip > 0 && u > 0) sv -= 1.3; // 오른쪽 추녀면은 그늘
+          if (y < ridgeY - 1) sv -= 0.6;
+          if (fromEave < slip + 1.2) sv = Math.min(sv, 2); // 눈의 끝이 짚 위에 도톰하다
+          px.set(x, y, snow[clamp(Math.round(sv), 1, snow.length - 1)]);
+          continue;
+        }
+      }
       if (fromEave < 1) tone = 0.05;
       else if (fromEave < 2.2) tone = Math.min(tone, 0.22);
       else if (fromEave < 3.4) tone -= 0.14;
@@ -64,6 +78,14 @@ function thatchRoof(px: Px, x0: number, y0: number, w: number, h: number, pal: P
     px.set(x, y - 1, ramp[n - 1 - (x % 3 === 0 ? 1 : 0)]);
     px.set(x, y, ramp[x % 3 === 1 ? 2 : 3]);
     px.set(x, y + 1, ramp[2]);
+    if (winter) {
+      // 용마름 위에 얹힌 눈
+      px.set(x, y - 3, snow[4]);
+      px.set(x, y - 2, snow[t > 0.7 ? 3 : 4]);
+      px.set(x, y - 1, snow[3]);
+      px.set(x, y, snow[2]);
+      px.set(x, y + 1, snow[hash2(x, 5, seed + 11) < 0.4 ? 2 : 3]);
+    }
   }
 }
 
@@ -205,6 +227,11 @@ function chimney(px: Px, x: number, yBot: number, pal: Palette): { x: number; y:
     }
   }
   for (let i = 1; i < 5; i++) px.set(x + i, yBot - 12, pal.bark[0]);
+  // 겨울: 굴뚝 둘레는 더운 김에 눈이 녹고 가장자리에만 조금 남는다
+  if (pal.season === 'winter') {
+    px.set(x, yBot - 12, pal.snow[3]);
+    px.set(x + 5, yBot - 12, pal.snow[2]);
+  }
   return { x: x + 3, y: yBot - 13 };
 }
 
@@ -296,6 +323,8 @@ export const shed: Maker = (pal) => {
 function tileRoof(px: Px, x0: number, y0: number, w: number, h: number, pal: Palette, seed: number): void {
   const ramp = pal.tile;
   const n = ramp.length - 1;
+  const winter = pal.season === 'winter';
+  const snow = pal.snow;
   const half = w / 2;
   const cx = x0 + half;
   const ridgeHalf = half * 0.6;
@@ -321,6 +350,17 @@ function tileRoof(px: Px, x0: number, y0: number, w: number, h: number, pal: Pal
       const fromEave = eave - y;
       if (fromEave < 1) tone = rib < 2 ? 0.86 : 0.18; // 막새
       else if (fromEave < 2) tone = rib < 2 ? 0.6 : 0.12;
+      else if (winter) {
+        // 겨울: 기왓골을 따라 눈이 쌓였다. 수키와의 등은 희고 골은 그늘지며, 처마 가까이는 눈이 녹아 기와가 비친다.
+        const melt = fromEave < 3.2 + vnoise(x / 5.5, 1.3, seed + 6) * 3.4;
+        if (!(melt && rib >= 2)) {
+          let sv = 3.6 - 0.5 * v + (rib === 0 ? 0.5 : rib === 1 ? 0.1 : rib === 2 ? -0.5 : -1.5);
+          if (hip > -0.02) sv = u < 0 ? 3.8 : 1.9; // 추녀면: 왼쪽은 볕, 오른쪽은 그늘
+          if (melt) sv -= 0.6;
+          px.set(x, y, snow[clamp(Math.round(sv), 1, snow.length - 1)]);
+          continue;
+        }
+      }
       px.set(x, y, ramp[clamp(Math.round(tone * n), 0, n)]);
     }
     // 처마 밑(서까래 끝)
@@ -342,6 +382,10 @@ function tileRoof(px: Px, x0: number, y0: number, w: number, h: number, pal: Pal
       px.set(x, y - 1, ramp[side < 0 ? n : n - 2]);
       px.set(x, y, ramp[side < 0 ? n - 1 : 2]);
       px.set(x, y + 1, ramp[1]);
+      if (winter && t < 0.9) {
+        px.set(x, y - 1, snow[side < 0 ? 4 : 3]);
+        px.set(x, y, snow[side < 0 ? 3 : 2]);
+      }
     }
   }
   // 용마루
@@ -352,6 +396,12 @@ function tileRoof(px: Px, x0: number, y0: number, w: number, h: number, pal: Pal
     px.set(x, ridgeY - 1, ramp[x % 4 === 0 ? 2 : 3]);
     px.set(x, ridgeY, ramp[2]);
     px.set(x, ridgeY + 1, ramp[1]);
+    if (winter) {
+      // 용마루 위에 얹힌 눈
+      px.set(x, ridgeY - 4, snow[4]);
+      px.set(x, ridgeY - 3, snow[4]);
+      px.set(x, ridgeY - 2, snow[t > 0.75 ? 2 : 3]);
+    }
   }
 }
 
@@ -589,6 +639,14 @@ function wallCap(px: Px, x0: number, y0: number, w: number, pal: Palette): void 
     px.set(x, y0 + 4, t[rib === 0 ? 3 : rib === 3 ? 0 : 2]);
     px.set(x, y0 + 5, t[rib < 2 ? 5 : 1]);
     px.set(x, y0 + 6, t[0]);
+    if (pal.season === 'winter') {
+      // 담 위에 눈이 얹혔다(기왓골의 끝은 보인다)
+      const snow = pal.snow;
+      px.set(x, y0, snow[4]);
+      px.set(x, y0 + 1, snow[4]);
+      px.set(x, y0 + 2, snow[rib === 3 ? 2 : 3]);
+      if (rib < 2 || hash2(x, y0, 59) < 0.5) px.set(x, y0 + 3, snow[rib === 0 ? 3 : 2]);
+    }
   }
 }
 
@@ -599,7 +657,7 @@ export const wallH: Maker = (pal, variant) => {
   wallBody(px, 0, 8, W, 21, pal, variant);
   wallCap(px, 0, 1, W, pal);
   for (let x = 0; x < W; x++) {
-    px.set(x, 0, pal.ink);
+    px.set(x, 0, pal.season === 'winter' ? pal.snow[2] : pal.ink);
     px.set(x, H - 1, pal.ink);
   }
   return { frames: [px], ax: 8, ay: 26, shades: [{ dx: 3, dy: 2, rx: 10, ry: 4, strength: 0.3 }] };
@@ -619,6 +677,8 @@ export const wallV: Maker = (pal, variant) => {
       if (side !== 1) v += rib === 0 ? 0.8 : rib === 3 ? -1.2 : 0;
       if (x === 1 || x === W - 2) v = side === 0 ? 4 : 1;
       px.set(x, y, t[clamp(Math.round(v), 0, 5)]);
+      // 겨울: 담 위에 눈이 얹혔다(가장자리의 기와 끝은 보인다)
+      if (pal.season === 'winter' && x > 2 && x < W - 3) px.set(x, y, pal.snow[side === 1 ? 4 : side === 0 ? (rib === 3 ? 3 : 4) : rib === 3 ? 2 : 3]);
     }
   }
   // 남쪽 끝의 마구리면

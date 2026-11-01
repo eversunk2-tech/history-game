@@ -1,0 +1,329 @@
+{
+ "schema": 4,
+ "build": "dev",
+ "cleared": {},
+ "cards": [
+  "s1395-direct-sowing",
+  "s1395-dano",
+  "s1395-hanseong"
+ ],
+ "current": {
+  "situationId": "s1395",
+  "role": "farmer",
+  "look": "girl",
+  "seed": 1395,
+  "stats": {
+   "living": 5,
+   "body": 6,
+   "trust": 6
+  },
+  "flags": [
+   "return.help",
+   "return.done",
+   "sow.even",
+   "sow.low",
+   "dano.done"
+  ],
+  "cards": [
+   "s1395-direct-sowing",
+   "s1395-dano",
+   "s1395-hanseong"
+  ],
+  "items": [],
+  "draw": "normal",
+  "seasonIndex": 1,
+  "phase": "season",
+  "sunsLeft": 2,
+  "done": [
+   "s1395-spring-return",
+   "s1395-spring-return-help",
+   "s1395-spring-sow",
+   "s1395-summer-dano",
+   "s1395-summer-manor"
+  ],
+  "solved": [
+   "s1395-m-return",
+   "s1395-m-sow",
+   "s1395-m-dano"
+  ],
+  "history": [
+   {
+    "happeningId": "s1395-spring-return",
+    "season": "spring",
+    "missionId": "s1395-m-return",
+    "theme": "duty",
+    "choiceId": "help",
+    "label": "돌아온 집의 밀린 논갈이를 거든다",
+    "lines": [
+     {
+      "who": "neighbor-elder",
+      "pose": "glad",
+      "text": "거들어 주겠다고? 고맙구나. 우리 논에서 기다리마."
+     },
+     {
+      "text": "쟁기질은 못 해도 흙덩이 깨는 일은 할 수 있다. 이웃집 논으로 가자."
+     }
+    ],
+    "note": "나라는 농사 때를 놓칠까 봐 농민을 돌려보내고 스님들에게 일을 맡겼어요.",
+    "requested": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "delta": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "before": {
+     "living": 4,
+     "body": 6,
+     "trust": 5
+    },
+    "after": {
+     "living": 4,
+     "body": 6,
+     "trust": 5
+    },
+    "newCards": [],
+    "newItems": [],
+    "newFlags": [
+     "return.help"
+    ],
+    "solved": [],
+    "sun": 0,
+    "goTo": "neighborPaddy"
+   },
+   {
+    "happeningId": "s1395-spring-return-help",
+    "season": "spring",
+    "missionId": "s1395-m-return",
+    "theme": "duty",
+    "lines": [
+     {
+      "who": "neighbor-elder",
+      "pose": "glad",
+      "text": "덕분에 곧 볍씨를 뿌리겠다. 너희 집 일이 바쁠 때는 내가 가마."
+     },
+     {
+      "text": "팔다리는 뻐근하지만 마음은 가볍다."
+     }
+    ],
+    "note": "나라가 일꾼들을 돌려보낸 것은 이월 십구일, 봄 농사가 시작될 때였어요.",
+    "requested": {
+     "living": 0,
+     "body": -1,
+     "trust": 1
+    },
+    "delta": {
+     "living": 0,
+     "body": -1,
+     "trust": 1
+    },
+    "before": {
+     "living": 4,
+     "body": 6,
+     "trust": 5
+    },
+    "after": {
+     "living": 4,
+     "body": 5,
+     "trust": 6
+    },
+    "newCards": [],
+    "newItems": [],
+    "newFlags": [
+     "return.done"
+    ],
+    "solved": [
+     "s1395-m-return"
+    ],
+    "sun": 0
+   },
+   {
+    "happeningId": "s1395-spring-sow",
+    "season": "spring",
+    "missionId": "s1395-m-sow",
+    "theme": "farming",
+    "choiceId": "low",
+    "label": "낮은 논에 몰아 뿌린다",
+    "play": "even",
+    "lines": [
+     {
+      "who": "father",
+      "pose": "glad",
+      "text": "고루 잘 뿌렸구나. 덕분에 볍씨가 한 줌 남았다."
+     },
+     {
+      "text": "낮은 논이 볍씨로 촘촘하다. 이제 여름 하늘에 달렸다."
+     }
+    ],
+    "note": "이때는 볍씨를 논에 바로 뿌렸어요. 벼와 풀이 함께 자라 논의 풀 뽑기가 힘들었어요.",
+    "requested": {
+     "living": 1,
+     "body": -1,
+     "trust": 0
+    },
+    "delta": {
+     "living": 1,
+     "body": -1,
+     "trust": 0
+    },
+    "before": {
+     "living": 4,
+     "body": 5,
+     "trust": 6
+    },
+    "after": {
+     "living": 5,
+     "body": 4,
+     "trust": 6
+    },
+    "newCards": [
+     "s1395-direct-sowing"
+    ],
+    "newItems": [],
+    "newFlags": [
+     "sow.even",
+     "sow.low"
+    ],
+    "solved": [
+     "s1395-m-sow"
+    ],
+    "sun": 0
+   },
+   {
+    "happeningId": "s1395-summer-dano",
+    "season": "summer",
+    "missionId": "s1395-m-dano",
+    "theme": "play",
+    "choiceId": "play",
+    "label": "하루 쉬며 놀이판에 어울린다",
+    "lines": [
+     {
+      "text": "창포물에 감은 머리가 향긋하다. 그네가 솟을 때마다 마을이 한눈에 든다."
+     },
+     {
+      "who": "friend-girl",
+      "pose": "glad",
+      "text": "더 높이! 논일은 내일 하면 되잖아."
+     }
+    ],
+    "note": "단오에는 창포물에 머리를 감고 그네뛰기와 씨름을 즐겼다고 해요.",
+    "requested": {
+     "living": 0,
+     "body": 2,
+     "trust": 0
+    },
+    "delta": {
+     "living": 0,
+     "body": 2,
+     "trust": 0
+    },
+    "before": {
+     "living": 5,
+     "body": 4,
+     "trust": 6
+    },
+    "after": {
+     "living": 5,
+     "body": 6,
+     "trust": 6
+    },
+    "newCards": [
+     "s1395-dano"
+    ],
+    "newItems": [],
+    "newFlags": [
+     "dano.done"
+    ],
+    "solved": [
+     "s1395-m-dano"
+    ],
+    "sun": 0
+   },
+   {
+    "happeningId": "s1395-summer-manor",
+    "season": "summer",
+    "theme": "duty",
+    "lines": [
+     {
+      "text": "혼례, 장례, 제사… 우리 마을은 제사를 절에서 지내 왔는데, 무엇이 달라질까?"
+     },
+     {
+      "text": "양반 댁 손님 맞는 채에서는 벌써 그 이야기가 한창이라고 한다."
+     }
+    ],
+    "note": "이해 유월, 나라는 한양부를 한성부로 고치고 혼례·장례·제사의 예절을 정하게 했어요.",
+    "requested": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "delta": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "before": {
+     "living": 5,
+     "body": 6,
+     "trust": 6
+    },
+    "after": {
+     "living": 5,
+     "body": 6,
+     "trust": 6
+    },
+    "newCards": [
+     "s1395-hanseong"
+    ],
+    "newItems": [],
+    "newFlags": [],
+    "solved": [],
+    "sun": 1
+   }
+  ],
+  "flow": [
+   {
+    "living": 4,
+    "body": 6,
+    "trust": 5
+   },
+   {
+    "living": 5,
+    "body": 4,
+    "trust": 6
+   }
+  ],
+  "closings": [
+   {
+    "season": "spring",
+    "delta": {
+     "living": 1,
+     "body": -2,
+     "trust": 1
+    },
+    "before": {
+     "living": 4,
+     "body": 6,
+     "trust": 5
+    },
+    "after": {
+     "living": 5,
+     "body": 4,
+     "trust": 6
+    },
+    "lines": [],
+    "effects": [],
+    "newCards": []
+   }
+  ],
+  "seen": [
+   "village",
+   "fields"
+  ],
+  "at": "44,54"
+ },
+ "walked": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000feff3f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+}

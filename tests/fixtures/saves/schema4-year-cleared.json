@@ -1,0 +1,101 @@
+{
+ "schema": 4,
+ "build": "dev",
+ "cleared": {
+  "s1395": [
+   {
+    "role": "farmer",
+    "look": "girl",
+    "ending": "s1395-letters",
+    "legacy": "s1395-legacy-tree",
+    "draw": "normal",
+    "flow": [
+     [
+      4,
+      6,
+      5
+     ],
+     [
+      5,
+      4,
+      6
+     ],
+     [
+      8,
+      4,
+      6
+     ],
+     [
+      9,
+      2,
+      7
+     ],
+     [
+      7,
+      2,
+      7
+     ]
+    ],
+    "picks": {
+     "s1395-spring-return": "help",
+     "s1395-spring-return-help": "",
+     "s1395-spring-sow": "low",
+     "s1395-summer-dano": "play",
+     "s1395-summer-manor": "",
+     "s1395-summer-weed": "all",
+     "s1395-autumn-leave": "tend",
+     "s1395-autumn-sendoff": "",
+     "s1395-autumn-back": "",
+     "s1395-autumn-harvest": "",
+     "s1395-autumn-salt": "ours",
+     "s1395-winter-rite": "temple",
+     "s1395-winter-weave": "",
+     "s1395-winter-rite-temple": "",
+     "s1395-winter-letters-girl": "learn"
+    },
+    "plays": {
+     "s1395-spring-sow": "even",
+     "s1395-summer-weed": "clean",
+     "s1395-autumn-harvest": "all",
+     "s1395-autumn-salt": "exact",
+     "s1395-winter-weave": "bolt"
+    },
+    "solved": [
+     "s1395-m-return",
+     "s1395-m-sow",
+     "s1395-m-dano",
+     "s1395-m-weed",
+     "s1395-m-leave",
+     "s1395-m-harvest",
+     "s1395-m-rite",
+     "s1395-m-letters",
+     "s1395-m-cards"
+    ],
+    "cards": [
+     "s1395-direct-sowing",
+     "s1395-dano",
+     "s1395-hanseong",
+     "s1395-fifteen-thousand",
+     "s1395-jongmyo",
+     "s1395-state-share",
+     "s1395-rice-cloth",
+     "s1395-cloth-bolt",
+     "s1395-temple-rite",
+     "s1395-hyanggyo"
+    ]
+   }
+  ]
+ },
+ "cards": [
+  "s1395-direct-sowing",
+  "s1395-dano",
+  "s1395-hanseong",
+  "s1395-fifteen-thousand",
+  "s1395-jongmyo",
+  "s1395-state-share",
+  "s1395-rice-cloth",
+  "s1395-cloth-bolt",
+  "s1395-temple-rite",
+  "s1395-hyanggyo"
+ ]
+}

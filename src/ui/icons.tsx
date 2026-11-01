@@ -94,3 +94,39 @@ export function ClothIcon(): JSX.Element {
     </svg>
   );
 }
+
+/**
+ * 남길 것의 갈래 그림: 나무(어린나무) · 물건(보자기에 싼 꾸러미) · 이야기(말이 퍼져 나가는 모양).
+ * 그림 안에 글자를 넣지 않는다. 뜻은 곁의 이름이 전한다.
+ */
+export function LegacyIcon({ kind }: { kind: 'tree' | 'thing' | 'story' }): JSX.Element {
+  return (
+    <svg class="icon legacy" viewBox="0 0 64 64" aria-hidden="true">
+      {kind === 'tree' && (
+        <g {...stroke} stroke-width={2.6}>
+          <path d="M10 54 Q32 46 54 54" fill="none" />
+          <path d="M32 52 V30" fill="none" stroke-width={3.6} />
+          <path d="M32 40 Q26 36 22 30 M32 36 Q38 32 42 27" fill="none" />
+          <ellipse cx="32" cy="18" rx="10" ry="9" fill="#a9cf66" />
+          <ellipse cx="19" cy="27" rx="7.5" ry="6.5" fill="#85b853" />
+          <ellipse cx="45" cy="24" rx="7.5" ry="6.5" fill="#85b853" />
+        </g>
+      )}
+      {kind === 'thing' && (
+        <g {...stroke} stroke-width={2.6}>
+          <path d="M14 30 Q32 22 50 30 Q56 44 50 53 Q32 58 14 53 Q8 44 14 30 Z" fill="#ddd3b9" />
+          <path d="M26 27 Q22 16 14 14 Q22 22 24 28 M38 27 Q42 16 50 14 Q42 22 40 28" fill="#f3eddc" />
+          <ellipse cx="32" cy="26" rx="6" ry="4.5" fill="#f3eddc" />
+          <path d="M20 40 Q32 45 44 40" fill="none" stroke-width={1.8} />
+        </g>
+      )}
+      {kind === 'story' && (
+        <g {...stroke} stroke-width={2.6}>
+          <path d="M10 14 H46 Q52 14 52 20 V36 Q52 42 46 42 H30 L18 53 V42 H16 Q10 42 10 36 Z" fill="#fbf6e9" />
+          <path d="M19 23 Q23 20 27 23 T35 23 T43 23 M19 32 Q23 29 27 32 T35 32" fill="none" stroke-width={2.2} />
+          <path d="M56 26 Q60 30 56 36" fill="none" stroke-width={2.2} />
+        </g>
+      )}
+    </svg>
+  );
+}

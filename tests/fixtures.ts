@@ -10,17 +10,22 @@ import { themes } from '../src/content/themes';
 import type { ContentBundle, MapRef } from '../src/content/validate';
 import {
   canCloseSeason,
+  choiceViews,
   closeSeason,
+  currentSeason,
   doHappening,
+  happeningOf,
   newGame,
   nextSeason,
   openChoiceIds,
   openHappenings,
   type DoInput,
 } from '../src/engine/game';
+import { reviewYear } from '../src/engine/review';
 import { mulberry32, pickOne, rollDraw, type Rng } from '../src/engine/rng';
 import {
   SEASONS,
+  type Condition,
   type GameState,
   type Happening,
   type Line,
@@ -28,6 +33,7 @@ import {
   type Mission,
   type RoleDef,
   type RoleId,
+  type Season,
   type Situation,
   type SituationPack,
   type Stats,
@@ -543,6 +549,34 @@ export function stateKey(state: GameState): string {
 export const EXPLORE_DEPTH = 60;
 export const EXPLORE_STATES = 200000;
 
+/**
+ * 한 해 걷기(exploreYear)에서 계절마다 살피는 형편의 한도. 네 가지 걷기(두 모습 × 날씨)에서 잰 가장 큰 수의 네 배쯤이다
+ * (1-라 고치기에서 잼 — 봄 1,120 · 여름 9,056~25,006 · 가을 99,587~144,972 · 겨울 313,737~407,837).
+ * 계절마다 따로 두어, 판이 부푸는 잘못이 봄·여름에 있으면 그 계절에서 바로 떨어지고(한 해를 다 걷기 전에),
+ * 겨울에 선택 있는 덤 하나가 늘어도 멀쩡한 판이 떨어지지 않게 했다(review 1-라 35번 ㉡ — 앞에는 모든 계절이 100만 하나였다).
+ */
+export const YEAR_WALK_LIMITS: Record<Season, number> = { spring: 4_500, summer: 100_000, autumn: 600_000, winter: 1_600_000 };
+
+/**
+ * 일 놀이가 끝난 모습에 따른 수치를 견준다(spec 5.2의 5번 "놀이의 차이는 품과 거둔 양의 작은 차이(±1)", review 1-라 10번).
+ * - 같은 선택지·형편에서 끝난 모습들의 차이가 수치마다 1 안이다(어느 둘을 견주어도).
+ * - "어른께 맡긴다"(left)가 "하다 만 것"(partial)보다 낫지 않다(같은 것은 된다 — 애쓰다 만 아이가 맡긴 아이보다 손해가 아니게).
+ * 어긋난 곳을 글로 돌려준다(없으면 빈 목록).
+ */
+export function playEndProblems(byEnd: Record<string, Stats>, partial: string, left = 'left'): string[] {
+  const out: string[] = [];
+  const base = byEnd[partial];
+  if (!base || !byEnd[left]) return [`끝난 모습 ${partial}·${left}가 없다`];
+  const stats = Object.keys(base) as (keyof Stats)[];
+  for (const stat of stats) {
+    const values = Object.values(byEnd).map((v) => v[stat]);
+    if (Math.max(...values) - Math.min(...values) > 1) out.push(`${stat}: 끝난 모습 사이의 차이가 ${Math.max(...values) - Math.min(...values)}`);
+  }
+  const l = byEnd[left];
+  if (stats.every((stat) => l[stat] >= base[stat]) && stats.some((stat) => l[stat] > base[stat])) out.push(`${left}가 ${partial}보다 낫다`);
+  return out;
+}
+
 export interface Explored {
   /** 그 계절 안에서 닿을 수 있는 모든 형편(처음 포함) */
   all: GameState[];
@@ -616,6 +650,192 @@ export function seedFor(weather: string): number {
     if (rollDraw('weather', seed) === weather) return seed;
   }
   throw new Error(`${weather}가 뽑히는 씨앗을 찾지 못했다`);
+}
+
+// ── 한 해를 걷는 도구(바퀴 1-라) ──────────────────────────────────
+
+/** 다음 계절로 넘어간다(계절을 닫고 넘긴다). 겨울 뒤에는 한 해가 끝난다. */
+export function advance(pack: SituationPack, state: GameState): GameState {
+  return nextSeason(pack, closeSeason(pack, state));
+}
+
+/**
+ * 꼭 푸는 미션의 일만 해서 그 계절을 보낼 수 있게 만든다(덤은 하지 않는다).
+ * prefer: 고를 수 있는 움직임이 여럿일 때 먼저 고를 것들('일/선택지/놀이'의 앞머리). 없으면 처음 것.
+ */
+export function playMusts(pack: SituationPack, start: GameState, prefer: string[] = []): GameState {
+  let state = start;
+  for (let step = 0; step < 40 && !canCloseSeason(pack, state); step++) {
+    const moves = movesOf(pack, state).filter((move) => happeningOf(pack, move.id).cost === 0);
+    if (moves.length === 0) throw new Error(`막다른 길: ${currentSeason(state)} — 한 일 [${state.done.join(', ')}]`);
+    const name = (move: DoInput) => [move.id, move.choiceId ?? '', move.play ?? ''].join('/');
+    const wanted = moves.find((move) => prefer.some((head) => name(move).startsWith(head)));
+    state = doHappening(pack, state, wanted ?? moves[0]);
+  }
+  if (!canCloseSeason(pack, state)) throw new Error(`${currentSeason(state)}의 꼭 푸는 미션이 끝나지 않는다`);
+  return state;
+}
+
+/**
+ * 그 계절의 맵까지 간다: 앞 계절들은 꼭 푸는 미션만 하고 넘긴다. weather를 주면 그 날씨가 뽑히는 씨앗으로 시작한다.
+ * prefer는 playMusts에 넘긴다(앞 계절에서 고를 길).
+ */
+export function toSeason(
+  pack: SituationPack,
+  role: RoleId,
+  look: Look,
+  season: Season,
+  options: { weather?: string; prefer?: string[]; seed?: number } = {},
+): GameState {
+  const seed = options.seed ?? (options.weather ? seedFor(options.weather) : 1);
+  let state = newGame(pack, role, look, seed);
+  while (currentSeason(state) !== season) state = advance(pack, playMusts(pack, state, options.prefer));
+  return state;
+}
+
+/** 조건이 읽는 표시("또는" 안까지) */
+function flagsIn(cond: Condition | undefined, into: Set<string>): void {
+  if (!cond) return;
+  for (const flag of [...(cond.flags ?? []), ...(cond.notFlags ?? [])]) into.add(flag);
+  for (const one of cond.anyOf ?? []) flagsIn(one, into);
+}
+
+/** 그 계절부터 뒤에서 읽히는 표시들: 그 계절과 뒤 계절의 일, 미션, 나중 결과, 한 해 이름, 바람이 읽는 것 */
+export function flagsReadFrom(pack: SituationPack, role: RoleId, seasonIndex: number): Set<string> {
+  const out = new Set<string>();
+  for (const h of pack.happenings) {
+    if (SEASONS.indexOf(h.season) < seasonIndex || (h.roles && !h.roles.includes(role))) continue;
+    flagsIn(h.shows, out);
+    for (const variant of h.lineVariants ?? []) flagsIn(variant.when, out);
+    // 그 일의 놀이가 남긴 표시를 그 일의 결과가 읽는 것은 뺀다(일을 마친 뒤에는 쓰이지 않는다. 다른 곳이 읽으면 거기서 든다)
+    const own = new Set(Object.values(h.play?.flags ?? {}));
+    const result = new Set<string>();
+    for (const choice of h.choices ?? []) {
+      flagsIn(choice.lock?.unless, out);
+      for (const variant of choice.variants ?? []) flagsIn(variant.when, result);
+    }
+    for (const variant of h.after?.variants ?? []) flagsIn(variant.when, result);
+    for (const flag of result) if (!own.has(flag)) out.add(flag);
+  }
+  // 미션이 풀렸는지 가리는 표시: 그 계절부터의 미션과 한 해 내내 푸는 덤 미션의 것(앞 계절의 미션은 이미 풀렸다)
+  for (const m of pack.missions) {
+    if (m.roles && !m.roles.includes(role)) continue;
+    if (m.season === 'year' || SEASONS.indexOf(m.season) >= seasonIndex) flagsIn(m.done, out);
+  }
+  for (const later of pack.situation.later ?? []) if (SEASONS.indexOf(later.at) >= seasonIndex) flagsIn(later.when, out);
+  for (const ending of pack.situation.endings) flagsIn(ending.when, out);
+  for (const row of pack.situation.roles.find((r) => r.id === role)?.wishOutcomes ?? []) flagsIn(row.when, out);
+  return out;
+}
+
+export interface YearWalk {
+  /** 계절마다: 서로 다른 처음 형편의 수 */
+  starts: number[];
+  /** 계절마다: 살핀 형편의 수 */
+  states: number[];
+  /** 꼭 푸는 미션을 다 풀 길이 없어진 형편(계절과 한 일) */
+  stuck: string[];
+  /** 한 해를 마친 판들에서 나온 한 해 이름(id → 한 가지 보기) */
+  names: Map<string, GameState>;
+  /** 한 해를 마친 형편의 수(서로 다른 것) */
+  ends: number;
+  /** 도중에 본 것들: 잠긴 선택지('일/선택지'), 한 일, 인심이 깎인 일 */
+  locksSeen: Set<string>;
+  did: Set<string>;
+  trustLoss: Set<string>;
+}
+
+/**
+ * 한 해 전체를 엔진으로 걷는다: 계절마다 닿을 수 있는 모든 형편을 걷고(계절을 보낼 수 있는 형편마다 닫아),
+ * 서로 다른 "다음 계절의 처음 형편"을 모아 다음 계절로 넘긴다. 검사기의 걷기와 달리 수치를 어림하지 않는다 —
+ * 실제 시작 수치에서 닿는 수치만 걷는다. 형편이 같은지는 수치·해·그 계절부터 읽히는 표시·그 계절에 한 일로 가린다
+ * (앞 계절에 무엇을 했는지는 뒤에서 읽히는 표시로만 남는다. 모은 카드의 수는 가리지 않는다 — 덤 미션에만 걸린다).
+ * 끝이 있다: 한 계절의 걸음과 살피는 형편에 한도를 두어, 판이 나아가지 않으면 멈추지 않고 던진다.
+ */
+export function exploreYear(pack: SituationPack, role: RoleId, look: Look, weather: string): YearWalk {
+  const out: YearWalk = { starts: [], states: [], stuck: [], names: new Map(), ends: 0, locksSeen: new Set(), did: new Set(), trustLoss: new Set() };
+  const sorted = (list: Iterable<string>) => [...list].sort().join(',');
+  let starts: GameState[] = [newGame(pack, role, look, seedFor(weather))];
+  const finals = new Set<string>();
+
+  for (let index = 0; index < SEASONS.length; index++) {
+    const season = SEASONS[index];
+    const reads = flagsReadFrom(pack, role, index);
+    const readsNext = flagsReadFrom(pack, role, index + 1);
+    const mine = new Set(pack.happenings.filter((h) => h.season === season).map((h) => h.id));
+    const keyOf = (state: GameState): string =>
+      [
+        state.stats.living,
+        state.stats.body,
+        state.stats.trust,
+        state.sunsLeft,
+        sorted(state.flags.filter((flag) => reads.has(flag))),
+        sorted(state.done.filter((id) => mine.has(id))),
+      ].join('|');
+    const good = new Map<string, boolean>();
+    const next = new Map<string, GameState>();
+    let seen = 0;
+
+    const visit = (state: GameState, depth: number): boolean => {
+      if (depth > EXPLORE_DEPTH) throw new Error(`${season}: ${EXPLORE_DEPTH}걸음을 넘게 걸었다(판이 나아가지 않는다)`);
+      const key = keyOf(state);
+      const known = good.get(key);
+      if (known !== undefined) return known;
+      if (++seen > YEAR_WALK_LIMITS[season]) throw new Error(`${season}: 살핀 형편이 ${YEAR_WALK_LIMITS[season]}가지를 넘었다(판이 부푼다 — YEAR_WALK_LIMITS)`);
+      good.set(key, false);
+      // 지금 할 수 있는 움직임을 한 번에 모은다(잠긴 선택지는 본 것으로 적는다)
+      const moves: DoInput[] = [];
+      for (const view of openHappenings(pack, state)) {
+        const h = view.happening;
+        let picks: (string | undefined)[] = [undefined];
+        if (h.choices && h.choices.length > 0) {
+          const shown = choiceViews(pack, state, h.id);
+          for (const choice of shown) if (choice.locked) out.locksSeen.add(`${h.id}/${choice.id}`);
+          picks = shown.filter((choice) => !choice.locked).map((choice) => choice.id);
+        }
+        if (view.noSun) continue;
+        const ends: (string | undefined)[] = h.play ? Object.keys(h.play.flags) : [undefined];
+        for (const choiceId of picks) for (const play of ends) moves.push({ id: h.id, choiceId, play });
+      }
+      let ok = canCloseSeason(pack, state);
+      if (ok) {
+        const after = advance(pack, state);
+        if (after.phase === 'done') {
+          const finalKey = [after.stats.living, after.stats.body, after.stats.trust, sorted(after.flags.filter((flag) => reads.has(flag)))].join('|');
+          if (!finals.has(finalKey)) {
+            finals.add(finalKey);
+            const name = reviewYear(pack, after).yearName.id;
+            if (!out.names.has(name)) out.names.set(name, after);
+          }
+        } else {
+          const nextKey = [
+            after.stats.living,
+            after.stats.body,
+            after.stats.trust,
+            sorted(after.flags.filter((flag) => readsNext.has(flag))),
+          ].join('|');
+          if (!next.has(nextKey)) next.set(nextKey, after);
+        }
+      }
+      for (const move of moves) {
+        const child = doHappening(pack, state, move);
+        const deed = child.history[child.history.length - 1];
+        out.did.add(deed.happeningId);
+        if (deed.delta.trust < 0) out.trustLoss.add(`${deed.happeningId}/${deed.choiceId ?? ''}`);
+        if (visit(child, depth + 1)) ok = true;
+      }
+      good.set(key, ok);
+      if (!ok) out.stuck.push(`${season}: [${state.done.filter((id) => mine.has(id)).join(', ')}] 살림 ${state.stats.living}·기력 ${state.stats.body}·인심 ${state.stats.trust}`);
+      return ok;
+    };
+
+    for (const start of starts) visit(start, 0);
+    out.starts.push(starts.length);
+    out.states.push(seen);
+    starts = [...next.values()];
+  }
+  out.ends = finals.size;
+  return out;
 }
 
 export function deepFreeze<T>(value: T): T {

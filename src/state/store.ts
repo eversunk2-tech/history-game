@@ -17,13 +17,16 @@ import {
   lastDeed,
   newGame,
   nextSeason,
+  openChoiceIds,
   openHappenings,
   playableRoles,
   roleOf,
   seasonReady,
   type DoInput,
 } from '../engine/game';
-import { SEASONS, type Deed, type GameState, type Look, type RoleId, type Season, type SituationPack } from '../engine/types';
+import { reviewYear } from '../engine/review';
+import { rollDraw } from '../engine/rng';
+import { SEASONS, STATS, type Deed, type GameState, type Look, type RoleId, type Season, type SituationPack } from '../engine/types';
 import {
   dropBackup,
   keepBackup,
@@ -34,11 +37,12 @@ import {
   withCards,
   withCurrent,
   writeSave,
+  type ClearRecord,
   type LoadStatus,
   type Save,
 } from './storage';
 
-export type Screen = 'title' | 'book' | 'rolePick' | 'intro' | 'map' | 'seasonClose' | 'next' | 'trouble' | 'sheet';
+export type Screen = 'title' | 'book' | 'rolePick' | 'intro' | 'map' | 'seasonClose' | 'review' | 'next' | 'trouble' | 'sheet';
 
 const loaded = loadSave();
 
@@ -74,7 +78,8 @@ export const pack = computed<SituationPack | null>(() => (situationId.value ? (g
 /** 이어 할 것이 있는가(제목의 "이어 하기") */
 export const canContinue = computed<boolean>(() => {
   const cur = save.value.current;
-  return Boolean(cur && getPack(cur.situationId) && cur.phase !== 'done');
+  // 겨울을 보내고 한 해 돌아보기를 아직 마치지 않은 해(phase 'done')도 이어 한다(돌아보기에서 열린다)
+  return Boolean(cur && getPack(cur.situationId));
 });
 
 /** 맵 위에 무언가 얹혀 있어 걷기를 멈춰야 하는가 */
@@ -264,6 +269,7 @@ export function continueGame(): void {
     owed = (save.value.papers ?? []).filter((id) => next.solved.includes(id) && p.missions.some((m) => m.id === id));
     missionQueue.value = next.phase === 'season' ? owed : [];
     if (next.phase === 'seasonClose') screen.value = 'seasonClose';
+    else if (next.phase === 'done') screen.value = 'review';
     else if (next.phase === 'season' && seasonReady(p, next.role, currentSeason(next))) screen.value = 'map';
     else screen.value = 'next';
   } catch (error) {
@@ -396,7 +402,65 @@ export function goNextSeason(): void {
     // 계절마다 새로 걷는다(작은 지도가 다시 엷어진다)
     walkedNow = '';
     saveNow();
-    screen.value = next.phase === 'season' && seasonReady(p, next.role, currentSeason(next)) ? 'map' : 'next';
+    // 겨울을 보냈으면 한 해가 끝났다 → 한 해 돌아보기. 다음 계절이 아직 만들어지지 않았으면 "다음에 만들어요".
+    if (next.phase === 'done') screen.value = 'review';
+    else screen.value = next.phase === 'season' && seasonReady(p, next.role, currentSeason(next)) ? 'map' : 'next';
+  } catch (error) {
+    fail(error);
+  }
+}
+
+/**
+ * 깬 기록 한 줄(꼴 4): 역할·모습·한 해 이름·남긴 것에 더해 그 해의 줄거리를 id와 수로만 적는다
+ * (날씨, 처음과 계절마다 닫을 때의 수치, 한 일마다 고른 것과 놀이의 끝, 푼 미션, 카드).
+ * 뒤 바퀴의 견주어 보기·수첩·선생님 자료가 읽는다. 진행 중인 해를 지운 뒤에도 남는다.
+ */
+export function clearRecordOf(g: GameState, ending: string, legacy: string): ClearRecord {
+  const picks: Record<string, string> = {};
+  const plays: Record<string, string> = {};
+  for (const deed of g.history) {
+    picks[deed.happeningId] = deed.choiceId ?? '';
+    if (deed.play) plays[deed.happeningId] = deed.play;
+  }
+  return {
+    role: g.role,
+    look: g.look,
+    ending,
+    legacy,
+    draw: g.draw,
+    flow: g.flow.map((stats) => STATS.map((stat) => stats[stat])),
+    picks,
+    plays,
+    solved: [...g.solved],
+    cards: [...g.cards],
+  };
+}
+
+/**
+ * 한 해 돌아보기의 끝: 남길 것을 하나 고르면 이야기를 깬 것이다.
+ * 깬 기록(역할, 모습, 한 해 이름, 남긴 것)을 진행 중인 해와 따로 적고, 진행 중인 해를 내려놓은 뒤 이야기책으로 간다.
+ * 이야기책의 그 해에 한 해 이름이 찍힌다. 같은 이야기를 다른 모습으로 다시 할 수 있다.
+ */
+export function finishYear(legacyId: string): void {
+  const p = pack.value;
+  const g = game.value;
+  if (!p || !g || g.phase !== 'done') return;
+  if (tooSoon()) return;
+  try {
+    const year = reviewYear(p, g);
+    const legacy = p.situation.legacy.find((one) => one.id === legacyId)?.id ?? '';
+    const record = clearRecordOf(g, year.yearName.id, legacy);
+    const cleared = { ...save.value.cleared, [g.situationId]: [...(save.value.cleared[g.situationId] ?? []), record] };
+    owed = [];
+    walkedNow = '';
+    persist(withCurrent({ ...withCards(save.value, g.cards), cleared }, undefined));
+    if (!saveFailed.value) dropBackup();
+    talk.value = null;
+    missionQueue.value = [];
+    panel.value = null;
+    game.value = null;
+    gameNo.value += 1;
+    screen.value = 'book';
   } catch (error) {
     fail(error);
   }
@@ -475,6 +539,7 @@ export function goSheet(): void {
  *   ?view=sheet&season=autumn    그림 견본
  *   ?view=map&who=farmer-girl    봄의 맵에서 바로 시작(새 판)
  *   ?view=map&who=farmer-boy&talk=s1395-spring-sow   그 일의 대화 장면을 바로 연다
+ *   ?view=map&who=farmer-girl&from=autumn&draw=drought   앞 계절을 꼭 할 일만 해서 그 계절로 건너뛴다(from=review는 한 해 돌아보기)
  */
 export function openFromUrl(): void {
   // 빌드본에서는 먹지 않는다
@@ -490,12 +555,42 @@ export function openFromUrl(): void {
       const p = getPack('s1395');
       if (!p) return;
       situationId.value = 's1395';
+      // &draw=drought|normal|bumper: 그 날씨가 뽑히는 씨앗을 찾아 쓴다(비 오는 여름 등을 찍어 볼 때)
+      const wantDraw = q.get('draw');
       seed.value = freshSeed();
-      game.value = newGame(p, role, look === 'girl' ? 'girl' : 'boy', seed.value);
+      if (wantDraw) {
+        for (let trySeed = 1; trySeed < 5000; trySeed++) {
+          if (rollDraw(p.situation.draw.kind, trySeed) === wantDraw) {
+            seed.value = trySeed;
+            break;
+          }
+        }
+      }
+      let fresh = newGame(p, role, look === 'girl' ? 'girl' : 'boy', seed.value);
+      // &from=summer|autumn|winter|review: 앞 계절들을 꼭 할 일만(첫 선택지로) 해서 그 계절의 처음으로 건너뛴다.
+      // &pick=1 이면 둘째 선택지로(봄의 볍씨를 나눠 뿌리는 판 등을 볼 때).
+      const from = q.get('from');
+      const target = from === 'review' ? SEASONS.length : SEASONS.indexOf(from as Season);
+      const pick = Number(q.get('pick') ?? '0') || 0;
+      for (let guard = 0; guard < 400 && target > 0 && fresh.phase !== 'done' && fresh.seasonIndex < target; guard++) {
+        if (fresh.phase === 'seasonClose') {
+          fresh = nextSeason(p, fresh);
+          continue;
+        }
+        const next = canCloseSeason(p, fresh) ? undefined : openHappenings(p, fresh).find((v) => v.must && !v.noSun) ?? openHappenings(p, fresh).find((v) => !v.noSun);
+        if (!next) {
+          fresh = closeSeason(p, fresh);
+          continue;
+        }
+        const h = next.happening;
+        const open = openChoiceIds(p, fresh, h.id);
+        fresh = doHappening(p, fresh, { id: h.id, choiceId: open.length > 0 ? open[Math.min(pick, open.length - 1)] : undefined, play: h.play ? Object.keys(h.play.flags)[0] : undefined });
+      }
+      game.value = fresh;
       walkedNow = '';
       owed = [];
       gameNo.value += 1;
-      screen.value = 'map';
+      screen.value = fresh.phase === 'done' ? 'review' : fresh.phase === 'seasonClose' ? 'seasonClose' : 'map';
       // &talk=일의 id: 그 일의 대화 장면을 바로 연다(화면을 찍어 볼 때)
       const first = q.get('talk');
       if (first && game.value && openHappenings(p, game.value).some((v) => v.happening.id === first && !v.noSun)) talk.value = first;

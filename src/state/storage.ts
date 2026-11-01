@@ -11,8 +11,13 @@ export const BACKUP_KEY = 'joseon-year/backup';
  * 지금 코드가 쓰는 저장의 꼴. 1-가의 'joseon-year/v1'은 학생이 쓴 적이 없어 옮기지 않는다.
  *   2 — 바퀴 1-다: 깬 기록 · 카드 · 진행 중인 해 · 가 본 칸
  *   3 — 1-다 고치기: 아직 보여 주지 않은 "미션이 풀림" 종이(papers)를 더했다
+ *   4 — 1-라 고치기: 깬 기록에 그 해의 줄거리(날씨, 계절마다의 수치, 한 일마다 고른 것, 푼 미션, 카드)를,
+ *       계절 닫기에 줄마다의 값(effects)을 더했다. 칸은 모두 더한 것이라 3 → 4는 옮길 것이 없다.
+ *       꼴을 올리는 까닭은 하나 더 있다: 옛 판(꼴 3)이 이 판의 저장을 읽으면 모르는 일(여름~겨울)을 솎아 다시 쓴다.
+ *       꼴이 다르면 옛 판은 "게임을 새로 받아야 해요"를 띄우고 건드리지 않는다(spec 5.4).
+ *       → 올린 판에 일·미션·카드를 더할 때도 꼴 번호를 올린다.
  */
-export const SCHEMA = 3;
+export const SCHEMA = 4;
 
 /** 한 계절의 해 ☀가 이보다 많을 수는 없다(역할의 해는 둘이나 셋이다). 저장을 읽을 때의 울타리다. */
 export const MAX_SUNS = 5;
@@ -23,8 +28,24 @@ export const BUILD: string = (import.meta.env?.VITE_BUILD as string | undefined)
 export interface ClearRecord {
   role: RoleId;
   look: Look;
+  /** 한 해 이름의 id(이 id는 바꾸지 않는다 — 이야기책의 도장이 이것을 읽는다) */
   ending: string;
+  /** 남긴 것의 id */
   legacy: string;
+  // ── [더함, 꼴 4] 그 해의 줄거리. 뒤 바퀴의 견주어 보기·수첩·선생님 자료가 읽는다. 꼴 3까지의 기록에는 없다.
+  //    저장 한 칸이 커지지 않게 이름은 모두 id로, 수치는 [살림, 기력, 인심] 차례의 수 셋으로 적는다.
+  /** 그해의 뽑기(날씨: 'drought' · 'normal' · 'bumper'). 뽑지 않은 이야기면 null. */
+  draw?: string | null;
+  /** 처음과 계절마다 닫을 때의 수치(처음 · 봄 · 여름 · 가을 · 겨울), 하나마다 [살림, 기력, 인심] */
+  flow?: number[][];
+  /** 한 일마다 고른 선택지: 일 id → 선택지 id(고르는 것이 없던 일은 ''). 한 일의 차례대로 적힌다. */
+  picks?: Record<string, string>;
+  /** 일 놀이가 있던 일의 끝난 모습: 일 id → 끝난 모습 */
+  plays?: Record<string, string>;
+  /** 푼 미션의 id */
+  solved?: string[];
+  /** 그 해에 얻은 생활 카드의 id */
+  cards?: string[];
 }
 
 export interface Save {
@@ -73,8 +94,9 @@ export function browserStorage(): StorageLike | null {
  * ok: 그대로 읽었다 · empty: 저장이 없다 · migrated: 옛 꼴을 새 꼴로 옮겼다
  * yearLost: 진행 중인 해를 읽을 수 없어 깬 기록만 살렸다 · unreadable: 아무것도 읽을 수 없어 처음부터
  * newer: 코드보다 새 꼴의 저장이다(저장을 건드리지 않는다) · noStorage: 저장이 안 되는 창이다
+ * clearedLost: 깬 기록 가운데 읽을 수 없는 줄을 빼 두었다(읽기 전의 글자는 한 벌 남긴다)
  */
-export type LoadStatus = 'ok' | 'empty' | 'migrated' | 'yearLost' | 'unreadable' | 'newer' | 'noStorage';
+export type LoadStatus = 'ok' | 'empty' | 'migrated' | 'yearLost' | 'clearedLost' | 'unreadable' | 'newer' | 'noStorage';
 
 export interface Loaded {
   save: Save;
@@ -102,10 +124,12 @@ function isDeed(v: unknown): boolean {
   return v.sun === 0 || v.sun === 1;
 }
 
-/** 계절을 닫은 기록 한 줄이 제 꼴인가 */
+/** 계절을 닫은 기록 한 줄이 제 꼴인가(줄마다의 값 effects는 꼴 4부터 있고, 있으면 줄과 수가 같아야 한다) */
 function isClosing(v: unknown): boolean {
   if (!isObject(v)) return false;
-  return isSeason(v.season) && isNumbers(v.delta) && isNumbers(v.before) && isNumbers(v.after) && isStrings(v.lines) && isStrings(v.newCards);
+  if (!(isSeason(v.season) && isNumbers(v.delta) && isNumbers(v.before) && isNumbers(v.after) && isStrings(v.lines) && isStrings(v.newCards))) return false;
+  if (v.effects === undefined) return true;
+  return Array.isArray(v.effects) && v.effects.length === (v.lines as unknown[]).length && v.effects.every(isNumbers);
 }
 
 function statsOf(v: unknown): Stats | null {
@@ -129,6 +153,8 @@ export function parseGame(v: unknown): GameState | null {
   if (typeof v.seed !== 'number' || typeof v.seasonIndex !== 'number') return null;
   if (!Number.isInteger(v.seasonIndex) || v.seasonIndex < 0 || v.seasonIndex >= SEASONS.length) return null;
   if (v.phase !== 'season' && v.phase !== 'seasonClose' && v.phase !== 'done') return null;
+  // 한 해가 끝난 것은 겨울을 보낸 뒤뿐이다(여름에 끝난 해를 그대로 깨지 않게)
+  if (v.phase === 'done' && v.seasonIndex !== SEASONS.length - 1) return null;
   if (typeof v.sunsLeft !== 'number' || !Number.isFinite(v.sunsLeft) || v.sunsLeft < 0) return null;
   if (!Array.isArray(v.history) || !Array.isArray(v.flow) || !Array.isArray(v.closings)) return null;
   // 한 일과 계절 닫기의 기록은 화면이 그대로 읽는다. 한 줄이라도 꼴이 어긋나면 그 해는 봄부터 다시 한다.
@@ -159,24 +185,54 @@ export function parseGame(v: unknown): GameState | null {
   };
 }
 
-function parseCleared(v: unknown): Save['cleared'] {
+const isFlowRow = (v: unknown): v is number[] => Array.isArray(v) && v.length === STATS.length && v.every((n) => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 10);
+const isIdMap = (v: unknown): v is Record<string, string> => isObject(v) && Object.values(v).every((x) => typeof x === 'string');
+
+/** 깬 기록 한 줄을 읽는다. 뼈대(역할·모습·한 해 이름·남긴 것)가 어긋나면 null, 덧붙인 칸만 어긋나면 그 칸만 뺀다. */
+function parseClearRow(row: unknown): { record: ClearRecord; trimmed: boolean } | null {
+  if (!isObject(row) || typeof row.role !== 'string') return null;
+  if (row.look !== 'boy' && row.look !== 'girl') return null;
+  if (typeof row.ending !== 'string' || typeof row.legacy !== 'string') return null;
+  const record: ClearRecord = { role: row.role, look: row.look, ending: row.ending, legacy: row.legacy };
+  let trimmed = false;
+  const take = <K extends keyof ClearRecord>(key: K, ok: (x: unknown) => boolean): void => {
+    if (row[key] === undefined) return;
+    if (ok(row[key])) record[key] = row[key] as ClearRecord[K];
+    else trimmed = true;
+  };
+  take('draw', (x) => x === null || typeof x === 'string');
+  take('flow', (x) => Array.isArray(x) && x.every(isFlowRow));
+  take('picks', isIdMap);
+  take('plays', isIdMap);
+  take('solved', isStrings);
+  take('cards', isStrings);
+  return { record, trimmed };
+}
+
+/** 깬 기록을 읽는다. 읽을 수 없는 줄·칸이 있으면 빼고, 뺀 것이 있었는지 알린다(읽기 전의 글자를 한 벌 남기게). */
+function parseCleared(v: unknown): { cleared: Save['cleared']; dropped: boolean } {
   const out: Save['cleared'] = {};
-  if (!isObject(v)) return out;
+  if (v === undefined || v === null) return { cleared: out, dropped: false };
+  if (!isObject(v)) return { cleared: out, dropped: true };
+  let dropped = false;
   for (const [story, list] of Object.entries(v)) {
-    if (!Array.isArray(list)) continue;
+    if (!Array.isArray(list)) {
+      dropped = true;
+      continue;
+    }
     const rows: ClearRecord[] = [];
     for (const row of list) {
-      if (!isObject(row) || typeof row.role !== 'string') continue;
-      rows.push({
-        role: row.role,
-        look: row.look === 'girl' ? 'girl' : 'boy',
-        ending: typeof row.ending === 'string' ? row.ending : '',
-        legacy: typeof row.legacy === 'string' ? row.legacy : '',
-      });
+      const parsed = parseClearRow(row);
+      if (!parsed) {
+        dropped = true;
+        continue;
+      }
+      if (parsed.trimmed) dropped = true;
+      rows.push(parsed.record);
     }
     if (rows.length > 0) out[story] = rows;
   }
-  return out;
+  return { cleared: out, dropped };
 }
 
 /**
@@ -186,6 +242,8 @@ function parseCleared(v: unknown): Save['cleared'] {
 export const MIGRATIONS: Record<number, (old: Record<string, unknown>) => Record<string, unknown>> = {
   // 2 → 3: 아직 보여 주지 않은 종이의 칸이 생겼다. 옛 저장에는 보여 줄 종이가 없다.
   2: (old) => ({ ...old, schema: 3, papers: [] }),
+  // 3 → 4: 더한 칸(깬 기록의 줄거리, 닫기의 줄마다 값)은 모두 없어도 되는 칸이다. 옛 기록은 그대로 옮긴다.
+  3: (old) => ({ ...old, schema: 4 }),
 };
 
 /** 저장 글자를 읽는다. 저장소를 건드리지 않는다. */
@@ -211,8 +269,9 @@ export function parseSave(raw: string | null): Loaded {
     }
     migrated = true;
   }
-  const save: Save = { schema: SCHEMA, build: BUILD, cleared: parseCleared(cur.cleared), cards: strings(cur.cards) };
-  let status: LoadStatus = migrated ? 'migrated' : 'ok';
+  const { cleared, dropped } = parseCleared(cur.cleared);
+  const save: Save = { schema: SCHEMA, build: BUILD, cleared, cards: strings(cur.cards) };
+  let status: LoadStatus = dropped ? 'clearedLost' : migrated ? 'migrated' : 'ok';
   if (cur.current !== undefined && cur.current !== null) {
     const game = parseGame(cur.current);
     if (game) {
@@ -237,7 +296,7 @@ export function loadSave(storage: StorageLike | null = browserStorage()): Loaded
   }
   const loaded = parseSave(raw);
   // 옛 꼴을 옮겼거나 읽다가 잃은 것이 있으면, 읽기 전의 글자를 한 벌 남긴다(다음 저장이 덮어쓰기 전에)
-  if ((loaded.status === 'migrated' || loaded.status === 'yearLost' || loaded.status === 'unreadable') && raw !== null) {
+  if ((loaded.status === 'migrated' || loaded.status === 'yearLost' || loaded.status === 'clearedLost' || loaded.status === 'unreadable') && raw !== null) {
     try {
       storage.setItem(BACKUP_KEY, raw);
     } catch {

@@ -3,7 +3,8 @@
 //
 // 틀림이 없다: 어떻게 뿌려도 일은 끝난다. 시간에 쫓기지 않는다. "어른께 맡긴다"로 건너뛸 수 있다.
 // 광주리의 볍씨는 정해져 있어서, 한곳에 오래 머물면 다른 곳에 뿌릴 것이 모자란다.
-// 끝난 모습(sowRules.ts): even(논의 칸들에 고루 뿌림) · patchy(빈 칸이 많아 듬성듬성) · left(어른께 맡김 — 거의 뿌리지 않고 끝낸 것도).
+// 끝난 모습(sowRules.ts): even(논의 칸들에 고루 뿌림) · patchy(빈 칸이 많아 듬성듬성) · left(거의 뿌리지 않음).
+// "어른께 맡긴다"를 눌러도 뿌린 만큼은 버리지 않는다(sowLeave — 끝내기 단추와 같은 셈).
 // 맞았다·틀렸다는 말도 점수도 없다. 뿌린 자리는 논에 그대로 보인다:
 //   - 논물은 잔잔한 어두운 물빛이고, 볍씨가 내려앉은 자리는 물이 일어 한결 밝아진다(뿌린 곳과 빈 곳이 한눈에 갈린다).
 //   - 볍씨는 밝은 누런 낟알(석 점 남짓)에 먹빛 그늘을 달아 물빛 위에서 또렷하다. 떨어질 때 잔물결이 한 번 인다.
@@ -15,9 +16,10 @@ import { paletteOf } from '../pixel/palette';
 import { COL, DIRS, HEROES, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W, footShadow, personSheet } from '../pixel/people';
 import { Px, fbm, hash2, hex, mix, pick, toCanvas, vnoise } from '../pixel/px';
 import { game, heroName } from '../state/store';
+import { useEndOnce } from './bits';
 import { PlayFrame } from './Frame';
 import type { PlayProps } from './index';
-import { SOW_ROWS, SOW_SEEDS, emptySowCells, sowCellOf, sowVerdict } from './sowRules';
+import { SOW_ROWS, SOW_SEEDS, emptySowCells, sowCellOf, sowLeave, sowVerdict } from './sowRules';
 
 /**
  * 규칙의 이름표마다의 놀이 방법 한 줄. 지금은 '1395'(논에 바로 뿌린다) 하나다.
@@ -113,7 +115,8 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
   /** 놀이의 셈(그리는 쪽과 누르는 쪽이 함께 본다) */
   const sim = useRef({ cells: emptySowCells(), left: SOW_SEEDS });
 
-  const finish = (): void => onDone(sowVerdict(sim.current.cells));
+  const { end } = useEndOnce(onDone);
+  const finish = (): void => void end(sowVerdict(sim.current.cells));
   const finishRef = useRef(finish);
   finishRef.current = finish;
 
@@ -196,10 +199,12 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
 
     const resize = (): void => {
       const dpr = window.devicePixelRatio || 1;
-      const rect = box.getBoundingClientRect();
-      if (rect.width < 8 || rect.height < 8) return;
-      const dw = Math.floor(rect.width * dpr);
-      const dh = Math.floor(rect.height * dpr);
+      // 테두리 안쪽의 크기(테두리에 논의 가장자리가 깎이지 않게)
+      const bw = box.clientWidth;
+      const bh = box.clientHeight;
+      if (bw < 8 || bh < 8) return;
+      const dw = Math.floor(bw * dpr);
+      const dh = Math.floor(bh * dpr);
       // 점 하나가 기기 화소의 정수배가 되게. 논의 높이가 150점쯤 되게 잡는다.
       const scale = Math.max(2, Math.round(dh / 150));
       const nw = Math.max(64, Math.floor(dw / scale));
@@ -409,7 +414,7 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
       doneLabel="다 뿌렸어요"
       ready={empty}
       onDone={finish}
-      onLeave={() => onDone('left')}
+      onLeave={() => void end(sowLeave(sim.current.cells))}
       status={
         <div class="sow-basket">
           <span class="sow-basket-gauge" role="img" aria-label={`바구니에 남은 볍씨: 열 가운데 ${tenth}`}>

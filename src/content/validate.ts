@@ -6,6 +6,11 @@
 //   - 사람이 한 번 봐야 하는 곳: 읽히지 않는 표시, 근거 글에 없는 숫자, 갈린 결과가 빠뜨린 카드·표시, 인물의 쏠림
 //   - 이 검사기가 더한 한도(SOFT_BUDGET)를 넘은 글
 //
+// 한 해가 다 차야 맞는 것은 "그 역할의 네 계절이 다 만들어졌을 때" 잘못으로 바뀐다(바퀴 1-라 — 다른 역할이 아직 없어도):
+//   꼭 푸는 미션 6~10개, 올해의 바람을 가릴 줄, 인심이 깎이는 선택과 살림·기력 잠김, 그 역할의 일만 남기는 표시가 읽히지 않는 것,
+//   그 역할의 미션·바람이 읽는 표시를 남기는 곳이 없는 것. 일곱 물음은 이야기 전체(모든 역할)가 다 차야 잘못이 되고,
+//   그 전에는 역할마다 "이 역할이 미션으로 만나지 못하는 물음"을 알림으로 적는다(농민 집 아이는 혼인을 만나지 못한다 — spec 6.3).
+//
 // "만들어졌다"는 것: 그 역할의 그 계절에 꼭 푸는 미션이 하나라도 있다(엔진의 seasonReady). 봄부터 이어진 계절만 친다.
 // 만들어진 역할·계절에 대해서만 맵의 자리, 선택지 수, 막다른 길을 본다. 막다른 길은 엔진으로 실제로 걸어서 찾는다.
 
@@ -272,6 +277,11 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
   const isComplete = (role: RoleId) => (built.get(role) ?? []).length === SEASONS.length;
   const anyComplete = roles.some((role) => isComplete(role.id));
   const allComplete = roles.length > 0 && roles.every((role) => isComplete(role.id));
+  /** 이 역할들만의 것인가, 그리고 그 역할들의 한 해가 모두 다 만들어졌는가(역할을 적지 않은 것은 모든 역할의 것이다) */
+  const settledFor = (only: RoleId[] | undefined): boolean => {
+    const mine = only ?? roles.map((role) => role.id);
+    return mine.length > 0 && mine.every((role) => isComplete(role));
+  };
   /** 이 일이 지금 실제로 벌어지는 사람들(만들어진 역할·계절) */
   const liveFor = (h: Happening): RoleDef[] =>
     builtRoles.filter((role) => (!h.roles || h.roles.includes(role.id)) && (built.get(role.id) ?? []).includes(h.season));
@@ -456,10 +466,11 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
    * 조건 하나를 본다. live = 지금 쓰이는 일과 미션의 조건(모르는 표시는 잘못),
    * later = 한 해가 다 만들어져야 쓰이는 조건(한 해 이름, 바람, 뒤 계절의 첫 줄 — 아직 남기는 곳이 없을 수 있어 알림).
    */
-  const checkCondition = (cond: Condition | undefined, where: string, when: 'live' | 'later' = 'live'): void => {
+  const checkCondition = (cond: Condition | undefined, where: string, when: 'live' | 'later' = 'live', settled = false): void => {
     if (!cond) return;
     takeRead(cond);
-    const unknown = when === 'live' || allComplete ? err : gap;
+    // settled: 이 조건을 쓰는 역할들의 한 해가 다 만들어졌다 — 남기는 곳이 없는 표시를 뒤에 채울 계절이 없다
+    const unknown = when === 'live' || allComplete || settled ? err : gap;
     for (const role of cond.roles ?? []) {
       if (!roleIds.has(role)) err('condition', where, `없는 역할 "${String(role)}"`);
     }
@@ -482,11 +493,18 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
       if (!itemIds.has(item)) err('item-unknown', where, `items.ts에 없는 물건 "${item}"`);
       else if (!itemGivers.has(item)) unknown('item-unknown', where, `어디서도 얻을 수 없는 물건 "${item}"`);
     }
-    for (const one of cond.anyOf ?? []) checkCondition(one, where, when);
+    if (cond.cardCount !== undefined) {
+      const have = refs.cards.filter((card) => card.situation === situation.id).length;
+      if (!Number.isInteger(cond.cardCount) || cond.cardCount < 1) err('condition', where, `카드 수 조건 ${String(cond.cardCount)} (1 이상의 정수여야 한다)`);
+      else if (cond.cardCount > have) unknown('card-count', where, `카드 ${cond.cardCount}장을 모아야 하는데 이 이야기의 카드는 ${have}장뿐이다`);
+    }
+    for (const one of cond.anyOf ?? []) checkCondition(one, where, when, settled);
   };
 
   for (const def of roles) {
-    (def.wishOutcomes ?? []).forEach((row, index) => checkCondition(row.when, `${sid} 역할 ${def.id} 바람 ${index + 1}`, 'later'));
+    (def.wishOutcomes ?? []).forEach((row, index) =>
+      checkCondition(row.when, `${sid} 역할 ${def.id} 바람 ${index + 1}`, 'later', isComplete(def.id)),
+    );
   }
   for (const ending of endings) checkCondition(ending.when, `${sid} 한 해 이름 ${ending.id}`, 'later');
   for (const season of SEASONS) {
@@ -530,7 +548,9 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
     checkBudget(err, `${where} 할 일`, 'budget-mission', m.goal ?? '', BUDGET.missionGoal);
     checkBudget(gap, `${where} 해낸 일`, 'budget-soft', m.doneLine ?? '', SOFT_BUDGET.doneLine);
 
-    if (!m.parts || m.parts.length === 0) err('mission-parts', where, '이 미션을 이루는 일(parts)이 없다');
+    // 카드를 세는 덤 미션은 딸린 일이 따로 없어도 된다(카드는 어느 일에서 얻은 것이든 센다)
+    const countsCards = !m.must && m.done?.cardCount !== undefined;
+    if ((!m.parts || m.parts.length === 0) && !countsCards) err('mission-parts', where, '이 미션을 이루는 일(parts)이 없다');
     for (const part of m.parts ?? []) {
       const h = happeningById.get(part);
       if (m.must) inMust.add(part);
@@ -552,7 +572,8 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
 
     // 한 해 내내 푸는 덤 미션과 아직 만들지 않은 계절의 미션은 뒤 계절의 일이 남길 표시를 읽을 수 있다(그때까지는 알림)
     const liveMission = m.season !== 'year' && SEASONS.includes(m.season) && anyBuilt(m.season);
-    checkCondition(m.done, `${where} 풀림 조건`, liveMission ? 'live' : 'later');
+    // 한 해 내내 푸는 덤 미션도, 그 미션을 푸는 역할들의 한 해가 다 만들어졌으면 표시를 남기는 곳이 있어야 한다
+    checkCondition(m.done, `${where} 풀림 조건`, liveMission ? 'live' : 'later', settledFor(m.roles));
     // 처음부터 풀려 있으면 안 된다(가서, 듣고, 고르고, 해내야 풀린다)
     const solvedAtStart = roles
       .filter((role) => !m.roles || m.roles.includes(role.id))
@@ -584,7 +605,11 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
       const [a, b] = [happenings[i], happenings[j]];
       if (!a.spot || a.spot !== b.spot || a.season !== b.season) continue;
       const shared = builtRoles.some((role) => liveFor(a).includes(role) && liveFor(b).includes(role));
-      if (shared) gap('spot-shared', `${a.id} · ${b.id}`, `같은 계절에 같은 자리("${a.spot}")를 쓴다. 함께 나타나면 맵에서 표시가 겹친다`);
+      if (!shared) continue;
+      // 함께 나타날 수 없는 짝은 알리지 않는다: 모습이 다른 사람의 일이거나, 한쪽이 다른 쪽을 마친 뒤에야 나타나는 일(차례로 나타난다)
+      if (a.shows?.look && b.shows?.look && a.shows.look !== b.shows.look) continue;
+      if (showsAfter(a, b) || showsAfter(b, a)) continue;
+      gap('spot-shared', `${a.id} · ${b.id}`, `같은 계절에 같은 자리("${a.spot}")를 쓴다. 함께 나타나면 맵에서 표시가 겹친다`);
     }
   }
 
@@ -623,6 +648,7 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
     if (cast.length > 2) err('cast', where, `무대에 선 사람이 ${cast.length}명이다(두 명까지)`);
     for (const one of cast) {
       if (!(one.who in people)) err('who-unknown', `${where} 무대`, `등장인물 표(people)에 없는 사람 "${one.who}"`);
+      if (one.pose !== undefined && !POSES.includes(one.pose)) err('cast', `${where} 무대`, `"${one.who}"의 기본 표정이 없는 표정 "${String(one.pose)}"이다`);
     }
 
     // 글: 여는 대화
@@ -741,6 +767,22 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
         if (!situation.statusLocks && readsRoles(choice.lock.unless)) {
           err('status-lock', cw, '이 이야기는 신분으로 잠그지 않는다(statusLocks: false)');
         }
+        // 잠긴 까닭이 형편마다 갈릴 때(처음 맞는 것이 뜬다). 바탕 까닭과 같은 잣대로 본다.
+        (choice.lock.reasons ?? []).forEach((one, index) => {
+          const rw = `${cw} 잠긴 까닭 갈림 ${index + 1}`;
+          if (!one.reason?.trim()) err('lock-reason', rw, '잠긴 까닭이 없다');
+          checkBudget(err, rw, 'budget-lock', one.reason ?? '', BUDGET.lockReason);
+          for (const blame of BLAME_WORDS) {
+            if (one.reason?.includes(blame)) {
+              err('lock-blame', rw, `잠긴 까닭이 사람을 탓한다("${blame}"). 제도나 형편을 주어로 쓴다`);
+            }
+          }
+          checkCondition(one.when, `${rw} 조건`, mode);
+          if (!situation.statusLocks && readsRoles(one.when)) {
+            err('status-lock', rw, '이 이야기는 신분으로 잠그지 않는다(statusLocks: false)');
+          }
+          if (one.reason === choice.lock?.reason) gap('lock-reason-same', rw, '바탕 까닭과 글이 같아 갈림이 쓸모없다');
+        });
       }
     }
     // 선택지가 없는 일의 결과
@@ -787,7 +829,8 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
         if (!map.hasSpot(h.spot)) {
           err('spot-unknown', who, `맵 "${role.map}"에 없는 자리 "${h.spot}"`);
         } else {
-          for (const look of role.looks ?? []) {
+          // 한쪽 모습에만 나타나는 일(shows.look)은 그 모습이 닿으면 된다(향교 가는 길은 남자아이 모습만 닿는다)
+          for (const look of looksOf(h, role)) {
             if (!map.canReach(h.spot, { role: role.id, look })) {
               err('spot-unreachable', `${where} (${role.id}/${look})`, `자리 "${h.spot}"에 걸어서 닿을 수 없다`);
             }
@@ -804,7 +847,7 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
         (m) => (!m.roles || m.roles.includes(role.id)) && m.parts.includes(h.id) && m.rescue !== undefined && happeningById.has(m.rescue),
       );
       if (rescued) continue;
-      for (const look of role.looks ?? []) {
+      for (const look of looksOf(h, role)) {
         const stuck = findAllLocked(h, { role: role.id, look }, possibleDraws(pack, h.season));
         if (stuck) {
           err(
@@ -846,22 +889,33 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
       const extras = happenings.filter(
         (h) => h.season === season && h.cost === 1 && !rescueIds.has(h.id) && (!h.roles || h.roles.includes(def.id)),
       );
-      if (extras.length <= def.suns) {
-        err('extras-count', sw, `덤으로 하는 일이 ${extras.length}개다(해 ☀ ${def.suns}개보다 많아야 한다)`);
+      // 봄은 덤이 해 ☀보다 많아야 한다(어디로 갈지가 선택이다 — 5.1). 뒤 계절은 봄보다 가볍게 잡아(1-라, 한 해 30분 안팎)
+      // 둘은 있어야 하고(고를 것이 있게), 해보다 많지 않으면 알림만 한다.
+      if (season === SEASONS[0] ? extras.length <= def.suns : extras.length < 2) {
+        err(
+          'extras-count',
+          sw,
+          season === SEASONS[0]
+            ? `덤으로 하는 일이 ${extras.length}개다(해 ☀ ${def.suns}개보다 많아야 한다)`
+            : `덤으로 하는 일이 ${extras.length}개다(둘은 있어야 한다)`,
+        );
+      } else if (extras.length <= def.suns) {
+        gap('extras-few', sw, `덤으로 하는 일이 ${extras.length}개다(해 ☀ ${def.suns}개보다 많지 않아, 덤을 다 할 수 있다)`);
       }
     }
 
-    // 인심이 깎이는 선택, 살림·기력 잠김, (신분 역할의 이야기) 신분 잠김: 지금은 알림
+    // 인심이 깎이는 선택, 살림·기력 잠김: 한 해가 다 만들어진 역할이면 잘못, 그 전에는 알림. (신분 역할의 이야기) 신분 잠김은 알림
+    const need = isComplete(def.id) ? err : gap;
     const mineH = happenings.filter((h) => (!h.roles || h.roles.includes(def.id)) && seasons.includes(h.season));
     const outcomes = mineH.flatMap((h) =>
       outcomesOfHappening(h, def.id).map(([, outcome]) => outcome),
     );
     const locks = mineH.flatMap((h) => (h.choices ?? []).filter((c) => (!c.only || c.only.includes(def.id)) && c.lock).map((c) => c.lock!.unless));
     if (!outcomes.some((outcome) => (outcome.effects?.trust ?? 0) < 0)) {
-      gap('trust-loss', where, '인심이 깎이는 선택이 하나도 없다(인심이 쌓이기만 해서는 안 된다 — 5.2의 9번)');
+      need('trust-loss', where, '인심이 깎이는 선택이 하나도 없다(인심이 쌓이기만 해서는 안 된다 — 5.2의 9번)');
     }
-    if (!locks.some((cond) => readsStat(cond, 'living'))) gap('stat-lock', where, '살림 때문에 잠기는 선택지가 하나도 없다');
-    if (!locks.some((cond) => readsStat(cond, 'body'))) gap('stat-lock', where, '기력 때문에 잠기는 선택지가 하나도 없다');
+    if (!locks.some((cond) => readsStat(cond, 'living'))) need('stat-lock', where, '살림 때문에 잠기는 선택지가 하나도 없다');
+    if (!locks.some((cond) => readsStat(cond, 'body'))) need('stat-lock', where, '기력 때문에 잠기는 선택지가 하나도 없다');
     if (situation.statusLocks && def.kind === 'status' && !locks.some((cond) => readsRoles(cond))) {
       const hidden = mineH.some((h) => (h.choices ?? []).some((c) => c.only));
       if (!hidden) gap('status-lock-missing', where, '신분 때문에 잠기거나 숨는 선택지가 하나도 없다');
@@ -881,15 +935,40 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
     }
   }
 
-  // 남기기만 하고 아무 조건도 읽지 않는 표시. 뒤 계절이 아직 없어 읽히지 않는 것일 수 있으므로 한 해를 다 만들기 전에는 알림이다.
-  for (const [flag, setters] of flagSetters) {
-    if (!flagsRead.has(flag)) {
-      (allComplete ? err : gap)(
-        'flag-unread',
-        `${sid} 표시 ${flag}`,
-        `남기기만 하고 아무 조건도 읽지 않는 표시다(남기는 곳: ${setters.join(', ')})${allComplete ? '' : ' — 뒤 계절이 읽을 것이면 그대로 둔다'}`,
-      );
+  // 한 해가 다 만들어진 역할마다: 그 역할이 미션(꼭 푸는 것과 덤 미션)으로 만나지 못하는 물음을 알린다.
+  // 잘못은 아니다 — 이야기를 깨면 역할이 무엇이든 일곱 칸이 열리고(6.2), 농민 집 아이는 혼인을 미션으로 만나지 못한다(6.3).
+  for (const def of roles) {
+    if (!isComplete(def.id)) continue;
+    const met = new Set<string>(missions.filter((m) => !m.roles || m.roles.includes(def.id)).map((m) => m.theme));
+    const missed = THEME_IDS.filter((theme) => !met.has(theme));
+    if (missed.length > 0) {
+      gap('theme-role', `${sid} ${def.id}`, `이 역할이 미션으로 만나지 못하는 견주기 물음: ${missed.map((theme) => `"${theme}"`).join(', ')}`);
     }
+  }
+
+  // 남기기만 하고 아무 조건도 읽지 않는 표시. 뒤 계절이 아직 없어 읽히지 않는 것일 수 있으므로 한 해를 다 만들기 전에는 알림이다.
+  // 그 표시를 남기는 일이 모두 한 해가 다 만들어진 역할의 것이면(뒤에 읽을 계절이 없다) 잘못이다.
+  // 일 놀이의 끝난 모습 표시는 따로 본다: 놀이의 끝 가운데 하나라도 읽히면, 읽히지 않는 끝은 "그 밖의 끝"(바탕 결과)으로 쓰인 것이다.
+  const playEnds = new Map<string, string[]>();
+  for (const h of happenings) {
+    const ends = Object.values(h.play?.flags ?? {}).filter(Boolean);
+    for (const flag of ends) playEnds.set(flag, ends);
+  }
+  /** 표시 → 그 표시를 남기는 일들 */
+  const setterHappenings = (flag: string): Happening[] =>
+    happenings.filter(
+      (h) => Object.values(h.play?.flags ?? {}).includes(flag) || outcomesOfHappening(h).some(([, outcome]) => (outcome.setFlags ?? []).includes(flag)),
+    );
+  for (const [flag, setters] of flagSetters) {
+    if (flagsRead.has(flag)) continue;
+    const siblings = playEnds.get(flag);
+    if (siblings && siblings.some((other) => other !== flag && flagsRead.has(other))) continue;
+    const final = allComplete || setterHappenings(flag).every((h) => settledFor(h.roles));
+    (final ? err : gap)(
+      'flag-unread',
+      `${sid} 표시 ${flag}`,
+      `남기기만 하고 아무 조건도 읽지 않는 표시다(남기는 곳: ${setters.join(', ')})${final ? '' : ' — 뒤 계절이 읽을 것이면 그대로 둔다'}`,
+    );
   }
 
   // ── 막다른 길: 엔진으로 실제로 걸어 본다 ──
@@ -1058,6 +1137,29 @@ function readsRoles(cond: Condition | undefined): boolean {
   return Boolean(cond.roles) || (cond.anyOf ?? []).some((one) => readsRoles(one));
 }
 
+/** 이 일이 나타날 수 있는 모습들: 나타나는 조건(shows)이 한쪽 모습만 받으면 그 모습뿐이다 */
+function looksOf(h: Happening, role: RoleDef): Look[] {
+  const looks = role.looks ?? [];
+  return h.shows?.look ? looks.filter((look) => look === h.shows?.look) : looks;
+}
+
+/** later가 earlier를 마친 뒤에야 나타나는 일인가: later의 나타나는 조건이 earlier(와 그 놀이)가 남기는 표시를 읽는다 */
+function showsAfter(later: Happening, earlier: Happening): boolean {
+  const left = new Set<string>([
+    ...Object.values(earlier.play?.flags ?? {}),
+    ...outcomesOfHappening(earlier).flatMap(([, outcome]) => outcome.setFlags ?? []),
+  ]);
+  // notFlags로 읽는 것은 "하기 전에만 나타난다"는 뜻이라 뺀다
+  const wanted = new Set<string>();
+  const want = (cond: Condition | undefined): void => {
+    if (!cond) return;
+    for (const flag of cond.flags ?? []) wanted.add(flag);
+    for (const one of cond.anyOf ?? []) want(one);
+  };
+  want(later.shows);
+  return [...wanted].some((flag) => left.has(flag));
+}
+
 /**
  * 글에 나온 아라비아 숫자들. 천 단위 쉼표는 떼고 센다("66,067" → "66067").
  * "구월", "열다섯"처럼 한글로 쓴 수는 잡지 못한다(사람이 본다).
@@ -1078,6 +1180,9 @@ function textsOfHappening(h: Happening): TextPiece[] {
   for (const choice of h.choices ?? []) {
     out.push({ where: `${h.id}/${choice.id} 선택지`, field: 'label', text: choice.label ?? '' });
     if (choice.lock) out.push({ where: `${h.id}/${choice.id} 잠긴 까닭`, field: 'reason', text: choice.lock.reason ?? '' });
+    (choice.lock?.reasons ?? []).forEach((one, index) =>
+      out.push({ where: `${h.id}/${choice.id} 잠긴 까닭 갈림 ${index + 1}`, field: 'reason', text: one.reason ?? '' }),
+    );
   }
   for (const [at, outcome] of outcomesOfHappening(h)) {
     pushLines(outcome.lines, at);
@@ -1381,6 +1486,7 @@ function readsOfHappening(h: Happening, flags: Set<string>, items: Set<string>):
   takeReads(h.shows, flags, items);
   for (const choice of h.choices ?? []) {
     takeReads(choice.lock?.unless, flags, items);
+    for (const one of choice.lock?.reasons ?? []) takeReads(one.when, flags, items);
     for (const variant of choice.variants ?? []) takeReads(variant.when, flags, items);
   }
   for (const variant of h.after?.variants ?? []) takeReads(variant.when, flags, items);

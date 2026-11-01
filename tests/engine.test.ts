@@ -1,5 +1,6 @@
 // 규칙 엔진 시험(견본 이야기로): 수치와 변화 한도, 조건, 잠김과 숨김, 결과 갈림과 놀이 표시, 해 ☀ 한도,
 // 꼭 푸는 미션을 다 풀어야 계절이 넘어감, 도움의 일, 나중에 나타나는 결과, 뽑기, 약속이 깨지면 던짐, 순수 함수, 같은 씨앗 같은 결과.
+// 바퀴 1-라에서 더한 것: 모은 카드의 수를 보는 조건(cardCount), 앞의 일을 마쳐야 나타나는 일과 도움의 일, 계절이 바뀔 때 비우는 것.
 
 import { describe, expect, it } from 'vitest';
 import { applyEffects, clampStats, meets } from '../src/engine/conditions';
@@ -10,10 +11,12 @@ import {
   currentSeason,
   deedsOfSeason,
   doHappening,
+  factsOf,
   lastClosing,
   lastDeed,
   missingMusts,
   missionOfHappening,
+  missionProgress,
   missionViews,
   missionsOf,
   newGame,
@@ -28,7 +31,7 @@ import {
 } from '../src/engine/game';
 import { judgeWish, pickEnding, reviewYear, summarizeSeason } from '../src/engine/review';
 import { dealRoles, drawValues, mulberry32, rollDraw, subSeed } from '../src/engine/rng';
-import { SEASONS, STATS, type Facts, type GameState, type Happening, type SituationPack } from '../src/engine/types';
+import { SEASONS, STATS, type Facts, type GameState, type Happening, type Mission, type SituationPack } from '../src/engine/types';
 import { deepFreeze, doAll, movesOf, playSeasonRandom, playYearRandom, seedFor, testPack, withStats } from './fixtures';
 
 const facts = (over: Partial<Facts> = {}): Facts => ({
@@ -226,6 +229,28 @@ describe('잠김과 숨김', () => {
     const helped = doAll(testPack, withStats(farmer(), { trust: 3 }), ['t-news/help', 't-help']);
     expect(helped.stats.trust).toBe(4);
     expect(story(helped)?.locked).toBe(false);
+  });
+
+  it('잠긴 까닭이 형편마다 갈린다(lock.reasons): 처음 맞는 갈림의 까닭이 뜨고, 맞는 것이 없으면 바탕 까닭이다', () => {
+    // ① 김매기의 "서로 거들기"처럼: 기력은 되는데 인심 때문에 잠기면 다른 까닭을 보인다
+    const split = patched('t-granny', (h) => {
+      const story = h.choices!.find((c) => c.id === 'story')!;
+      story.lock = {
+        ...story.lock!,
+        reasons: [
+          { when: { min: { body: 5 } }, reason: '할머니 일을 거든 적이 없어요' },
+          { when: { min: { body: 3 } }, reason: '둘째 갈림의 까닭이에요' },
+        ],
+      };
+    });
+    const story = (state: GameState) => choiceViews(split, state, 't-granny').find((v) => v.id === 'story');
+    expect(story(withStats(farmer(), { body: 6, trust: 3 }))).toMatchObject({ locked: true, reason: '할머니 일을 거든 적이 없어요' });
+    expect(story(withStats(farmer(), { body: 4, trust: 3 }))).toMatchObject({ locked: true, reason: '둘째 갈림의 까닭이에요' });
+    expect(story(withStats(farmer(), { body: 1, trust: 3 }))).toMatchObject({ locked: true, reason: '할머니는 아직 나를 잘 모르세요' });
+    // 열리면 갈림이 맞아도 까닭이 없다
+    expect(story(withStats(farmer(), { body: 6, trust: 6 }))).toMatchObject({ locked: false, reason: undefined });
+    // 갈림이 없는 잠김은 그대로다
+    expect(choiceViews(testPack, withStats(farmer(), { body: 6, trust: 3 }), 't-granny').find((v) => v.id === 'story')?.reason).toBe('할머니는 아직 나를 잘 모르세요');
   });
 
   it('조건(shows)이 맞아야 맵에 나타난다: 앞선 선택, 물건', () => {
@@ -469,6 +494,7 @@ describe('미션과 계절', () => {
       after: { living: 6, body: 3, trust: 4 },
       delta: { living: 2, body: -3, trust: -1 },
       lines: [],
+      effects: [], // 나중 결과 줄마다 실제로 바뀐 값(줄이 없으면 비어 있다)
       newCards: [],
     });
     expect(closed.flow).toEqual([
@@ -713,5 +739,130 @@ describe('한 해 돌아보기', () => {
 
   it('한 해가 끝나기 전에는 돌아볼 수 없다', () => {
     expect(() => reviewYear(testPack, farmer())).toThrow(/끝나지 않았다/);
+  });
+});
+
+// ── 바퀴 1-라에서 더한 것 ─────────────────────────────────────────
+
+describe('모은 카드의 수를 보는 조건(cardCount)', () => {
+  it('모은 카드가 그 수만큼은 되어야 참이다. 카드를 적지 않은 형편은 한 장도 없는 것으로 본다', () => {
+    expect(meets({ cardCount: 2 }, facts())).toBe(false);
+    expect(meets({ cardCount: 2 }, facts({ cards: ['a'] }))).toBe(false);
+    expect(meets({ cardCount: 2 }, facts({ cards: ['a', 'b'] }))).toBe(true);
+    expect(meets({ cardCount: 2 }, facts({ cards: ['a', 'b', 'c'] }))).toBe(true);
+    expect(meets({ cardCount: 0 }, facts())).toBe(true);
+    // 다른 칸과는 "그리고"로 묶인다
+    expect(meets({ cardCount: 1, flags: ['x'] }, facts({ cards: ['a'] }))).toBe(false);
+    expect(meets({ cardCount: 1, flags: ['x'] }, facts({ cards: ['a'], flags: ['x'] }))).toBe(true);
+    expect(meets({ anyOf: [{ cardCount: 3 }, { min: { trust: 5 } }] }, facts())).toBe(true);
+  });
+
+  it('판의 형편(factsOf)에 모은 카드가 들어 있다', () => {
+    expect(factsOf(farmer()).cards).toEqual([]);
+    expect(factsOf(doAll(testPack, farmer(), ['t-temple'])).cards).toEqual(['c2']);
+  });
+
+  it('카드를 모으는 덤 미션: 그 수가 차는 일에서 풀리고, 딸린 일이 없어 어느 일도 이 미션의 일로 적히지 않는다', () => {
+    const pack = structuredClone(testPack);
+    const cards: Mission = {
+      id: 'm-cards',
+      situation: pack.situation.id,
+      season: 'year',
+      must: false,
+      kind: 'collect',
+      title: '카드 두 장',
+      goal: '카드를 두 장 모은다',
+      parts: [],
+      done: { cardCount: 2 },
+      doneLine: '카드 두 장을 모았다.',
+      lesson: '0차시: 시험',
+      theme: 'play',
+    };
+    pack.missions.push(cards);
+    let state = newGame(pack, 'farmer', 'boy', 1);
+    expect(missionProgress(cards, state)).toEqual({ have: 0, need: 2 });
+    expect(missionViews(pack, state).find((v) => v.mission.id === 'm-cards')).toMatchObject({ solved: false, spot: undefined });
+    state = doAll(pack, state, ['t-temple']); // 카드 c2
+    expect(missionProgress(cards, state)).toEqual({ have: 1, need: 2 });
+    expect(state.solved).not.toContain('m-cards');
+    state = doAll(pack, state, ['t-news/give']);
+    expect(state.solved).toEqual([]);
+    state = doAll(pack, state, ['t-give']); // 카드 c1 — 이 일로 꼭 푸는 미션과 카드 미션이 함께 풀린다
+    expect(lastDeed(state)?.newCards).toEqual(['c1']);
+    expect(lastDeed(state)?.solved).toEqual(['m-news', 'm-cards']);
+    expect(lastDeed(state)?.missionId).toBe('m-news');
+    expect(missionProgress(cards, state)).toEqual({ have: 2, need: 2 });
+    expect(state.history.some((deed) => deed.missionId === 'm-cards')).toBe(false);
+    // 덤 미션이라 계절을 넘기는 데는 걸리지 않는다
+    expect(missingMusts(pack, newGame(pack, 'farmer', 'boy', 1)).map((m) => m.id)).toEqual(['m-news', 'm-sow']);
+    // 표시 여럿을 모으는 미션의 셈은 그대로다
+    const stories = pack.missions.find((m) => m.id === 'm-stories') as Mission;
+    expect(missionProgress(stories, state)).toEqual({ have: 1, need: 2 });
+  });
+});
+
+describe('앞의 일을 마쳐야 나타나는 일과 도움의 일', () => {
+  /** 볍씨 뿌리기가 이웃을 거든 뒤에야 나타난다고 해 본다(실제 가을걷이는 아버지가 돌아온 뒤에 나타난다) */
+  const gated = patched('t-sow', (h) => void (h.shows = { flags: ['news.help'] }));
+  const fresh = () => newGame(gated, 'farmer', 'boy', 1);
+
+  it('아직 나타나지 않은 일이 남아 있으면 막힌 것이 아니다: 도움의 일이 미리 뜨지 않는다', () => {
+    expect(openIds(gated, fresh())).not.toContain('t-sow');
+    expect(openIds(gated, fresh())).not.toContain('t-sow-rescue');
+    // 수치가 바닥이어도 마찬가지다(나타난 뒤에야 잠겼는지 가린다)
+    expect(openIds(gated, withStats(fresh(), { living: 0, body: 0, trust: 0 }))).not.toContain('t-sow-rescue');
+    expect(() => doHappening(gated, fresh(), { id: 't-sow-rescue' })).toThrow(/할 수 없는 일/);
+    // 쪽지에는 미션이 그대로 있고, 가리킬 자리는 아직 없다
+    expect(missionViews(gated, fresh()).find((v) => v.mission.id === 'm-sow')).toMatchObject({ solved: false, spot: undefined });
+    expect(missingMusts(gated, fresh()).map((m) => m.id)).toEqual(['m-news', 'm-sow']);
+  });
+
+  it('나타난 뒤에 선택지가 모두 잠기면 도움의 일이 열린다', () => {
+    const helped = doAll(gated, fresh(), ['t-news/help', 't-help']);
+    expect(openIds(gated, helped)).toContain('t-sow');
+    expect(openIds(gated, helped)).not.toContain('t-sow-rescue');
+    const worn = withStats(helped, { body: 0 });
+    expect(openIds(gated, worn)).toEqual(expect.arrayContaining(['t-sow', 't-sow-rescue']));
+    expect(lastDeed(doAll(gated, worn, ['t-sow-rescue']))?.solved).toEqual(['m-sow']);
+  });
+
+  it('나타날 일이 더 없는데도 미션이 풀리지 않았으면 도움의 일이 열린다', () => {
+    // 볍씨를 뿌려도 풀림 표시가 남지 않는다고 해 본다: 일은 끝났는데 미션은 남는다
+    const hollow = patched('t-sow', (h) => {
+      for (const choice of h.choices ?? []) {
+        choice.setFlags = [];
+        choice.variants = [];
+      }
+    });
+    const sown = doAll(hollow, newGame(hollow, 'farmer', 'boy', 1), ['t-sow/low/even']);
+    expect(sown.solved).toEqual([]);
+    expect(openIds(hollow, sown)).toContain('t-sow-rescue');
+  });
+
+  it('할 일 쪽지는 선택지가 모두 잠긴 일보다 도움의 일을 가리킨다', () => {
+    const spot = (state: GameState) => missionViews(testPack, state).find((v) => v.mission.id === 'm-sow')?.spot;
+    expect(spot(farmer())).toBe('paddy');
+    expect(spot(withStats(farmer(), { body: 2 }))).toBe('paddy');
+    expect(spot(withStats(farmer(), { body: 1 }))).toBe('paddyEdge'); // 볍씨의 두 선택지가 잠겼다 → 이웃이 거드는 자리
+    // 잠긴 일도 맵에는 그대로 있다(가 보면 까닭이 보인다)
+    expect(openIds(testPack, withStats(farmer(), { body: 1 }))).toEqual(expect.arrayContaining(['t-sow', 't-sow-rescue']));
+  });
+});
+
+describe('계절이 바뀔 때 비우는 것', () => {
+  it('계절을 닫으면 갈 자리(goTo)가, 다음 계절로 가면 서 있던 자리(at)가 비워진다(계절은 집 앞에서 시작한다)', () => {
+    const chose = doAll(testPack, farmer(), ['t-news/help']);
+    expect(chose.goTo).toBe('neighbor');
+    const done: GameState = { ...doAll(testPack, chose, ['t-help', 't-sow/low/even']), at: '12,34', goTo: 'well' };
+    const closed = closeSeason(testPack, done);
+    expect(closed.goTo).toBeUndefined();
+    expect(closed.at).toBe('12,34'); // 닫는 화면에서 돌아오지는 않지만, 넘어가기 전까지는 그대로 둔다
+    const summer = nextSeason(testPack, closed);
+    expect(summer.at).toBeUndefined();
+    expect(summer.goTo).toBeUndefined();
+    expect(currentSeason(summer)).toBe('summer');
+    // 가 본 구역과 모은 것은 계절을 넘어 이어진다
+    expect(summer.flags).toEqual(done.flags);
+    expect(summer.cards).toEqual(done.cards);
   });
 });

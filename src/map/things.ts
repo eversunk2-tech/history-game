@@ -12,6 +12,10 @@ export interface ThingDef {
   sways?: boolean;
   /** 숲을 이루는 나무인가(빽빽한 숲에 심는다) */
   tree?: boolean;
+  /** 바람과 상관없이 스스로 움직이는가(그네, 씨름하는 사람) */
+  moves?: boolean;
+  /** 땅바닥에 깔린 것인가(씨름판의 모래, 멍석). 사람과 세운 것보다 먼저 그려 그 위에 설 수 있다. */
+  flat?: boolean;
 }
 
 export const THINGS: Record<string, ThingDef> = {
@@ -63,6 +67,17 @@ export const THINGS: Record<string, ThingDef> = {
   reed: { fw: 0, fh: 0, variants: 3, sways: true }, // 물가의 풀
   tuft: { fw: 0, fh: 0, variants: 4, sways: true }, // 풀포기
   flower: { fw: 0, fh: 0, variants: 5, sways: true }, // 들꽃
+  // 계절의 것(그 계절의 맵에만 놓는다)
+  swing: { fw: 1, fh: 1, variants: 2, tall: true, moves: true }, // 큰 나무에 맨 그네(0 빈 그네, 1 그네 뛰는 아이) — 여름
+  sandring: { fw: 0, fh: 0, variants: 1, flat: true }, // 모래를 깐 씨름판 — 여름
+  wrestlers: { fw: 2, fh: 1, variants: 1, moves: true }, // 씨름하는 두 사람 — 여름
+  basin: { fw: 1, fh: 1, variants: 1 }, // 창포 삶은 물을 담은 나무 함지 — 여름
+  sheaf: { fw: 0, fh: 0, variants: 3 }, // 벤 논에 맞대어 세워 말리는 볏단 — 가을
+  sheafpile: { fw: 2, fh: 1, variants: 1 }, // 타작 마당에 쌓은 볏단 — 가을
+  gaesang: { fw: 2, fh: 1, variants: 1 }, // 개상: 볏단을 내리쳐 낟알을 떠는 통나무 — 가을
+  grainmat: { fw: 0, fh: 0, variants: 1, flat: true }, // 멍석에 널어 말리는 낟알 — 가을
+  bundle: { fw: 0, fh: 0, variants: 2 }, // 길 떠나는 사람의 짐 꾸러미 — 가을
+  snowpile: { fw: 0, fh: 0, variants: 2 }, // 쓸어 모은 눈 — 겨울
 };
 
 export function thing(kind: string): ThingDef {

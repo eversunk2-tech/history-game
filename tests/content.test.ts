@@ -1,5 +1,7 @@
 // 콘텐츠 시험: 검사기가 실제 묶음을 잘못 없이 통과시키는지, 일부러 한 군데씩 망가뜨린 견본을 잡아내는지.
 // 아직 만들지 않은 계절·역할·이야기는 잘못이 아니라 알림이다(목록으로 찍어 본다).
+// 바퀴 1-라: ① 농민 집 아이의 네 계절이 다 찼다. "한 해가 다 차야 맞는 것"이 그 역할에게는 잘못으로 바뀌는지,
+// 한 해의 글자 수와 어림 시간이 얼마인지 본다(다른 세 집은 아직 없어 알림으로 남는다).
 
 import { describe, expect, it } from 'vitest';
 import { bundle, getPack, packs, shelf } from '../src/content';
@@ -22,10 +24,10 @@ import {
   type ContentBundle,
   type Issue,
 } from '../src/content/validate';
-import { playableRoles } from '../src/engine/game';
+import { missionsOf, playableRoles } from '../src/engine/game';
 import { drawValues } from '../src/engine/rng';
-import { SEASONS, THEME_IDS, type Happening, type Mission, type SituationPack } from '../src/engine/types';
-import { testBundle, testPack } from './fixtures';
+import { SEASONS, THEME_IDS, type Condition, type Happening, type Look, type Mission, type Season, type SituationPack } from '../src/engine/types';
+import { advance, playMusts, testBundle, testPack, toSeason } from './fixtures';
 
 const s1395 = getPack('s1395')!;
 
@@ -222,20 +224,182 @@ describe('실제 묶음', () => {
       ['spot-unreachable', '(farmer/boy)'],
       ['spot-unreachable', '(farmer/girl)'],
     ]);
-    // 일마다 자리가 맵에 있고, 두 모습 모두 걸어서 닿는다
+    // 일마다 자리가 맵에 있고, 그 일이 나타나는 모습으로 걸어서 닿는다(한쪽 모습에만 나타나는 일은 그 모습으로만 본다)
     const map = bundle.maps.find((one) => one.id === s1395.situation.roles.find((r) => r.id === 'farmer')!.map)!;
     for (const h of s1395.happenings) {
       expect(map.hasSpot(h.spot), h.id).toBe(true);
-      for (const look of ['boy', 'girl'] as const) expect(map.canReach(h.spot, { role: 'farmer', look }), `${h.id}/${look}`).toBe(true);
+      for (const look of ['boy', 'girl'] as const) {
+        if (h.shows?.look && h.shows.look !== look) continue;
+        expect(map.canReach(h.spot, { role: 'farmer', look }), `${h.id}/${look}`).toBe(true);
+      }
     }
   });
 
-  it('막다른 길을 찾느라 걸어 본 횟수를 찍어 본다', () => {
+  it('향교 가는 길은 남자아이 모습만 닿는다: 「겨울 글공부」의 두 일이 모습에 따라 자리가 다르다', () => {
+    const map = bundle.maps.find((one) => one.id === 'neutigol')!;
+    const boys = s1395.happenings.find((h) => h.id === 's1395-winter-letters')!;
+    const girls = s1395.happenings.find((h) => h.id === 's1395-winter-letters-girl')!;
+    expect([boys.shows, girls.shows]).toEqual([{ look: 'boy' }, { look: 'girl' }]);
+    expect(boys.spot).toBe('hyanggyoRoad');
+    expect(girls.spot).not.toBe(boys.spot);
+    expect(map.canReach(boys.spot, { role: 'farmer', look: 'boy' })).toBe(true);
+    expect(map.canReach(boys.spot, { role: 'farmer', look: 'girl' })).toBe(false); // 여자아이 모습에게는 막혀 있다
+    expect(map.canReach(girls.spot, { role: 'farmer', look: 'girl' })).toBe(true);
+    // 남자아이의 일을 두 모습 모두에게 나타나게 하면(shows를 지우면) 여자아이 모습이 닿지 못해 잡힌다
+    const copy = structuredClone(s1395);
+    delete copy.happenings.find((h) => h.id === 's1395-winter-letters')!.shows;
+    const issues = errorsOf(validatePack(copy, bundle, { walk: false }));
+    expect(issues.map((i) => [i.rule, i.where])).toContainEqual(['spot-unreachable', 's1395-winter-letters (farmer/girl)']);
+  });
+
+  it('막다른 길을 찾느라 걸어 본 횟수를 찍어 본다(네 계절을 이어 걷는다 — 한도에 걸리지 않는다)', () => {
     const walked = walkRole(s1395, 'farmer');
     console.log(`[걸어 보기] s1395 농민 집 아이: ${walked.walks}번 걸어 형편 ${walked.states}가지를 살폈다`);
-    expect(walked.issues).toEqual([]);
-    expect(walked.walks).toBeGreaterThanOrEqual(2 * 27); // 두 모습 × 수치의 모서리와 가운데
+    expect(walked.issues).toEqual([]); // 막다른 길도, "길이 너무 많아 다 걷지 못했다"는 알림도 없다
+    expect(gapRules(issues, 'walk-capped')).toEqual([]);
+    // 두 모습 × (봄: 뽑기 전 / 여름~겨울: 날씨 셋) × 앞선 선택 × (덤까지 모든 길 + 수치의 모서리와 가운데 스물일곱)
+    expect(walked.walks).toBeGreaterThanOrEqual(2 * 29 + 3 * 2 * 3 * 30);
+  }, 60000);
+
+  it('① 농민 집 아이의 한 해가 다 찼다: 꼭 푸는 미션 여덟(계절마다 둘), 미션으로 만나는 물음 여섯', () => {
+    expect(builtSeasons(s1395, 'farmer')).toEqual([...SEASONS]);
+    const musts = missionsOf(s1395, 'farmer').filter((m) => m.must);
+    expect(musts.map((m) => [m.season, m.title])).toEqual([
+      ['spring', '돌아온 사람들, 떠나는 스님들'],
+      ['spring', '볍씨 뿌리기'],
+      ['summer', '단오 놀이판'],
+      ['summer', '김매기'],
+      ['autumn', '한양으로 떠난 장정들'],
+      ['autumn', '가을걷이와 나라 몫'],
+      ['winter', '할아버지의 제삿날'],
+      ['winter', '겨울 글공부'],
+    ]);
+    expect(missionsOf(s1395, 'farmer').filter((m) => !m.must).map((m) => [m.id, m.season])).toEqual([
+      ['s1395-m-tales', 'year'],
+      ['s1395-m-cards', 'year'],
+    ]);
+    // spec 6.3: 농민 집 아이만 혼인을 미션으로 만나지 못한다(평민의 혼인 풍습은 자료가 사대부 중심이다). 나머지 여섯 물음은 꼭 푸는 미션이 다룬다.
+    expect(new Set(musts.map((m) => m.theme))).toEqual(new Set(THEME_IDS.filter((theme) => theme !== 'marriage')));
+    expect(gapRules(issues, 'theme-role').map((g) => [g.where, g.message])).toEqual([
+      ['s1395 farmer', '이 역할이 미션으로 만나지 못하는 견주기 물음: "marriage"'],
+    ]);
+    // 미션마다 차시가 달려 있고, 미션과 일에 역할(농민 집)이 적혀 있다
+    for (const m of s1395.missions) {
+      expect(m.lesson, m.id).toMatch(/차시/);
+      expect(m.roles, m.id).toEqual(['farmer']);
+    }
+    for (const h of s1395.happenings) expect(h.roles, h.id).toEqual(['farmer']);
   });
+
+  it('실제 묶음의 알림은 아직 만들지 않은 것과, 봄보다 가볍게 잡은 덤뿐이다', () => {
+    expect(new Set(gapsOf(issues).map((g) => g.rule))).toEqual(
+      new Set(['situation-soon', 'role-empty', 'extras-few', 'status-lock-missing', 'theme-coverage', 'theme-role']),
+    );
+    expect(gapRules(issues, 'role-empty').map((g) => g.where)).toEqual(['s1395 son', 's1395 daughter', 's1395 nobi']);
+    // 여름과 가을의 덤은 셋(여름의 하나는 큰비가 온 해에만 나타난다), 겨울은 넷이다. 해 ☀는 셋.
+    expect(gapRules(issues, 'extras-few').map((g) => g.where)).toEqual(['s1395 farmer summer', 's1395 farmer autumn']);
+    const extras = (season: Season) => s1395.happenings.filter((h) => h.season === season && h.cost === 1).length;
+    expect(SEASONS.map(extras)).toEqual([4, 3, 3, 4]);
+    // 한 해가 다 차야 맞는 것들이 모두 맞다: 남기는 곳이 없는 표시도, 읽히지 않는 표시도, 겹치는 자리도 없다
+    for (const rule of ['flag-unread', 'flag-unknown', 'mission-count', 'season-soon', 'happening-idle', 'spot-shared', 'variant-drops', 'trust-loss', 'stat-lock', 'wish']) {
+      expect(gapRules(issues, rule), rule).toEqual([]);
+    }
+  });
+
+  it('한 해가 다 찬 농민 집의 것은 이제 잘못으로 잡힌다(실제 묶음을 한 군데씩 망가뜨려 본다)', () => {
+    const brokenReal = (mutate: (pack: SituationPack) => void): Issue[] => {
+      const copy = structuredClone(s1395);
+      mutate(copy);
+      return validatePack(copy, bundle, { walk: false });
+    };
+    const real = (pack: SituationPack, id: string) => pack.happenings.find((h) => h.id === id)!;
+    const farmer = (pack: SituationPack) => pack.situation.roles.find((r) => r.id === 'farmer')!;
+    expect(rules(brokenReal(() => undefined))).toEqual([]);
+    // 읽히지 않는 표시
+    const unread = brokenReal((p) => void (real(p, 's1395-summer-manor').after!.setFlags = ['manor.heard']));
+    expect(errorsOf(unread).map((i) => [i.rule, i.where])).toEqual([['flag-unread', 's1395 표시 manor.heard']]);
+    // 남기는 곳이 없는 표시를 읽는 바람과 덤 미션(이 역할의 것) — 한 해 이름은 다른 집이 남길 수도 있어 알림이다
+    const wish = brokenReal((p) => void (farmer(p).wishOutcomes[0].when = { flags: ['year.rich'] }));
+    expect(errorsOf(wish).map((i) => [i.rule, i.where])).toEqual([['flag-unknown', 's1395 역할 farmer 바람 1']]);
+    const tales = brokenReal((p) => void p.missions.find((m) => m.id === 's1395-m-tales')!.done.flags!.push('tale.summer'));
+    expect(errorsOf(tales).map((i) => [i.rule, i.where])).toEqual([['flag-unknown', '미션 s1395-m-tales 풀림 조건']]);
+    const ending = brokenReal((p) => void (p.situation.endings[0].when = { flags: ['year.rich'] }));
+    expect(rules(ending)).toEqual([]);
+    expect(gapRules(ending, 'flag-unknown').map((g) => g.where)).toEqual(['s1395 한 해 이름 hard']);
+    // 꼭 푸는 미션이 여섯보다 적으면
+    const few = brokenReal((p) => {
+      p.missions = p.missions.filter((m) => !['s1395-m-dano', 's1395-m-leave', 's1395-m-rite'].includes(m.id));
+    });
+    expect(errorOf(few, 'mission-count')?.where).toBe('s1395 farmer');
+    expect(errorOf(few, 'mission-count')?.message).toContain('5개');
+    // 모을 카드가 이야기의 카드보다 많으면
+    const cards = brokenReal((p) => void (p.missions.find((m) => m.id === 's1395-m-cards')!.done.cardCount = 30));
+    expect(errorsOf(cards).map((i) => [i.rule, i.where])).toEqual([['card-count', '미션 s1395-m-cards 풀림 조건']]);
+    // 인심이 깎이는 길과 살림·기력 잠김이 하나도 없으면
+    const soft = brokenReal((p) => {
+      for (const h of p.happenings) {
+        for (const outcome of [...(h.choices ?? []).flatMap((c) => [c, ...(c.variants ?? [])]), ...(h.after ? [h.after, ...(h.after.variants ?? [])] : [])]) {
+          if ((outcome.effects?.trust ?? 0) < 0) outcome.effects = { ...outcome.effects, trust: 0 };
+        }
+        for (const choice of h.choices ?? []) delete choice.lock;
+      }
+    });
+    expect(errorsOf(soft).map((i) => [i.rule, i.where, i.message.slice(0, 2)])).toEqual([
+      ['trust-loss', 's1395 farmer', '인심'],
+      ['stat-lock', 's1395 farmer', '살림'],
+      ['stat-lock', 's1395 farmer', '기력'],
+    ]);
+  });
+
+  it('① 한 해의 글자 수와 시간 어림(계절마다, 한 해 — 분당 300자)을 찍어 본다', () => {
+    const lines: string[] = ['[① 한 해 · 농민 집 아이의 글자 수와 시간 어림] 꼭 푸는 미션만(짧은 길~긴 길) / 덤까지(짧은 길~긴 길)'];
+    const totals: { name: string; must: number; all: number; mustChars: number; allChars: number }[] = [];
+    for (const look of ['boy', 'girl'] as Look[]) {
+      for (const weather of ['normal', 'drought']) {
+        let state = toSeason(s1395, 'farmer', look, 'spring', { weather });
+        const sum = { must: [0, 0], all: [0, 0], mustChars: [0, 0], allChars: [0, 0] };
+        for (const season of SEASONS) {
+          expect(state.phase).toBe('season');
+          const size = measureSeason(s1395, 'farmer', look, state);
+          expect(size, `${look}/${weather}/${season}`).not.toBeNull();
+          if (!size) break;
+          expect(size.season).toBe(season);
+          lines.push(
+            `  ${look}/${weather}/${season}: ${size.must.short.chars}~${size.must.long.chars}자, 일 ${size.must.short.happenings}~${size.must.long.happenings}개(놀이 ${size.must.long.plays}) ${size.must.short.minutes}~${size.must.long.minutes}분` +
+              ` / ${size.all.short.chars}~${size.all.long.chars}자, 일 ${size.all.short.happenings}~${size.all.long.happenings}개 ${size.all.short.minutes}~${size.all.long.minutes}분`,
+          );
+          sum.must[0] += size.must.short.minutes;
+          sum.must[1] += size.must.long.minutes;
+          sum.all[0] += size.all.short.minutes;
+          sum.all[1] += size.all.long.minutes;
+          sum.mustChars[0] += size.must.short.chars;
+          sum.mustChars[1] += size.must.long.chars;
+          sum.allChars[0] += size.all.short.chars;
+          sum.allChars[1] += size.all.long.chars;
+          // 여름과 겨울은 봄(1,077자·7.6분)보다 가볍다. 가을은 미션 둘이 일 둘씩이고 놀이가 둘이라 봄보다 길다(읽기 4.5분, 모두 10분쯤).
+          const cap = { spring: [1100, 8, 12], summer: [850, 6.5, 10.5], autumn: [1400, 10.5, 15], winter: [1100, 7, 10] }[season];
+          expect(size.must.long.chars, `${look}/${weather}/${season}`).toBeLessThanOrEqual(cap[0]);
+          expect(size.must.long.minutes, `${look}/${weather}/${season}`).toBeLessThanOrEqual(cap[1]);
+          expect(size.all.long.minutes, `${look}/${weather}/${season}`).toBeLessThanOrEqual(cap[2]);
+          state = playMusts(s1395, state);
+          if (season !== 'winter') state = advance(s1395, state);
+        }
+        const round = (n: number) => Math.round(n * 10) / 10;
+        lines.push(
+          `  ${look}/${weather} 한 해: ${sum.mustChars[0]}~${sum.mustChars[1]}자 ${round(sum.must[0])}~${round(sum.must[1])}분 / ${sum.allChars[0]}~${sum.allChars[1]}자 ${round(sum.all[0])}~${round(sum.all[1])}분`,
+        );
+        totals.push({ name: `${look}/${weather}`, must: sum.must[1], all: sum.all[1], mustChars: sum.mustChars[1], allChars: sum.allChars[1] });
+      }
+    }
+    console.log(lines.join('\n'));
+    // spec 5.2의 11번: 이야기 하나 30분 안팎(26~34분, 끝 화면 포함), 덤까지 다 하면 45분쯤. 계절 열고 닫기는 어림에 들어 있고 끝 화면(2분쯤)은 빠져 있다.
+    for (const row of totals) {
+      expect(row.must, row.name).toBeLessThanOrEqual(32);
+      expect(row.must, row.name).toBeGreaterThanOrEqual(24);
+      expect(row.all, row.name).toBeLessThanOrEqual(47);
+      expect(row.mustChars, row.name).toBeLessThanOrEqual(4400);
+    }
+  }, 60000);
 });
 
 // ── 견본 ─────────────────────────────────────────────────────
@@ -260,12 +424,21 @@ describe('견본', () => {
   });
 
   it('남기기만 하고 읽히지 않는 표시를 알린다(뒤 계절이 읽을 수도 있어 알림이다)', () => {
-    expect(gapRules(issues, 'flag-unread').map((g) => g.where).sort()).toEqual([
-      't0001 표시 sow.even',
-      't0001 표시 sow.helped',
-      't0001 표시 weed.swap',
-    ]);
-    expect(gapRules(issues, 'flag-unread')[0].message).toContain('t-sow 놀이');
+    expect(gapRules(issues, 'flag-unread').map((g) => g.where).sort()).toEqual(['t0001 표시 sow.helped', 't0001 표시 weed.swap']);
+    expect(gapRules(issues, 'flag-unread')[0].message).toContain('t-sow-rescue 결과');
+  });
+
+  it('일 놀이의 끝난 모습 표시: 한 끝이라도 읽히면 읽히지 않는 끝은 "그 밖의 끝"(바탕 결과)이라 알리지 않는다', () => {
+    // 견본의 볍씨 뿌리기: heaped와 left를 결과의 갈림이 읽고, even은 바탕 결과다
+    expect(gapRules(issues, 'flag-unread').map((g) => g.where)).not.toContain('t0001 표시 sow.even');
+    // 어느 끝도 읽히지 않으면(놀이가 결과를 바꾸지 않으면) 세 끝을 모두 알린다
+    const flat = broken((p) => {
+      for (const choice of hap(p, 't-sow').choices!) choice.variants = [];
+    });
+    expect(gapRules(flat, 'flag-unread').map((g) => g.where).sort()).toEqual(
+      ['sow.even', 'sow.heaped', 'sow.helped', 'sow.left', 'weed.swap'].map((flag) => `t0001 표시 ${flag}`),
+    );
+    expect(gapRules(flat, 'flag-unread').find((g) => g.where.endsWith('sow.even'))?.message).toContain('t-sow 놀이');
   });
 
   it('두 계절을 이어 걷는다(봄의 선택이 여름으로 넘어간다)', () => {
@@ -409,6 +582,26 @@ describe('말과 근거를 잡아낸다', () => {
     expect(rules(broken((p) => void (hap(p, 't-news').choices![2].lock!.reason = '네가 게을러서 안 돼요')))).toContain('lock-blame');
   });
 
+  it('형편마다 갈리는 잠긴 까닭(lock.reasons)도 바탕 까닭과 같은 잣대로 본다: 30자, 탓하지 않음, 조건, 글 모음', () => {
+    const withReason = (reason: string, when: Condition = { min: { body: 3 } }) =>
+      broken((p) => void (hap(p, 't-news').choices![2].lock!.reasons = [{ when, reason }]));
+    expect(rules(withReason('일손이 모자라 지금은 보탤 수 없어요'))).toEqual([]);
+    expect(rules(withReason(long(31)))).toEqual(['budget-lock']);
+    expect(rules(withReason(''))).toEqual(['lock-reason']);
+    expect(rules(withReason('네가 게을러서 안 돼요'))).toContain('lock-blame');
+    expect(rules(withReason('일손이 모자라 지금은 보탤 수 없어요', { min: { luck: 3 } as never }))).toContain('condition');
+    // 바탕 까닭과 글이 같으면 알림(쓸모없는 갈림)
+    const same = broken((p) => {
+      const lock = hap(p, 't-news').choices![2].lock!;
+      lock.reasons = [{ when: { min: { body: 3 } }, reason: lock.reason }];
+    });
+    expect(gapRules(same, 'lock-reason-same')).toHaveLength(1);
+    // 화면에 보일 수 있는 글 모음에 들어간다(대본과 견주는 시험이 이 글도 본다)
+    const pack = structuredClone(testPack);
+    hap(pack, 't-news').choices![2].lock!.reasons = [{ when: { min: { body: 3 } }, reason: '일손이 모자라 지금은 보탤 수 없어요' }];
+    expect(textsOfPack(pack).map((one) => one.text)).toContain('일손이 모자라 지금은 보탤 수 없어요');
+  });
+
   it('신분으로 잠그지 않는 이야기(⑦)에서 신분 잠김을 쓰면', () => {
     const issues = broken((p) => {
       p.situation.statusLocks = false;
@@ -454,6 +647,13 @@ describe('자리와 사람을 잡아낸다', () => {
 
   it('무대에 세 사람이 서면', () => {
     expect(rules(broken((p) => void hap(p, 't-news').stage.cast!.push({ who: 'granny' })))).toEqual(['cast']);
+  });
+
+  // Review 1-라 11.8 ①: 무대의 사람에 기본 표정(pose)을 적을 수 있다. 없는 표정이면 잡는다.
+  it('무대에 선 사람의 기본 표정이 없는 표정이면', () => {
+    const sad = broken((p) => void (hap(p, 't-news').stage.cast![0].pose = 'sad' as 'worried'));
+    expect(errorsOf(sad).map((i) => [i.rule, i.where])).toEqual([['cast', 't-news 무대']]);
+    expect(rules(broken((p) => void (hap(p, 't-news').stage.cast![0].pose = 'worried')))).toEqual([]);
   });
 });
 
@@ -827,7 +1027,26 @@ describe('알림(잘못은 아니지만 사람이 한 번 볼 것)', () => {
   it('아직 쓰이지 않는 일(만들지 않은 계절의 것)은 알림이다', () => {
     const issues = broken((p) => void (hap(p, 't-summer-4').season = 'autumn'));
     expect(gapRules(issues, 'happening-idle').map((g) => g.where)).toEqual(['t-summer-4']);
-    expect(errorsOf(issues).map((i) => [i.rule, i.where])).toEqual([['extras-count', 't0001 farmer summer']]); // 여름의 덤 셋, 농민 집의 해 셋
+    // 여름의 덤이 셋으로 줄었다: 농민 집의 해가 셋이라 덤을 다 할 수 있다 — 봄이 아닌 계절은 알림이다(노비 집은 해가 둘이라 알리지 않는다)
+    expect(rules(issues)).toEqual([]);
+    expect(gapRules(issues, 'extras-few').map((g) => g.where)).toEqual(['t0001 farmer summer']);
+  });
+
+  it('덤의 수: 봄은 해 ☀보다 많아야 하고, 뒤 계절은 둘은 있어야 한다(해보다 많지 않으면 알림)', () => {
+    expect(gapRules(baseIssues, 'extras-few')).toEqual([]);
+    const one = broken((p) => {
+      p.happenings = p.happenings.filter((h) => !['t-summer-2', 't-summer-3', 't-summer-4'].includes(h.id));
+    });
+    expect(errorsOf(one).map((i) => [i.rule, i.where])).toEqual([
+      ['extras-count', 't0001 farmer summer'],
+      ['extras-count', 't0001 nobi summer'],
+    ]);
+    expect(errorOf(one, 'extras-count')?.message).toContain('둘은 있어야 한다');
+    const two = broken((p) => {
+      p.happenings = p.happenings.filter((h) => !['t-summer-3', 't-summer-4'].includes(h.id));
+    });
+    expect(rules(two)).toEqual([]);
+    expect(gapRules(two, 'extras-few').map((g) => g.where)).toEqual(['t0001 farmer summer', 't0001 nobi summer']);
   });
 });
 
@@ -857,11 +1076,233 @@ describe('한 해가 다 만들어지면', () => {
     const issues = validatePack(full, testBundle);
     expect(errorsOf(issues).filter((i) => i.rule === 'mission-count').map((i) => i.where)).toEqual(['t0001 farmer', 't0001 nobi']);
     expect(errorsOf(issues).filter((i) => i.rule === 'theme-coverage')).toHaveLength(3);
-    expect(errorsOf(issues).filter((i) => i.rule === 'flag-unread').map((i) => i.where)).toContain('t0001 표시 sow.even');
+    expect(errorsOf(issues).filter((i) => i.rule === 'flag-unread').map((i) => i.where)).toEqual(['t0001 표시 sow.helped', 't0001 표시 weed.swap']);
     expect(gapRules(issues, 'season-soon')).toEqual([]);
     // 한 해 이름과 바람도 이제는 있어야 한다
     full.situation.endings = [];
     full.situation.roles[0].wishOutcomes = [];
     expect(rules(validatePack(full, testBundle, { walk: false }))).toEqual(expect.arrayContaining(['endings', 'wish']));
+  });
+
+  /** 농민 집만 한 해를 채운다(노비 집은 여름까지, 양반 집 아들은 비어 있다) — 지금의 ① 1395년과 같은 꼴 */
+  function farmerYear(): SituationPack {
+    const copy = structuredClone(testPack);
+    for (const season of ['autumn', 'winter'] as const) {
+      const weed = structuredClone(hap(copy, 't-weed'));
+      const id = `t-${season}`;
+      copy.happenings.push({
+        ...weed,
+        id,
+        season,
+        roles: ['farmer'],
+        lineVariants: [],
+        choices: weed.choices!.map((c) => ({ ...c, variants: [], setFlags: [`${season}.done`] })),
+      });
+      copy.missions.push({
+        ...structuredClone(mis(copy, 'm-weed')),
+        id: `m-${season}`,
+        season,
+        roles: ['farmer'],
+        parts: [id],
+        done: { flags: [`${season}.done`] },
+      });
+    }
+    return copy;
+  }
+  const of = (issues: Issue[], rule: string) => errorsOf(issues).filter((i) => i.rule === rule).map((i) => i.where);
+
+  it('한 역할의 한 해만 다 차도 그 역할의 것은 잘못이 된다(다른 역할의 것은 알림으로 남는다)', () => {
+    const pack = farmerYear();
+    expect(builtSeasons(pack, 'farmer')).toEqual([...SEASONS]);
+    expect(builtSeasons(pack, 'nobi')).toEqual(['spring', 'summer']);
+    const issues = validatePack(pack, testBundle, { walk: false });
+    // 꼭 푸는 미션 6~10개
+    expect(of(issues, 'mission-count')).toEqual(['t0001 farmer']);
+    expect(gapRules(issues, 'mission-count').map((g) => g.where)).toEqual(['t0001 nobi']);
+    expect(gapRules(issues, 'season-soon').map((g) => g.where)).toEqual(['t0001 nobi']);
+    // 읽히지 않는 표시: 농민 집의 일만 남기는 것(sow.helped)은 잘못, 노비 집도 하는 일이 남기는 것(weed.swap)은 뒤 계절이 읽을 수 있어 알림
+    expect(of(issues, 'flag-unread')).toEqual(['t0001 표시 sow.helped']);
+    expect(gapRules(issues, 'flag-unread').map((g) => g.where)).toEqual(['t0001 표시 weed.swap']);
+    // 일곱 물음: 이야기 전체는 모든 역할이 다 찰 때까지 알림이고, 한 해가 다 찬 역할이 미션으로 만나지 못하는 물음을 따로 알린다
+    expect(of(issues, 'theme-coverage')).toEqual([]);
+    expect(gapRules(issues, 'theme-coverage')).toHaveLength(3);
+    expect(gapRules(issues, 'theme-role').map((g) => g.where)).toEqual(['t0001 farmer']);
+    expect(gapRules(issues, 'theme-role')[0].message).toMatch(/"paying".*"inheritance".*"learning"/);
+    // 견본 그대로(둘 다 여름까지)는 역할마다의 알림이 없다
+    expect(gapRules(baseIssues, 'theme-role')).toEqual([]);
+  });
+
+  it('한 해가 다 찬 역할: 바람을 가릴 줄, 인심이 깎이는 길, 살림 잠김이 없으면 잘못이다', () => {
+    const noWish = farmerYear();
+    noWish.situation.roles[0].wishOutcomes = [];
+    noWish.situation.roles[1].wishOutcomes = [];
+    const wish = validatePack(noWish, testBundle, { walk: false });
+    expect(of(wish, 'wish')).toEqual(['t0001 역할 farmer']);
+    expect(gapRules(wish, 'wish').map((g) => g.where)).toEqual(['t0001 역할 nobi']);
+
+    const soft = farmerYear();
+    hap(soft, 't-own').after!.effects = { living: 1 };
+    hap(soft, 't-sow-rescue').after!.effects = {};
+    delete hap(soft, 't-news').choices![2].lock;
+    const issues = validatePack(soft, testBundle, { walk: false });
+    expect(of(issues, 'trust-loss')).toEqual(['t0001 farmer']);
+    expect(errorsOf(issues).filter((i) => i.rule === 'stat-lock').map((i) => [i.where, i.message])).toEqual([
+      ['t0001 farmer', '살림 때문에 잠기는 선택지가 하나도 없다'],
+    ]);
+    expect(gapRules(issues, 'stat-lock').map((g) => g.where)).toEqual(['t0001 nobi']);
+  });
+
+  it('한 해가 다 찬 역할의 바람과 덤 미션이 읽는 표시는 남기는 곳이 있어야 한다', () => {
+    const pack = farmerYear();
+    pack.situation.roles[0].wishOutcomes[0].when = { flags: ['year.rich'] };
+    pack.situation.roles[1].wishOutcomes[0].when = { flags: ['year.rich'] };
+    mis(pack, 'm-stories').done = { flags: ['story.granny', 'story.temple', 'story.autumn'] };
+    const issues = validatePack(pack, testBundle, { walk: false });
+    expect(of(issues, 'flag-unknown')).toEqual(['t0001 역할 farmer 바람 1']);
+    // 노비 집의 바람과, 모든 역할이 함께 푸는 덤 미션은 아직 알림이다
+    expect(gapRules(issues, 'flag-unknown').map((g) => g.where)).toEqual(['t0001 역할 nobi 바람 1', '미션 m-stories 풀림 조건']);
+    mis(pack, 'm-stories').roles = ['farmer'];
+    expect(of(validatePack(pack, testBundle, { walk: false }), 'flag-unknown')).toEqual(['t0001 역할 farmer 바람 1', '미션 m-stories 풀림 조건']);
+  });
+});
+
+describe('바퀴 1-라에서 더한 규칙', () => {
+  it('카드를 세는 조건(cardCount): 1 이상의 정수여야 하고, 이야기의 카드보다 많으면 알린다', () => {
+    // 견본의 카드는 두 장이다
+    const two = broken((p) => void (mis(p, 'm-stories').done = { cardCount: 2 }));
+    expect(rules(two)).toEqual([]);
+    expect(gapRules(two, 'card-count')).toEqual([]);
+    const many = broken((p) => void (mis(p, 'm-stories').done = { cardCount: 3 }));
+    expect(rules(many)).toEqual([]);
+    expect(gapRules(many, 'card-count').map((g) => g.where)).toEqual(['미션 m-stories 풀림 조건']);
+    expect(rules(broken((p) => void (mis(p, 'm-stories').done = { cardCount: 0 })))).toContain('condition');
+    // 카드를 세는 덤 미션은 딸린 일이 없어도 된다. 꼭 푸는 미션이나 표시를 읽는 미션은 일이 있어야 한다.
+    const partless = broken((p) => {
+      mis(p, 'm-stories').done = { cardCount: 2 };
+      mis(p, 'm-stories').parts = [];
+    });
+    expect(rules(partless)).toEqual([]);
+    expect(rules(broken((p) => void (mis(p, 'm-stories').parts = [])))).toContain('mission-parts');
+  });
+
+  it('한쪽 모습에만 나타나는 일은 그 모습이 자리에 닿으면 된다', () => {
+    // 견본 맵의 향교(school)는 여자아이 모습에게 막혀 있다
+    const boys = broken((p) => {
+      hap(p, 't-sow').spot = 'school';
+      hap(p, 't-sow').shows = { look: 'boy' };
+    });
+    expect(rules(boys).filter((rule) => rule === 'spot-unreachable')).toEqual([]);
+    const girls = broken((p) => {
+      hap(p, 't-sow').spot = 'school';
+      hap(p, 't-sow').shows = { look: 'girl' };
+    });
+    expect(errorsOf(girls).filter((i) => i.rule === 'spot-unreachable').map((i) => i.where)).toEqual(['t-sow (farmer/girl)']);
+  });
+
+  it('같은 자리를 쓰는 두 일: 차례로 나타나거나 모습이 갈리면 알리지 않는다', () => {
+    const same = broken((p) => void (hap(p, 't-temple').spot = 'well'));
+    expect(gapRules(same, 'spot-shared').map((g) => g.where)).toEqual(['t-well · t-temple']);
+    // 뒷일이 앞일을 마친 뒤에야 나타나면(앞일이 남긴 표시를 읽으면) 함께 뜨지 않는다
+    const after = broken((p) => {
+      hap(p, 't-temple').spot = 'well';
+      hap(p, 't-well').choices![0].setFlags = ['well.heard'];
+      hap(p, 't-well').choices![0].variants![0].setFlags = ['well.heard'];
+      hap(p, 't-temple').shows = { flags: ['well.heard'] };
+    });
+    expect(gapRules(after, 'spot-shared')).toEqual([]);
+    // 앞일을 하기 전에만 나타나는 것(notFlags)은 함께 뜰 수 있다
+    const before = broken((p) => {
+      hap(p, 't-temple').spot = 'well';
+      hap(p, 't-well').choices![0].setFlags = ['well.heard'];
+      hap(p, 't-well').choices![0].variants![0].setFlags = ['well.heard'];
+      hap(p, 't-temple').shows = { notFlags: ['well.heard'] };
+    });
+    expect(gapRules(before, 'spot-shared').map((g) => g.where)).toEqual(['t-well · t-temple']);
+    const looks = broken((p) => {
+      hap(p, 't-temple').spot = 'well';
+      hap(p, 't-well').shows = { look: 'boy' };
+      hap(p, 't-temple').shows = { look: 'girl' };
+    });
+    expect(gapRules(looks, 'spot-shared')).toEqual([]);
+  });
+});
+
+// ── 대본과 자료 ─────────────────────────────────────────────────
+
+/** 대본(docs/script-1395.md). "이 문서의 글이 곧 자료다" — 자료의 글이 대본에 그대로 있는지 본다(Review가 둘을 견준다). */
+const SCRIPT = Object.values(import.meta.glob<string>('../docs/script-1395.md', { eager: true, query: '?raw', import: 'default' }))[0] ?? '';
+
+describe('대본과 자료가 같은 글이다', () => {
+  const missing = (texts: [string, string][]): string[] => texts.filter(([, text]) => text.length > 0 && !SCRIPT.includes(text)).map(([where, text]) => `${where}: ${text}`);
+
+  it('대본을 읽었다', () => {
+    expect(SCRIPT.length).toBeGreaterThan(50000);
+    expect(SCRIPT).toContain('# 대본 — ① 새 나라, 새 도읍 한양 · 1395년 · 여름·가을·겨울 · 농민 집 아이');
+  });
+
+  it('일의 모든 글(여는 대화와 그 갈림, 선택지, 잠긴 까닭, 결과 대화, 배움 쪽지, 한마디)이 대본에 한 글자도 다르지 않게 있다', () => {
+    const texts: [string, string][] = [];
+    for (const h of s1395.happenings) {
+      for (const line of [...h.lines, ...(h.lineVariants ?? []).flatMap((v) => v.lines)]) texts.push([`${h.id} 여는 대화`, line.text]);
+      for (const choice of h.choices ?? []) {
+        texts.push([`${h.id}/${choice.id} 선택지`, choice.label]);
+        if (choice.lock) texts.push([`${h.id}/${choice.id} 잠긴 까닭`, choice.lock.reason]);
+        for (const outcome of [choice, ...(choice.variants ?? [])]) {
+          for (const line of outcome.lines) texts.push([`${h.id}/${choice.id} 결과`, line.text]);
+          if (outcome.note) texts.push([`${h.id}/${choice.id} 쪽지`, outcome.note]);
+        }
+      }
+      for (const outcome of h.after ? [h.after, ...(h.after.variants ?? [])] : []) {
+        for (const line of outcome.lines) texts.push([`${h.id} 결과`, line.text]);
+        if (outcome.note) texts.push([`${h.id} 쪽지`, outcome.note]);
+      }
+      texts.push([`${h.id} 쪽지`, h.note], [`${h.id} 한마디`, h.lure ?? '']);
+    }
+    expect(texts.length).toBeGreaterThan(400);
+    expect(missing(texts)).toEqual([]);
+  });
+
+  it('미션, 카드, 물건, 한 해 이름, 바람, 나중 결과, 계절 첫 줄, 남길 것, 이름표, 뒷이야기도 대본에 그대로 있다', () => {
+    const farmer = s1395.situation.roles.find((r) => r.id === 'farmer')!;
+    const texts: [string, string][] = [
+      ...s1395.missions.flatMap((m): [string, string][] => [[`${m.id} 이름`, m.title], [`${m.id} 할 일`, m.goal], [`${m.id} 해낸 일`, m.doneLine]]),
+      ...bundle.cards.filter((card) => card.situation === 's1395').flatMap((card): [string, string][] => [[`${card.id} 이름`, card.title], [`${card.id} 글`, card.text]]),
+      ...bundle.items.flatMap((item): [string, string][] => [[`${item.id} 이름`, item.label], [`${item.id} 글`, item.text]]),
+      ...s1395.situation.endings.flatMap((ending): [string, string][] => [[`${ending.id} 이름`, ending.title], [`${ending.id} 한 줄`, ending.line]]),
+      ...farmer.wishOutcomes.map((row, index): [string, string] => [`바람 ${index + 1}`, row.reason]),
+      ['바람', farmer.wish],
+      ...(s1395.situation.later ?? []).map((row, index): [string, string] => [`나중 결과 ${index + 1}`, row.line]),
+      ...Object.entries(s1395.situation.seasons).flatMap(([season, row]): [string, string][] => [[`${season} 첫 줄`, row.line], ...(row.lineVariants ?? []).map((v): [string, string] => [`${season} 첫 줄 갈림`, v.line])]),
+      ...s1395.situation.legacy.map((one): [string, string] => [one.id, one.label]),
+      ...Object.entries(s1395.situation.people).map(([who, person]): [string, string] => [who, person.label]),
+      ['뒷이야기', s1395.situation.epilogue],
+      ...bundle.places.map((place): [string, string] => [`배경 ${place.id}`, place.label]),
+    ];
+    expect(missing(texts)).toEqual([]);
+  });
+
+  it('대본에 적힌 이름들이 자료에 있다: 일·미션·카드·표시의 이름', () => {
+    for (const h of s1395.happenings) expect(SCRIPT, h.id).toContain(h.id.replace(/^s1395-(summer|autumn|winter)-/, (_, season: string) => `s1395-${season}-`));
+    for (const m of s1395.missions) expect(SCRIPT, m.id).toContain(m.id);
+    for (const card of bundle.cards.filter((one) => one.situation === 's1395')) expect(SCRIPT, card.id).toContain(card.id);
+    // 대본이 드는 표시(`…`로 적힌 것 가운데 점이 든 이름)는 모두 자료가 남기거나 읽는 표시다
+    const known = new Set<string>();
+    const take = (cond: { flags?: string[]; notFlags?: string[]; anyOf?: unknown[] } | undefined): void => {
+      if (!cond) return;
+      for (const flag of [...(cond.flags ?? []), ...(cond.notFlags ?? [])]) known.add(flag);
+      for (const one of cond.anyOf ?? []) take(one as { flags?: string[] });
+    };
+    for (const h of s1395.happenings) {
+      for (const flag of Object.values(h.play?.flags ?? {})) known.add(flag);
+      take(h.shows);
+      for (const outcome of [...(h.choices ?? []).flatMap((c) => [c, ...(c.variants ?? [])]), ...(h.after ? [h.after, ...(h.after.variants ?? [])] : [])]) {
+        for (const flag of outcome.setFlags ?? []) known.add(flag);
+      }
+    }
+    const named = [...SCRIPT.matchAll(/`((?:return|sow|tale|dano|weed|leave|autumn|harvest|salt|pay|rite|letters|weave)\.[a-z]+)`/g)]
+      .map((m) => m[1])
+      .filter((name) => !name.endsWith('.ts')); // `autumn.ts` 같은 파일 이름은 뺀다
+    expect(named.length).toBeGreaterThan(50);
+    expect([...new Set(named)].filter((flag) => !known.has(flag))).toEqual([]);
   });
 });

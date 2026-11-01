@@ -1,6 +1,7 @@
 // 3. 누가 될까 — 신분 역할만 있는 이야기는 처음에 뒤집힌 패에서 뽑는다("태어날 집은 고를 수 없었어요").
 // 그 밖의 이야기와 다시 하는 판은 고른다. 아직 만들어지지 않은 집은 뽑히지 않고 "준비 중"으로 보인다.
 // 남녀 어느 쪽이든 될 수 있는 역할이면 이어서 남자아이·여자아이 모습을 고른다(도트 인물을 크게 보여 준다).
+// 깬 이야기를 다시 할 때는 이미 살아 본 집과 모습에 표시가 붙는다("살아 본 모습"과 그때의 한 해 이름). 같은 모습으로 다시 살아도 된다.
 
 import type { JSX } from 'preact';
 import { useRef, useState } from 'preact/hooks';
@@ -9,6 +10,7 @@ import { playableRoles } from '../engine/game';
 import type { Look, RoleDef, RoleId } from '../engine/types';
 import { goBook, heroName, pack, save, seed, settleRole } from '../state/store';
 import { ro } from '../ui/words';
+import { bookStamp, livedAs } from '../ui/year';
 
 const LOOK_LABELS: Record<Look, string> = { boy: '남자아이 모습', girl: '여자아이 모습' };
 
@@ -67,6 +69,8 @@ export function RolePick(): JSX.Element | null {
   const roleId: RoleId | null = choosing ? chosen : dealt && picked !== null ? dealt[picked] : null;
   const role = roleId ? (roles.find((r) => r.id === roleId) ?? null) : null;
   const someSoon = playable.length < roles.length;
+  // 이 이야기를 깬 기록(살아 본 집과 모습에 표시를 한다)
+  const stamp = bookStamp(p, save.value.cleared[situation.id]);
 
   // ── 모습 고르기 ──
   if (role && pickingLook) {
@@ -85,15 +89,29 @@ export function RolePick(): JSX.Element | null {
           </button>
         </header>
         <div class="look-cards">
-          {role.looks.map((look) => (
-            <button key={look} type="button" class="look-card" onClick={() => Date.now() - lookShownAt.current > 400 && settleRole(role.id, look)}>
-              <span class="look-figure" aria-hidden="true">
-                <Figure story={situation.id} pic={heroName(role.id, look)} sprite={heroName(role.id, look)} fill={0.92} act="walk" />
-              </span>
-              <span class="look-label">{LOOK_LABELS[look]}</span>
-              <span class="look-go">{ro(LOOK_LABELS[look])} 살기 ▶</span>
-            </button>
-          ))}
+          {role.looks.map((look) => {
+            const lived = livedAs(stamp, role.id, look);
+            return (
+              <button key={look} type="button" class={`look-card${lived ? ' lived' : ''}`} onClick={() => Date.now() - lookShownAt.current > 400 && settleRole(role.id, look)}>
+                <span class="look-figure" aria-hidden="true">
+                  <Figure story={situation.id} pic={heroName(role.id, look)} sprite={heroName(role.id, look)} fill={0.92} act="walk" />
+                </span>
+                <span class="look-label">{LOOK_LABELS[look]}</span>
+                {lived ? (
+                  // 딱지 밑에 한 해 이름을 한 줄로(이름이 길어도 한 글자만 아래로 떨어지지 않게 — Review 1-라 29번 ㉠)
+                  <span class="look-lived">
+                    <span class="look-lived-tag">살아 본 모습</span>
+                    <span class="look-lived-name">{lived.title}</span>
+                  </span>
+                ) : (
+                  stamp && <span class="look-lived new">아직 살아 보지 않은 모습</span>
+                )}
+                <span class="look-go">
+                  {ro(LOOK_LABELS[look])} {lived ? '다시 살기' : '살기'} ▶
+                </span>
+              </button>
+            );
+          })}
         </div>
       </main>
     );
@@ -117,7 +135,7 @@ export function RolePick(): JSX.Element | null {
           </p>
           <h1 class="screen-title">누가 될까</h1>
           <p class="role-guide">
-            {choosing ? '이번에는 살아 볼 집을 골라요.' : '태어날 집은 고를 수 없었어요. 패를 한 장 뒤집어 보세요.'}
+            {choosing ? (stamp ? '이번에는 살아 볼 집을 골라요. 살아 본 집도 다른 모습으로 다시 살 수 있어요.' : '이번에는 살아 볼 집을 골라요.') : '태어날 집은 고를 수 없었어요. 패를 한 장 뒤집어 보세요.'}
             {someSoon && ' 준비 중인 집은 아직 살아 볼 수 없어요.'}
           </p>
         </div>
@@ -158,10 +176,11 @@ export function RolePick(): JSX.Element | null {
               );
             }
             const mine = chosen === r.id;
+            const lived = livedAs(stamp, r.id) !== null;
             return (
               <button key={r.id} type="button" class={`role-card face${mine ? ' mine' : ''}`} aria-pressed={mine} onClick={() => setChosen(r.id)}>
                 <RoleFace story={situation.id} role={r} />
-                {mine ? <span class="role-tag">이 집으로</span> : <span class="role-tag-none" />}
+                {mine ? <span class="role-tag">이 집으로</span> : lived ? <span class="role-tag lived">살아 본 집</span> : <span class="role-tag-none" />}
               </button>
             );
           })}

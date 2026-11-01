@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { picturesMissed } from '../art/pictures';
 import { seasonLabels, statLabels } from '../content/labels';
 import { canCloseSeason, currentSeason, deedsOfSeason, openHappenings, roleOf } from '../engine/game';
-import { STATS, STAT_MAX, type Stat } from '../engine/types';
+import { SEASONS, STATS, STAT_MAX, type Stat } from '../engine/types';
 import { askHome, closeSeasonNow, game, mapBusy, openPanel, pack, panel, saveFailed, talk } from '../state/store';
 import { Ask } from './Ask';
 import { LockIcon, StatIcon, SunIcon } from './icons';
@@ -228,7 +228,8 @@ export function TopBand(): JSX.Element | null {
       {asking && (
         <Ask
           ask={g.sunsLeft > 0 ? `아직 해가 남았어요. ${sending} 보낼까요?` : `${sending} 보낼까요?`}
-          note={`${sending} 보내면 이 계절로는 돌아올 수 없어요.`}
+          // 겨울은 한 해의 마지막 계절이다: 보내면 한 해 돌아보기로 간다
+          note={g.seasonIndex >= SEASONS.length - 1 ? `${sending} 보내면 한 해가 끝나요. 이어서 한 해를 돌아봐요.` : `${sending} 보내면 이 계절로는 돌아올 수 없어요.`}
           yes={sendLabel}
           no="더 있을래요"
           onNo={() => setAsking(false)}

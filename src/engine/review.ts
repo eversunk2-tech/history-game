@@ -1,5 +1,5 @@
 // 한 해 돌아보기: 푼 미션, 수치의 흐름, 올해의 바람, 한 해 이름. 화면·브라우저·시간을 모른다.
-// (한 해를 끝까지 만드는 것은 바퀴 1-라다. 지금은 봄만 있어 화면에서 쓰이지 않는다.)
+// 겨울을 보낸 뒤 한 해 돌아보기 화면(src/screens/YearReview.tsx)과 이야기책의 도장이 읽는다.
 
 import { meets } from './conditions';
 import { deedsOfSeason, factsOf, roleOf } from './game';

@@ -2,13 +2,43 @@
 // 이 해만의 규칙: 나라는 농사철을 피해 일꾼을 불렀다(이월에 돌려보내고 팔월에 다시 부른다). 궂은 해는 "큰비가 온 해"다.
 // 값은 쌀과 베뿐이다. 새 예절을 따르지 않아도 인심이 깎이지 않는다(예법의 무게 0).
 //
-// 이 폴더의 다른 파일: missions.ts(미션), spring.ts(봄의 일). 지금은 농민 집 아이의 봄만 있다.
+// 이 폴더의 다른 파일: missions.ts(미션), spring.ts · summer.ts · autumn.ts · winter.ts(계절마다의 일). 농민 집 아이의 한 해가 다 있다.
 // 다른 세 집은 소개 글과 시작 수치만 있고 미션이 없어 화면에서 "준비 중"이 된다.
 // 대본과 출처 대조는 docs/script-1395.md.
 
-import type { Situation } from '../../../engine/types';
+import type { Ending, Situation } from '../../../engine/types';
 import { commonEndings } from '../../endings';
+import { AUTUMN } from './autumn';
 import { FLAGS } from './spring';
+import { WINTER } from './winter';
+
+/**
+ * 이 해만의 한 해 이름. id는 깬 기록에 적히므로 바꾸지 않는다.
+ * 어느 이름도 잘했다·못했다를 말하지 않는다. 문턱은 무작위 판에서 여덟 이름이 모두 나오게 잡았다(tests/playthrough.test.ts).
+ */
+const yearEndings = {
+  /** 큰비가 온 해인데도 살림을 지켰을 때 */
+  flood: {
+    id: 's1395-flood',
+    title: '큰비를 이겨 낸 한 해',
+    line: '여름 큰비에 논이 잠겼지만, 남은 벼를 거두고 아껴서 겨울 날 곡식을 지켰어요.',
+    when: { draw: 'drought', min: { living: 5 } },
+  },
+  /** 겨울 동안 글자를 익혔을 때(향교에서, 또는 동무에게) */
+  letters: {
+    id: 's1395-letters',
+    title: '글자를 익힌 한 해',
+    line: '농사일 틈틈이 글자를 익혔어요. 내 손으로 쓸 수 있는 글자가 하나씩 늘었어요.',
+    when: { flags: [WINTER.lettersLearned] },
+  },
+  /** 봄·가을·겨울의 새 나라 이야기를 다 들었을 때 */
+  tales: {
+    id: 's1395-tales',
+    title: '새 나라 이야기를 모은 한 해',
+    line: '새 나라가 서고 새 도읍이 지어지는 이야기를 귀 기울여 들은 한 해였어요.',
+    when: { flags: [FLAGS.taleSpring, AUTUMN.taleAutumn, WINTER.taleWinter] },
+  },
+} satisfies Record<string, Ending>;
 
 export const situation: Situation = {
   id: 's1395',
@@ -69,7 +99,7 @@ export const situation: Situation = {
       family: '할머니, 아버지, 어머니, 나보다 나이 많은 형제, 그리고 나',
       start: { living: 4, body: 6, trust: 5 },
       wish: '식구 모두 굶지 않고 겨울 나기',
-      // 한 해를 끝까지 만든 뒤(1-라)에 다시 다듬는다
+      // 겨울을 닫은 뒤의 수치로 가린다(위에서부터 처음 맞는 것). 이루지 못해도 실패라고 하지 않고 까닭을 말한다.
       wishOutcomes: [
         {
           when: { min: { living: 5 } },
@@ -118,7 +148,7 @@ export const situation: Situation = {
     },
   ],
 
-  // 계절 첫 줄(40자). 여름·가을은 날씨에 따라 바뀐다. 여름~겨울의 줄은 그 계절을 만들 때 다시 다듬는다(겨울 줄은 spec 6.3의 것).
+  // 계절 첫 줄(40자). 여름·가을은 날씨에 따라 바뀐다(겨울 줄은 spec 6.3의 것).
   seasons: {
     spring: { line: '이월, 얼었던 땅이 풀리고 궁궐 공사에 갔던 이웃이 돌아왔다.' },
     summer: {
@@ -160,6 +190,13 @@ export const situation: Situation = {
       facts: ['F55'],
     },
     {
+      // 나눠 뿌린 해에 큰비가 오지 않아도 봄의 선택을 한 번 다시 말한다(수치는 그대로 — review 12번)
+      at: 'summer',
+      when: { flags: [FLAGS.sowSplit], anyOf: [{ draw: 'normal' }, { draw: 'bumper' }] },
+      line: '높은 논까지 물을 대느라 힘들었지만, 나눠 뿌린 벼가 고루 자랐다.',
+      facts: ['F04'],
+    },
+    {
       at: 'autumn',
       when: { draw: 'drought' },
       effects: { living: 1 },
@@ -167,24 +204,25 @@ export const situation: Situation = {
       facts: ['F55'],
     },
     {
-      // 'autumn.tended'는 가을 미션 「한양으로 떠난 장정들」에서 떠난 집 논까지 돌봤을 때 남길 표시다(아직 그 일이 없다)
+      // 가을 미션 「한양으로 떠난 장정들」에서 떠난 집 논까지 돌봤을 때(autumn.ts의 tend)
       at: 'autumn',
-      when: { flags: ['autumn.tended'] },
+      when: { flags: [AUTUMN.tended] },
       effects: { body: 1 },
       line: '한양에서 돌아온 이웃이 우리 집 가을걷이를 거들어 주었다.',
       facts: ['F35'],
     },
   ],
 
-  // 남길 것(초안 — 한 해 돌아보기를 만드는 1-라에서 다시 정한다)
+  // 남길 것. id는 깬 기록에 적히므로 바꾸지 않는다. 이야기는 가을에 돌아온 아버지가 들려준 것으로 다듬었다.
   legacy: [
     { id: 's1395-legacy-tree', label: '마당에 심은 어린 느티나무', kind: 'tree' },
     { id: 's1395-legacy-thing', label: '손때 묻은 볍씨 자루', kind: 'thing' },
-    { id: 's1395-legacy-story', label: '새 도읍의 궁궐을 지은 이야기', kind: 'story' },
+    { id: 's1395-legacy-story', label: '아버지가 들려준 새 궁궐 이야기', kind: 'story' },
   ],
 
   // 등장인물. 열쇠가 대화의 who와 무대의 cast, 그림 자리(char/s1395/<열쇠>-<표정>)의 이름이다. 모두 꾸민 사람이다.
-  // 남 넷, 여 셋. 궁궐 공사에서 돌아온 사람과 스님이 남자인 것은 사실을 따른 것이다(F35).
+  // 남 아홉, 여 다섯. 궁궐 공사에서 돌아온 사람·스님·향교의 선생과 학생·관아에서 온 사람이 남자인 것은 사실을 따른 것이다(F35 F11).
+  // 이름표는 6자 안이다("마을 할아버지"는 7자라 "마을 어르신").
   people: {
     'neighbor-elder': { label: '이웃 어른', sex: 'm', age: 'adult', sprite: 'neighborMan' },
     monk: { label: '스님', sex: 'm', age: 'adult', sprite: 'monk' },
@@ -193,6 +231,14 @@ export const situation: Situation = {
     'village-grandma': { label: '마을 할머니', sex: 'f', age: 'old', sprite: 'granny' },
     'well-neighbor': { label: '아주머니', sex: 'f', age: 'adult', sprite: 'wellWoman' },
     'friend-boy': { label: '이웃집 동무', sex: 'm', age: 'child', sprite: 'boyKid' },
+    // 여름~겨울에 새로 나오는 사람들
+    grandma: { label: '할머니', sex: 'f', age: 'old', sprite: 'farmerGranny' },
+    'friend-girl': { label: '옆집 동무', sex: 'f', age: 'child', sprite: 'girlKid' },
+    'village-elder': { label: '마을 어르신', sex: 'm', age: 'old', sprite: 'elderMan' },
+    teacher: { label: '향교 선생', sex: 'm', age: 'adult', sprite: 'teacher' },
+    student: { label: '향교 동무', sex: 'm', age: 'child', sprite: 'student' },
+    official: { label: '관아 사람', sex: 'm', age: 'adult', sprite: 'official' },
+    'pass-villager': { label: '윗마을 사람', sex: 'm', age: 'adult', sprite: 'passMan' },
   },
 
   // 6.2 표의 ① 칸
@@ -209,11 +255,21 @@ export const situation: Situation = {
   // 6.3의 뒷이야기
   epilogue: '이듬해 도성과 네 대문이 섰다. 문 이름에 어짊·의로움·예의를 담았다.',
 
-  // 초안 — 생각 나눔 화면을 만들 때 다시 정한다. 지금은 화면에 나오지 않는다.
+  // 초안 — 생각 나눔 화면을 만들 때(1-마) 다시 정한다. 지금은 화면에 나오지 않는다.
   openQuestion: '새 나라가 섰는데도 마을의 농사와 제사가 예전과 비슷했던 까닭은 무엇일까요?',
 
-  // 한 해 이름: 위에서부터 처음 맞는 것(1-라에서 이 해만의 이름을 더한다)
-  endings: [commonEndings.hard, commonEndings.worn, commonEndings.full, commonEndings.neighbors, commonEndings.steady],
+  // 한 해 이름: 위에서부터 처음 맞는 것. 어려웠던 해(살림·기력이 바닥) → 큰비 → 글자 → 이웃 → 이야기 → 넉넉함 → 그 밖.
+  // 이야기 모으기는 덤을 다 하면 거의 늘 맞아서 글자·이웃 뒤에 둔다(review 13번).
+  endings: [
+    commonEndings.hard,
+    commonEndings.worn,
+    yearEndings.flood,
+    yearEndings.letters,
+    commonEndings.neighbors,
+    yearEndings.tales,
+    commonEndings.full,
+    commonEndings.steady,
+  ],
 
   // 견주기 답과 뒷이야기의 근거(spec 6.2의 근거 줄 가운데 ①의 것)
   proof: {

@@ -50,3 +50,11 @@ export function sowVerdict(cells: ArrayLike<number>): SowEnd {
   if (sowUsed(cells) < SOW_FEW) return 'left';
   return sowCoverage(cells) >= SOW_EVEN_SHARE ? 'even' : 'patchy';
 }
+
+/**
+ * "어른께 맡긴다"를 눌렀을 때의 끝난 모습. 남은 볍씨는 어른이 뿌리지만, 내가 뿌린 만큼은 버리지 않는다
+ * (끝내기 단추와 같은 셈 — 거의 안 뿌렸으면 left, 조금 뿌렸으면 patchy, 고루 뿌려 놓고 눌렀으면 even).
+ */
+export function sowLeave(cells: ArrayLike<number>): SowEnd {
+  return sowVerdict(cells);
+}

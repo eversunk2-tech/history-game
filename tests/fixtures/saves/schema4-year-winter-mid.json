@@ -1,0 +1,815 @@
+{
+ "schema": 4,
+ "build": "dev",
+ "cleared": {},
+ "cards": [
+  "s1395-direct-sowing",
+  "s1395-dano",
+  "s1395-hanseong",
+  "s1395-fifteen-thousand",
+  "s1395-jongmyo",
+  "s1395-state-share",
+  "s1395-rice-cloth",
+  "s1395-cloth-bolt"
+ ],
+ "current": {
+  "situationId": "s1395",
+  "role": "farmer",
+  "look": "girl",
+  "seed": 1395,
+  "stats": {
+   "living": 10,
+   "body": 1,
+   "trust": 7
+  },
+  "flags": [
+   "return.help",
+   "return.done",
+   "sow.even",
+   "sow.low",
+   "dano.done",
+   "weed.clean",
+   "weed.done",
+   "leave.tend",
+   "autumn.tended",
+   "leave.back",
+   "harvest.all",
+   "harvest.done",
+   "pay.exact",
+   "salt.done",
+   "rite.temple",
+   "weave.bolt"
+  ],
+  "cards": [
+   "s1395-direct-sowing",
+   "s1395-dano",
+   "s1395-hanseong",
+   "s1395-fifteen-thousand",
+   "s1395-jongmyo",
+   "s1395-state-share",
+   "s1395-rice-cloth",
+   "s1395-cloth-bolt"
+  ],
+  "items": [
+   "s1395-salt",
+   "s1395-my-cloth"
+  ],
+  "draw": "normal",
+  "seasonIndex": 3,
+  "phase": "season",
+  "sunsLeft": 1,
+  "done": [
+   "s1395-spring-return",
+   "s1395-spring-return-help",
+   "s1395-spring-sow",
+   "s1395-summer-dano",
+   "s1395-summer-manor",
+   "s1395-summer-weed",
+   "s1395-autumn-leave",
+   "s1395-autumn-sendoff",
+   "s1395-autumn-back",
+   "s1395-autumn-harvest",
+   "s1395-autumn-salt",
+   "s1395-winter-rite",
+   "s1395-winter-weave"
+  ],
+  "solved": [
+   "s1395-m-return",
+   "s1395-m-sow",
+   "s1395-m-dano",
+   "s1395-m-weed",
+   "s1395-m-leave",
+   "s1395-m-harvest"
+  ],
+  "history": [
+   {
+    "happeningId": "s1395-spring-return",
+    "season": "spring",
+    "missionId": "s1395-m-return",
+    "theme": "duty",
+    "choiceId": "help",
+    "label": "돌아온 집의 밀린 논갈이를 거든다",
+    "lines": [
+     {
+      "who": "neighbor-elder",
+      "pose": "glad",
+      "text": "거들어 주겠다고? 고맙구나. 우리 논에서 기다리마."
+     },
+     {
+      "text": "쟁기질은 못 해도 흙덩이 깨는 일은 할 수 있다. 이웃집 논으로 가자."
+     }
+    ],
+    "note": "나라는 농사 때를 놓칠까 봐 농민을 돌려보내고 스님들에게 일을 맡겼어요.",
+    "requested": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "delta": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "before": {
+     "living": 4,
+     "body": 6,
+     "trust": 5
+    },
+    "after": {
+     "living": 4,
+     "body": 6,
+     "trust": 5
+    },
+    "newCards": [],
+    "newItems": [],
+    "newFlags": [
+     "return.help"
+    ],
+    "solved": [],
+    "sun": 0,
+    "goTo": "neighborPaddy"
+   },
+   {
+    "happeningId": "s1395-spring-return-help",
+    "season": "spring",
+    "missionId": "s1395-m-return",
+    "theme": "duty",
+    "lines": [
+     {
+      "who": "neighbor-elder",
+      "pose": "glad",
+      "text": "덕분에 곧 볍씨를 뿌리겠다. 너희 집 일이 바쁠 때는 내가 가마."
+     },
+     {
+      "text": "팔다리는 뻐근하지만 마음은 가볍다."
+     }
+    ],
+    "note": "나라가 일꾼들을 돌려보낸 것은 이월 십구일, 봄 농사가 시작될 때였어요.",
+    "requested": {
+     "living": 0,
+     "body": -1,
+     "trust": 1
+    },
+    "delta": {
+     "living": 0,
+     "body": -1,
+     "trust": 1
+    },
+    "before": {
+     "living": 4,
+     "body": 6,
+     "trust": 5
+    },
+    "after": {
+     "living": 4,
+     "body": 5,
+     "trust": 6
+    },
+    "newCards": [],
+    "newItems": [],
+    "newFlags": [
+     "return.done"
+    ],
+    "solved": [
+     "s1395-m-return"
+    ],
+    "sun": 0
+   },
+   {
+    "happeningId": "s1395-spring-sow",
+    "season": "spring",
+    "missionId": "s1395-m-sow",
+    "theme": "farming",
+    "choiceId": "low",
+    "label": "낮은 논에 몰아 뿌린다",
+    "play": "even",
+    "lines": [
+     {
+      "who": "father",
+      "pose": "glad",
+      "text": "고루 잘 뿌렸구나. 덕분에 볍씨가 한 줌 남았다."
+     },
+     {
+      "text": "낮은 논이 볍씨로 촘촘하다. 이제 여름 하늘에 달렸다."
+     }
+    ],
+    "note": "이때는 볍씨를 논에 바로 뿌렸어요. 벼와 풀이 함께 자라 논의 풀 뽑기가 힘들었어요.",
+    "requested": {
+     "living": 1,
+     "body": -1,
+     "trust": 0
+    },
+    "delta": {
+     "living": 1,
+     "body": -1,
+     "trust": 0
+    },
+    "before": {
+     "living": 4,
+     "body": 5,
+     "trust": 6
+    },
+    "after": {
+     "living": 5,
+     "body": 4,
+     "trust": 6
+    },
+    "newCards": [
+     "s1395-direct-sowing"
+    ],
+    "newItems": [],
+    "newFlags": [
+     "sow.even",
+     "sow.low"
+    ],
+    "solved": [
+     "s1395-m-sow"
+    ],
+    "sun": 0
+   },
+   {
+    "happeningId": "s1395-summer-dano",
+    "season": "summer",
+    "missionId": "s1395-m-dano",
+    "theme": "play",
+    "choiceId": "play",
+    "label": "하루 쉬며 놀이판에 어울린다",
+    "lines": [
+     {
+      "text": "창포물에 감은 머리가 향긋하다. 그네가 솟을 때마다 마을이 한눈에 든다."
+     },
+     {
+      "who": "friend-girl",
+      "pose": "glad",
+      "text": "더 높이! 논일은 내일 하면 되잖아."
+     }
+    ],
+    "note": "단오에는 창포물에 머리를 감고 그네뛰기와 씨름을 즐겼다고 해요.",
+    "requested": {
+     "living": 0,
+     "body": 2,
+     "trust": 0
+    },
+    "delta": {
+     "living": 0,
+     "body": 2,
+     "trust": 0
+    },
+    "before": {
+     "living": 5,
+     "body": 4,
+     "trust": 6
+    },
+    "after": {
+     "living": 5,
+     "body": 6,
+     "trust": 6
+    },
+    "newCards": [
+     "s1395-dano"
+    ],
+    "newItems": [],
+    "newFlags": [
+     "dano.done"
+    ],
+    "solved": [
+     "s1395-m-dano"
+    ],
+    "sun": 0
+   },
+   {
+    "happeningId": "s1395-summer-manor",
+    "season": "summer",
+    "theme": "duty",
+    "lines": [
+     {
+      "text": "혼례, 장례, 제사… 우리 마을은 제사를 절에서 지내 왔는데, 무엇이 달라질까?"
+     },
+     {
+      "text": "양반 댁 손님 맞는 채에서는 벌써 그 이야기가 한창이라고 한다."
+     }
+    ],
+    "note": "이해 유월, 나라는 한양부를 한성부로 고치고 혼례·장례·제사의 예절을 정하게 했어요.",
+    "requested": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "delta": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "before": {
+     "living": 5,
+     "body": 6,
+     "trust": 6
+    },
+    "after": {
+     "living": 5,
+     "body": 6,
+     "trust": 6
+    },
+    "newCards": [
+     "s1395-hanseong"
+    ],
+    "newItems": [],
+    "newFlags": [],
+    "solved": [],
+    "sun": 1
+   },
+   {
+    "happeningId": "s1395-summer-weed",
+    "season": "summer",
+    "missionId": "s1395-m-weed",
+    "theme": "farming",
+    "choiceId": "all",
+    "label": "온 식구가 매달려 맨다",
+    "play": "clean",
+    "lines": [
+     {
+      "who": "mother",
+      "pose": "glad",
+      "text": "벼는 그대로 두고 풀만 말끔히 뽑았구나. 벼가 숨을 쉬겠다."
+     },
+     {
+      "text": "온 식구가 논에 엎드려 풀을 뽑았다. 허리는 끊어질 듯해도 논이 한결 훤하다."
+     }
+    ],
+    "note": "바로 뿌린 논은 벼와 풀이 섞여 자라, 풀만 가려 뽑는 김매기에 손이 많이 갔어요.",
+    "requested": {
+     "living": 2,
+     "body": -2,
+     "trust": 0
+    },
+    "delta": {
+     "living": 2,
+     "body": -2,
+     "trust": 0
+    },
+    "before": {
+     "living": 5,
+     "body": 6,
+     "trust": 6
+    },
+    "after": {
+     "living": 7,
+     "body": 4,
+     "trust": 6
+    },
+    "newCards": [],
+    "newItems": [],
+    "newFlags": [
+     "weed.clean",
+     "weed.done"
+    ],
+    "solved": [
+     "s1395-m-weed"
+    ],
+    "sun": 0
+   },
+   {
+    "happeningId": "s1395-autumn-leave",
+    "season": "autumn",
+    "missionId": "s1395-m-leave",
+    "theme": "duty",
+    "choiceId": "tend",
+    "label": "떠난 집 논까지 함께 돌본다",
+    "lines": [
+     {
+      "who": "neighbor-elder",
+      "pose": "glad",
+      "text": "봄에도 네 덕을 봤는데 또 도움을 받는구나. 마음 놓고 다녀오마."
+     },
+     {
+      "text": "우리 논과 이웃 논을 오가며 새를 쫓고 논물을 살폈다. 다리가 퉁퉁 붓는다."
+     }
+    ],
+    "note": "나라는 가을걷이를 앞둔 팔월에도 농민들을 궁궐 공사에 불렀어요.",
+    "requested": {
+     "living": 0,
+     "body": -2,
+     "trust": 1
+    },
+    "delta": {
+     "living": 0,
+     "body": -2,
+     "trust": 1
+    },
+    "before": {
+     "living": 8,
+     "body": 4,
+     "trust": 6
+    },
+    "after": {
+     "living": 8,
+     "body": 2,
+     "trust": 7
+    },
+    "newCards": [],
+    "newItems": [],
+    "newFlags": [
+     "leave.tend",
+     "autumn.tended"
+    ],
+    "solved": [],
+    "sun": 0
+   },
+   {
+    "happeningId": "s1395-autumn-sendoff",
+    "season": "autumn",
+    "theme": "duty",
+    "lines": [
+     {
+      "text": "아버지의 뒷모습이 보이지 않을 때까지 손을 흔들었다."
+     },
+     {
+      "text": "함께 배웅하던 이웃들과 눈이 마주쳤다. 남은 사람끼리 잘 지내야겠다."
+     }
+    ],
+    "note": "궁궐 공사에 불려 간 사람은 ‘장정’이라 부르던 어른 남자들이었어요.",
+    "requested": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "delta": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "before": {
+     "living": 8,
+     "body": 2,
+     "trust": 7
+    },
+    "after": {
+     "living": 8,
+     "body": 2,
+     "trust": 7
+    },
+    "newCards": [
+     "s1395-fifteen-thousand"
+    ],
+    "newItems": [],
+    "newFlags": [],
+    "solved": [],
+    "sun": 1
+   },
+   {
+    "happeningId": "s1395-autumn-back",
+    "season": "autumn",
+    "missionId": "s1395-m-leave",
+    "theme": "duty",
+    "lines": [
+     {
+      "who": "father",
+      "pose": "glad",
+      "text": "네가 이웃 논까지 돌봤다지. 같이 돌아온 사람들이 고마워하더라."
+     },
+     {
+      "text": "아버지 손이 더 거칠어졌다. 그래도 벼 벨 때에 맞춰 오셔서 다행이다."
+     }
+    ],
+    "note": "구월 보름(15일), 나라는 가을걷이를 하라고 농민들을 집으로 돌려보냈어요.",
+    "requested": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "delta": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "before": {
+     "living": 8,
+     "body": 2,
+     "trust": 7
+    },
+    "after": {
+     "living": 8,
+     "body": 2,
+     "trust": 7
+    },
+    "newCards": [
+     "s1395-jongmyo"
+    ],
+    "newItems": [],
+    "newFlags": [
+     "leave.back"
+    ],
+    "solved": [
+     "s1395-m-leave"
+    ],
+    "sun": 0
+   },
+   {
+    "happeningId": "s1395-autumn-harvest",
+    "season": "autumn",
+    "missionId": "s1395-m-harvest",
+    "theme": "paying",
+    "play": "all",
+    "lines": [
+     {
+      "who": "father",
+      "pose": "glad",
+      "text": "이삭 하나 남기지 않고 다 거뒀구나."
+     },
+     {
+      "text": "열 자루에서 한 자루를 나라 몫으로 덜어 놓았다. 남은 자루를 세어 본다."
+     }
+    ],
+    "note": "농민은 거둔 곡식의 열에 하나쯤을 나라 몫으로 냈어요.",
+    "requested": {
+     "living": 3,
+     "body": -1,
+     "trust": 0
+    },
+    "delta": {
+     "living": 2,
+     "body": -1,
+     "trust": 0
+    },
+    "before": {
+     "living": 8,
+     "body": 2,
+     "trust": 7
+    },
+    "after": {
+     "living": 10,
+     "body": 1,
+     "trust": 7
+    },
+    "newCards": [
+     "s1395-state-share"
+    ],
+    "newItems": [],
+    "newFlags": [
+     "harvest.all",
+     "harvest.done"
+    ],
+    "solved": [],
+    "sun": 0
+   },
+   {
+    "happeningId": "s1395-autumn-salt",
+    "season": "autumn",
+    "missionId": "s1395-m-harvest",
+    "theme": "paying",
+    "choiceId": "ours",
+    "label": "우리 집 쓸 만큼만 바꾼다",
+    "play": "exact",
+    "lines": [
+     {
+      "who": "pass-villager",
+      "pose": "glad",
+      "text": "알맞게 가져왔구나. 자, 소금 받아라."
+     },
+     {
+      "text": "소금 자루를 메고 고개를 내려온다. 올겨울 먹을 소금은 마련했다."
+     }
+    ],
+    "note": "돈이 널리 쓰이지 않아, 물건을 살 때 쌀과 베를 상대가 받을 만큼 맞춰 건넸어요.",
+    "requested": {
+     "living": -1,
+     "body": 0,
+     "trust": 0
+    },
+    "delta": {
+     "living": -1,
+     "body": 0,
+     "trust": 0
+    },
+    "before": {
+     "living": 10,
+     "body": 1,
+     "trust": 7
+    },
+    "after": {
+     "living": 9,
+     "body": 1,
+     "trust": 7
+    },
+    "newCards": [
+     "s1395-rice-cloth"
+    ],
+    "newItems": [
+     "s1395-salt"
+    ],
+    "newFlags": [
+     "pay.exact",
+     "salt.done"
+    ],
+    "solved": [
+     "s1395-m-harvest"
+    ],
+    "sun": 0
+   },
+   {
+    "happeningId": "s1395-winter-rite",
+    "season": "winter",
+    "missionId": "s1395-m-rite",
+    "theme": "inheritance",
+    "choiceId": "temple",
+    "label": "절에 가서 지낸다",
+    "lines": [
+     {
+      "who": "grandma",
+      "pose": "glad",
+      "text": "그러자. 쌀을 조금 챙겨라. 뒷산 절로 가자."
+     },
+     {
+      "text": "쌀 자루를 메고 할머니 손을 잡았다. 눈길을 밟아 뒷산 절로 오른다."
+     }
+    ],
+    "note": "조선 초에는 제삿날에 절에서 제사를 지내는 집이 많았어요.",
+    "requested": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "delta": {
+     "living": 0,
+     "body": 0,
+     "trust": 0
+    },
+    "before": {
+     "living": 9,
+     "body": 2,
+     "trust": 7
+    },
+    "after": {
+     "living": 9,
+     "body": 2,
+     "trust": 7
+    },
+    "newCards": [],
+    "newItems": [],
+    "newFlags": [
+     "rite.temple"
+    ],
+    "solved": [],
+    "sun": 0,
+    "goTo": "temple"
+   },
+   {
+    "happeningId": "s1395-winter-weave",
+    "season": "winter",
+    "theme": "paying",
+    "play": "bolt",
+    "lines": [
+     {
+      "who": "mother",
+      "pose": "glad",
+      "text": "끝까지 해냈구나. 이 한 필은 네가 짠 것이다."
+     },
+     {
+      "text": "어깨가 굳었다. 베 한 필에 이렇게 손이 많이 가는 줄 몰랐다."
+     }
+    ],
+    "note": "베는 옷감이면서 쌀과 함께 값을 치르는 데에도 쓰였어요.",
+    "requested": {
+     "living": 1,
+     "body": -1,
+     "trust": 0
+    },
+    "delta": {
+     "living": 1,
+     "body": -1,
+     "trust": 0
+    },
+    "before": {
+     "living": 9,
+     "body": 2,
+     "trust": 7
+    },
+    "after": {
+     "living": 10,
+     "body": 1,
+     "trust": 7
+    },
+    "newCards": [
+     "s1395-cloth-bolt"
+    ],
+    "newItems": [
+     "s1395-my-cloth"
+    ],
+    "newFlags": [
+     "weave.bolt"
+    ],
+    "solved": [],
+    "sun": 1
+   }
+  ],
+  "flow": [
+   {
+    "living": 4,
+    "body": 6,
+    "trust": 5
+   },
+   {
+    "living": 5,
+    "body": 4,
+    "trust": 6
+   },
+   {
+    "living": 8,
+    "body": 4,
+    "trust": 6
+   },
+   {
+    "living": 9,
+    "body": 2,
+    "trust": 7
+   }
+  ],
+  "closings": [
+   {
+    "season": "spring",
+    "delta": {
+     "living": 1,
+     "body": -2,
+     "trust": 1
+    },
+    "before": {
+     "living": 4,
+     "body": 6,
+     "trust": 5
+    },
+    "after": {
+     "living": 5,
+     "body": 4,
+     "trust": 6
+    },
+    "lines": [],
+    "effects": [],
+    "newCards": []
+   },
+   {
+    "season": "summer",
+    "delta": {
+     "living": 3,
+     "body": 0,
+     "trust": 0
+    },
+    "before": {
+     "living": 5,
+     "body": 4,
+     "trust": 6
+    },
+    "after": {
+     "living": 8,
+     "body": 4,
+     "trust": 6
+    },
+    "lines": [
+     "낮은 논은 물 대기가 쉬웠다. 몰아 뿌린 벼가 고르게 잘 자랐다."
+    ],
+    "effects": [
+     {
+      "living": 1,
+      "body": 0,
+      "trust": 0
+     }
+    ],
+    "newCards": []
+   },
+   {
+    "season": "autumn",
+    "delta": {
+     "living": 1,
+     "body": -2,
+     "trust": 1
+    },
+    "before": {
+     "living": 8,
+     "body": 4,
+     "trust": 6
+    },
+    "after": {
+     "living": 9,
+     "body": 2,
+     "trust": 7
+    },
+    "lines": [
+     "한양에서 돌아온 이웃이 우리 집 가을걷이를 거들어 주었다."
+    ],
+    "effects": [
+     {
+      "living": 0,
+      "body": 1,
+      "trust": 0
+     }
+    ],
+    "newCards": []
+   }
+  ],
+  "seen": [
+   "village",
+   "fields"
+  ],
+  "at": "46,34"
+ },
+ "walked": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000feffff3f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+}

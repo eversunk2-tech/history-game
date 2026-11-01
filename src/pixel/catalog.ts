@@ -4,8 +4,9 @@ import { THINGS } from '../map/things';
 import * as buildings from './buildings';
 import type { Palette } from './palette';
 import * as props from './props';
+import * as seasonal from './seasonal';
 import type { Shade } from './ground';
-import type { ShadeSpec, SpriteDef } from './shapes';
+import { snowCap, type ShadeSpec, type SpriteDef } from './shapes';
 import * as trees from './trees';
 
 type Maker = (pal: Palette, variant: number) => SpriteDef;
@@ -54,9 +55,44 @@ export const MAKERS: Record<string, Maker> = {
   reed: trees.reed,
   tuft: trees.tuft,
   flower: trees.flower,
+  swing: seasonal.swing,
+  sandring: seasonal.sandring,
+  wrestlers: seasonal.wrestlers,
+  basin: seasonal.basin,
+  sheaf: seasonal.sheaf,
+  sheafpile: seasonal.sheafpile,
+  gaesang: seasonal.gaesang,
+  grainmat: seasonal.grainmat,
+  bundle: seasonal.bundle,
+  snowpile: seasonal.snowpile,
 };
 
 export const thingKey = (kind: string, variant: number): string => `${kind}:${variant}`;
+
+/**
+ * 겨울에 위쪽 면에 눈이 얹히는 것과 그 두께(점). 지붕과 담, 나무는 제 그림 안에서 눈을 그린다
+ * (지붕은 넓게 덮이고, 가지에는 한 점씩 얹힌다).
+ */
+const SNOW_DEPTH: Record<string, number> = {
+  well: 2,
+  jars: 2,
+  woodpile: 2,
+  strawstack: 4,
+  fenceH: 2,
+  fenceV: 1,
+  stonewallH: 2,
+  stonewallV: 2,
+  pagoda: 2,
+  lantern: 2,
+  rockS: 1,
+  rockM: 3,
+  rockL: 4,
+  flatstone: 1,
+  stump: 2,
+  log: 2,
+  fallen: 2,
+  cairn: 2,
+};
 
 /** 모든 갈래 × 생김새의 그림(버퍼) */
 export function thingDefs(pal: Palette): Map<string, SpriteDef> {
@@ -64,7 +100,12 @@ export function thingDefs(pal: Palette): Map<string, SpriteDef> {
   for (const [kind, def] of Object.entries(THINGS)) {
     const make = MAKERS[kind];
     if (!make) throw new Error(`그림이 없는 갈래: ${kind}`);
-    for (let v = 0; v < def.variants; v++) out.set(thingKey(kind, v), make(pal, v));
+    for (let v = 0; v < def.variants; v++) {
+      const sprite = make(pal, v);
+      const depth = pal.season === 'winter' ? SNOW_DEPTH[kind] : undefined;
+      if (depth) sprite.frames.forEach((f) => snowCap(f, pal.snow, depth, 700 + kind.length * 13 + v));
+      out.set(thingKey(kind, v), sprite);
+    }
   }
   return out;
 }

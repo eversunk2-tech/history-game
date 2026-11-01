@@ -21,7 +21,7 @@ export const PERSON_AX = 12;
 export const PERSON_AY = 30;
 
 export type Hair = 'braid' | 'topknot' | 'band' | 'updo' | 'scarf' | 'shaved' | 'tuft';
-export type Tool = 'hoe' | 'axe' | 'broom' | 'rope' | 'bat' | 'none';
+export type Tool = 'hoe' | 'axe' | 'broom' | 'rope' | 'bat' | 'sickle' | 'sheaf' | 'none';
 
 export interface Person {
   build: 'teen' | 'adult' | 'child' | 'elder';
@@ -102,6 +102,7 @@ const LIP = hex('#b5564d');
 const WOODC = [hex('#523727'), hex('#8d6344'), hex('#c8a174')];
 const IRON = [hex('#3d3f4b'), hex('#797a80'), hex('#bfbbb0')];
 const STUBBLE = hex('#6f7480');
+const STRAW = [hex('#7c5c2f'), hex('#bd994c'), hex('#ecd58b')];
 
 const isGirlish = (p: Person): boolean => p.sex === 'f';
 
@@ -990,6 +991,46 @@ function drawTool(px: Px, tool: Tool, hx: number, hy: number, sw: number): void 
     for (let y = hy + 2; y <= 29; y++) px.set(hx, y, (y & 1) === 0 ? WOODC[2] : WOODC[1]);
   } else if (tool === 'bat') {
     for (let k = 0; k < 5; k++) px.set(hx - k, hy - (sw < 0 ? k : 0), WOODC[2]);
+  } else if (tool === 'sickle') {
+    // 낫: 짧은 자루에 굽은 날. 허리 아래에서 벼 포기를 당겨 벤다
+    const bx = hx - 1;
+    const by = hy + 1 + sw;
+    px.set(bx, by, WOODC[1]);
+    px.set(bx - 1, by, WOODC[2]);
+    px.set(bx - 2, by - 1, IRON[2]);
+    px.set(bx - 3, by, IRON[1]);
+    px.set(bx - 3, by + 1, IRON[2]);
+    px.set(bx - 2, by + 2, IRON[0]);
+    // 손에 잡힌 벼 포기
+    if (sw >= 0) {
+      px.set(bx - 4, by + 3, STRAW[1]);
+      px.set(bx - 5, by + 2, STRAW[2]);
+      px.set(bx - 5, by + 4, STRAW[0]);
+    }
+  } else if (tool === 'sheaf') {
+    // 볏단: 머리 위로 들었다가 개상에 내리친다. 손에 쥔 밑동에서 이삭 쪽으로 퍼진다
+    const tipX = hx - (sw < 0 ? 1 : sw === 0 ? 6 : 7);
+    const tipY = hy + (sw < 0 ? -9 : sw === 0 ? -5 : 3);
+    px.line(hx, hy, tipX, tipY, STRAW[1]);
+    px.line(hx, hy - 1, tipX, tipY - 1, STRAW[2]);
+    px.line(hx + 1, hy, tipX + 1, tipY, STRAW[0]);
+    for (const [dx, dy, c] of [
+      [-1, -1, 2],
+      [-2, 0, 2],
+      [-1, 1, 1],
+      [0, -2, 2],
+      [-2, -2, 1],
+      [1, -1, 1],
+      [-3, 1, 2],
+    ] as const) {
+      px.set(tipX + dx, tipY + dy, STRAW[c]);
+    }
+    // 내리칠 때 튀는 낟알
+    if (sw > 0) {
+      px.set(tipX - 3, tipY - 2, STRAW[2]);
+      px.set(tipX - 1, tipY + 3, STRAW[2]);
+      px.set(tipX + 2, tipY + 3, STRAW[1]);
+    }
   }
 }
 
@@ -1265,6 +1306,87 @@ export const VILLAGERS: Record<string, Person> = {
     ribbon: CLOTH.madder[2],
     skin: SKIN.fair,
   },
+  // ── 1-라에서 더한 사람들(여름·가을·겨울에 맵에 온다) ──
+  // 갓과 도포 같은 뒷시대의 차림은 그리지 않는다: 긴 옷(포)과 허리띠, 상투, 봇짐만으로 가른다
+  // (조선 초의 선비와 향리의 차림은 확인하지 못했다 — spec 12.3).
+  // 향교의 선생: 물들이지 않은 긴 옷에 쪽빛 허리띠, 검은 수염
+  teacher: {
+    ...base,
+    build: 'adult',
+    sex: 'm',
+    bottom: 'robe',
+    hair: 'topknot',
+    top: CLOTH.cotton,
+    lower: CLOTH.cotton,
+    sash: CLOTH.indigo,
+    beard: HAIR.black,
+    mustache: true,
+    shoes: CLOTH.black,
+    skin: SKIN.pale,
+  },
+  // 향교에 다니는 동무: 땋은 머리의 젊은이. 쪽빛 보자기에 싼 책을 등에 멨다
+  student: {
+    ...base,
+    build: 'teen',
+    sex: 'm',
+    bottom: 'pants',
+    hair: 'braid',
+    top: CLOTH.cotton,
+    lower: CLOTH.ash,
+    sash: CLOTH.indigo,
+    pack: CLOTH.indigo,
+    skin: SKIN.tan,
+  },
+  // 고을 관아에서 온 사람: 쪽빛 긴 옷에 검은 허리띠
+  official: {
+    ...base,
+    build: 'adult',
+    sex: 'm',
+    bottom: 'robe',
+    hair: 'topknot',
+    top: CLOTH.indigo,
+    lower: CLOTH.indigo,
+    sash: CLOTH.black,
+    mustache: true,
+    stout: true,
+    shoes: CLOTH.black,
+    skin: SKIN.fair,
+  },
+  // 고개 너머 마을 사람: 머릿수건을 쓰고 큰 짐을 졌다. 지팡이를 짚는다
+  passMan: {
+    ...base,
+    build: 'adult',
+    sex: 'm',
+    bottom: 'pants',
+    hair: 'scarf',
+    top: CLOTH.earth,
+    lower: CLOTH.hemp,
+    sash: CLOTH.hemp,
+    pack: CLOTH.straw,
+    cane: true,
+    mustache: true,
+    skin: SKIN.tan,
+  },
+};
+
+/**
+ * 같은 사람의 다른 차림(계절의 일에 따라 연장과 짐이 달라진다). 얼굴과 옷은 그 사람 그대로다.
+ * 맵의 사람(Dweller.sprite)이 이 이름을 쓴다.
+ */
+export const GUISES: Record<string, Person> = {
+  // 여름의 김매기
+  motherHoe: { ...VILLAGERS.mother, tool: 'hoe' },
+  brotherHoe: { ...VILLAGERS.brother, tool: 'hoe' },
+  neighborWork: { ...VILLAGERS.neighborMan, pack: undefined, tool: 'hoe' },
+  // 단오: 창포 삶은 물에 머리를 감는 아주머니(빨랫방망이를 내려놓았다)
+  changpoWoman: { ...VILLAGERS.washWoman, tool: 'none' },
+  wellWomanHoe: { ...VILLAGERS.wellWoman, tool: 'hoe' },
+  // 가을: 길 떠나는 아버지(봇짐), 돌아와 볏단을 떠는 아버지, 벼를 베는 형
+  fatherPack: { ...VILLAGERS.father, tool: undefined, pack: CLOTH.hemp },
+  fatherSheaf: { ...VILLAGERS.father, tool: 'sheaf' },
+  brotherSickle: { ...VILLAGERS.brother, tool: 'sickle' },
+  // 겨울: 절 마당의 눈을 쓰는 스님
+  monkBroom: { ...VILLAGERS.monk, pack: undefined, tool: 'broom' },
 };
 
 /** 집안의 식구들(살빛이 집안으로 갈리지 않는지 볼 때 쓴다) */
@@ -1275,7 +1397,7 @@ export const HOUSEHOLDS: Record<'farmer' | 'manor' | 'nobi', string[]> = {
 };
 
 export function personOf(name: string): Person | undefined {
-  return HEROES[name] ?? VILLAGERS[name];
+  return HEROES[name] ?? VILLAGERS[name] ?? GUISES[name];
 }
 
 /** 인물 발밑의 작은 그림자 */

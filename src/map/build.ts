@@ -1,9 +1,10 @@
 // 맵을 짓는 도구. 한 칸씩 손으로 적는 대신 구역·길·물길·건물을 놓는 말로 맵을 만든다.
 // 씨앗이 같으면 언제나 같은 맵이 나온다(Math.random을 쓰지 않는다).
 
+import type { Season } from '../engine/types';
 import { hash2, rngOf, vnoise } from '../pixel/px';
 import { thing } from './things';
-import { isWater, T, terrainWalkable, type MapData, type Placed } from './types';
+import { isWater, T, terrainWalkable, type MapData, type Placed, type Weather } from './types';
 
 type XY = readonly [number, number];
 
@@ -53,6 +54,10 @@ export interface ScatterOpts {
    * 나무 그림은 서너 칸 높이라, 길 남쪽에 바로 심으면 길과 걷는 사람을 덮는다.
    */
   keepLow?: { south: number; low: readonly (readonly [string, number])[]; chance: number };
+  /** 이 네모들(칸, 끝 포함) 안에는 키 큰 것 대신 keepLow의 낮은 것만 놓는다(그 북쪽의 볼거리를 나무가 덮지 않게) */
+  lowIn?: readonly (readonly [number, number, number, number])[];
+  /** lowIn 안에서 낮은 것이 놓일 확률(없으면 keepLow의 것) */
+  lowChance?: number;
   seed: number;
 }
 
@@ -63,14 +68,33 @@ export class MapBuilder {
   /** 세운 것이 막은 칸 */
   readonly solid: Uint8Array;
   readonly objects: Placed[] = [];
+  /** 어느 계절, 어느 날씨의 모습으로 짓는가. 그 계절·날씨의 것이 아닌 것은 놓지 않는다. */
+  readonly season: Season;
+  readonly weather: Weather;
+  /** 비워 둘 칸(자리의 설 칸 등). 길을 막는 것은 이 칸에 놓이지 않는다. */
+  private readonly kept: Uint8Array;
   private readonly seed: number;
 
-  constructor(w: number, h: number, seed: number) {
+  constructor(w: number, h: number, seed: number, season: Season = 'spring', weather: Weather = 'clear') {
     this.w = w;
     this.h = h;
     this.seed = seed;
+    this.season = season;
+    this.weather = weather;
     this.terrain = new Uint8Array(w * h);
     this.solid = new Uint8Array(w * h);
+    this.kept = new Uint8Array(w * h);
+  }
+
+  /** 이 칸을 비워 둔다: 뒤에 놓는 것 가운데 길을 막는 것은 이 칸을 차지하지 못한다(어느 계절에도 설 수 있어야 하는 칸) */
+  keep(x: number, y: number): void {
+    if (this.inb(x, y)) this.kept[y * this.w + x] = 1;
+  }
+
+  /** 지금 짓는 계절·날씨에 놓이는 것인가 */
+  inSeason(it: { seasons?: readonly Season[]; weather?: Weather }): boolean {
+    if (it.seasons && !it.seasons.includes(this.season)) return false;
+    return it.weather === undefined || it.weather === this.weather;
   }
 
   inb(x: number, y: number): boolean {
@@ -155,12 +179,23 @@ export class MapBuilder {
     return this.inb(x, y) && terrainWalkable(this.get(x, y)) && this.solid[y * this.w + x] === 0;
   }
 
-  /** 세운 것을 놓는다. 차지하는 칸을 막는다. */
+  /**
+   * 세운 것을 놓는다. 차지하는 칸을 막는다.
+   * seasons·weather를 적으면 그 계절·날씨의 맵에만 놓인다. 비워 두기로 한 칸(keep)을 막는 것은 놓지 않는다.
+   */
   put(kind: string, tx: number, ty: number, opts: Partial<Omit<Placed, 'kind' | 'tx' | 'ty'>> = {}): void {
+    if (!this.inSeason(opts)) return;
     const def = thing(kind);
+    for (let j = 0; j < def.fh; j++) {
+      for (let i = 0; i < def.fw; i++) {
+        if (this.inb(tx + i, ty - j) && this.kept[(ty - j) * this.w + tx + i] === 1) return;
+      }
+    }
     const variant = opts.variant ?? Math.floor(hash2(tx, ty, this.seed + 7) * def.variants);
     const placed: Placed = { kind, tx, ty, variant, flip: opts.flip, dx: opts.dx, dy: opts.dy };
     if (opts.gate) placed.gate = opts.gate;
+    if (opts.seasons) placed.seasons = opts.seasons;
+    if (opts.weather) placed.weather = opts.weather;
     this.objects.push(placed);
     for (let j = 0; j < def.fh; j++) {
       for (let i = 0; i < def.fw; i++) {
@@ -224,9 +259,10 @@ export class MapBuilder {
         if (opts.patchy && vnoise(x / 5.3, y / 5.3, opts.seed + 5) < opts.patchy) continue;
         let table = opts.kinds;
         let chance = opts.chance;
-        if (opts.keepLow && this.laneAbove(x, y, opts.keepLow.south, lanes)) {
+        const inLow = opts.lowIn?.some(([lx0, ly0, lx1, ly1]) => x >= lx0 && x <= lx1 && y >= ly0 && y <= ly1) ?? false;
+        if (opts.keepLow && (inLow || this.laneAbove(x, y, opts.keepLow.south, lanes))) {
           table = opts.keepLow.low;
-          chance = opts.keepLow.chance;
+          chance = inLow && opts.lowChance !== undefined ? opts.lowChance : opts.keepLow.chance;
         }
         if (roll >= chance) continue;
         const sum = table === opts.kinds ? total : table.reduce((n, [, weight]) => n + weight, 0);
@@ -330,6 +366,9 @@ export class MapBuilder {
   ): MapData {
     return {
       id,
+      season: this.season,
+      weather: this.weather,
+      raining: this.weather === 'rain',
       w: this.w,
       h: this.h,
       terrain: this.terrain,

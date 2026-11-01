@@ -87,6 +87,15 @@
   left: calc(100% - (100% - var(--choices-w)) * 0.28 - 25%);
 }
 
+/* 도트 인물(그림 파일이 없을 때의 대역)은 몸이 넓다. 두 사람이 설 때는 조금 더 바깥에 서서 선택지와 어깨가 닿지 않게 한다. */
+.talk.step-choose.cast-2 .talk-slot.at-left:has(.figure-sprite) {
+  left: calc((100% - var(--choices-w)) * 0.235 - 25%);
+}
+
+.talk.step-choose.cast-2 .talk-slot.at-right:has(.figure-sprite) {
+  left: calc(100% - (100% - var(--choices-w)) * 0.235 - 25%);
+}
+
 /* 비켜설 때 한 걸음 물러난 듯 조금 작아진다(발치를 붙든 채 줄어 머리가 내려온다 — 위쪽 줄의 "나중에 할게요"가 머리를 덮지 않게) */
 .talk-slot .figure-img {
   transform-origin: 50% 100%;
@@ -333,6 +342,17 @@ button.talk-box:focus-visible {
   transform: none;
 }
 
+/* 선택지가 넷 이상이면 사이를 좁힌다(잠긴 것이 둘이어도 대화창 위의 칸에 들어가게). 높이 56px은 그대로다. */
+.talk-choices.many {
+  gap: 0.5rem;
+}
+
+.talk-choices.many .talk-choice {
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+  line-height: 1.35;
+}
+
 /* 세로 가운데(넘칠 만큼 길어지면 위에서부터 놓인다 — 첫 선택지가 위쪽 줄 밑으로 숨지 않게) */
 .talk-choices > li:first-child {
   margin-top: auto;
@@ -344,6 +364,43 @@ button.talk-box:focus-visible {
 
 .talk-choices:focus {
   outline: none;
+}
+
+/* 자판으로 왔을 때(선택지 묶음에 초점): 묶음에 옅은 점선 테, 위에 "↑↓로 고르고 Enter로 정해요" 한 줄(Review 1-라 28번 ㉡).
+   손가락·마우스로 왔을 때는 브라우저가 :focus-visible을 주지 않아 보이지 않는다. */
+.talk-choices:focus-visible {
+  outline: 0.18rem dashed rgba(246, 239, 226, 0.75);
+  outline-offset: 0.45rem;
+  border-radius: 0.9rem;
+}
+
+.talk-keys {
+  position: absolute;
+  top: calc(var(--talk-gap) + 3.5rem + 0.35rem);
+  left: 50%;
+  z-index: 3;
+  display: none;
+  padding: 0.1rem 0.9rem;
+  border: 0.1rem solid rgba(233, 217, 180, 0.55);
+  border-radius: 2rem;
+  background: rgba(27, 20, 16, 0.82);
+  color: var(--talk-paper);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.talk.cast-1 .talk-keys {
+  right: calc(0.9rem + var(--choices-w) / 2);
+  left: auto;
+  transform: translateX(50%);
+}
+
+.talk:has(.talk-choices:focus-visible) .talk-keys {
+  display: block;
 }
 
 .talk-choices > li {
@@ -503,7 +560,7 @@ button.talk-choice:focus-visible {
   border-radius: 0.5rem;
   background: var(--ink);
   color: var(--paper-light);
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 700;
   vertical-align: 0.12em;
 }
@@ -543,7 +600,7 @@ button.talk-choice:focus-visible {
 }
 
 .play-done-go {
-  font-size: 1.125rem;
+  font-size: 1.25rem;
 }
 
 @keyframes ready-beat {

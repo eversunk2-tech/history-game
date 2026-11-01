@@ -2,7 +2,10 @@
 // 그리기는 draw.ts와 src/pixel이 맡는다.
 
 import { meets } from '../engine/conditions';
-import type { Condition, Look as EngineLook, RoleId } from '../engine/types';
+import type { Condition, Look as EngineLook, RoleId, Season } from '../engine/types';
+
+/** 날씨. 큰비가 온 해의 여름에만 'rain'이다(비가 오고 냇물이 불어난다). */
+export type Weather = 'clear' | 'rain';
 
 /** 타일 한 칸은 16×16 점 */
 export const TILE = 16;
@@ -16,8 +19,8 @@ export const T = {
   path: 4, // 흙길
   yard: 5, // 다져진 마당 흙
   ridge: 6, // 논둑길
-  soil: 7, // 갈아엎은 논
-  paddy: 8, // 물 댄 논
+  soil: 7, // 논의 다른 모습: 갈아엎은 논(봄) · 물에 잠긴 논(큰비가 온 여름) · 벼를 벤 논(가을)
+  paddy: 8, // 논: 물 댄 논(봄) · 푸른 벼(여름) · 누런 벼(가을) · 빈 논(겨울)
   field: 9, // 밭이랑
   shallow: 10, // 얕은 냇물
   deep: 11, // 깊은 냇물
@@ -75,6 +78,10 @@ export interface Placed {
   dy?: number;
   /** 이 문(Gate의 id)에 딸린 문짝인가. 그 문이 닫힌 사람에게는 닫힌 모습(variant 1)으로 보인다. */
   gate?: string;
+  /** 이 계절에만 놓인다(없으면 네 계절 내내). 맵을 그 계절로 지을 때 가려 놓는다. */
+  seasons?: Season[];
+  /** 이 날씨에만 놓인다(없으면 어느 날씨에나) */
+  weather?: Weather;
 }
 
 /**
@@ -100,6 +107,11 @@ export interface Gate {
   /** 막히는 칸들(길을 가로지르는 줄) */
   tiles: [number, number][];
   shut: { when: Condition; reason: string }[];
+  /**
+   * 문 너머를 누른 것을 문을 누른 것으로 치는 거리(칸, 문에서). 맵 끝으로 나가는 길은 그 너머 끝까지를 쳐서 길을 누르면 까닭이 뜬다.
+   * 담을 두른 집(양반 댁)은 문 바로 뒤까지만 친다 — 담 안의 먼 곳을 누른 것은 그 너머의 다른 곳으로 가려던 것이다. 없으면 2.
+   */
+  aim?: number;
 }
 
 /** 이 사람에게 막혀 있으면 까닭을, 열려 있으면 null을 돌려준다 */
@@ -142,6 +154,10 @@ export interface Dweller {
    * 조건은 엔진의 것이고, 맵 화면이 지금의 판으로 가려 준다. 없으면 늘 서 있다.
    */
   shows?: Condition;
+  /** 이 계절에만 그 자리에 있다(없으면 네 계절 내내). 맵을 그 계절로 지을 때 가려 세운다. */
+  seasons?: Season[];
+  /** 이 날씨에만 그 자리에 있다(비가 오면 놀이판이 빈다) */
+  weather?: Weather;
   /** 무엇을 하고 있는지 한 줄(눌렀을 때 뜨는 임시 창) */
   about: string;
   at: [number, number];
@@ -167,6 +183,13 @@ export interface Note {
 
 export interface MapData {
   id: string;
+  /** 어느 계절, 어느 날씨의 모습으로 지은 맵인가. 크기와 자리의 칸은 계절이 바뀌어도 같다. */
+  season: Season;
+  weather: Weather;
+  /** 빗줄기가 내리는가(큰비가 온 해의 여름이라도 단옷날에는 비가 잠깐 멎는다) */
+  raining: boolean;
+  /** 칸마다 1이면 논의 벼가 성기다(큰비가 온 해의 가을, 냇가 쪽 낮은 논). 없으면 고르다. */
+  thin?: Uint8Array;
   w: number;
   h: number;
   terrain: Uint8Array;

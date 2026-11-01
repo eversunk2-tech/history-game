@@ -17,6 +17,8 @@ export interface SpriteDef {
   sort?: number;
   /** 장을 넘기는 차례(없으면 0,1,2…). 흔들림은 0,1,0,2로 오간다. */
   seq?: number[];
+  /** 장을 넘기는 빠르기(초당 장 수). 없으면 바람에 흔들리는 빠르기(1.7). */
+  rate?: number;
   /** 굴뚝 끝(그림 안의 점). 여기서 연기가 피어오른다. */
   smoke?: { x: number; y: number };
 }
@@ -310,6 +312,28 @@ export function rim(px: Px, dark: Color, soft: Color): void {
       const above = has(x, y + 1) || has(x + 1, y);
       if (below) px.d[y * w + x] = dark;
       else if (above) px.d[y * w + x] = soft;
+    }
+  }
+}
+
+/**
+ * 겨울: 그림의 위쪽 면에 눈을 얹는다. 위가 비어 있는 점마다 거기서 아래로 depth점쯤을 눈빛으로 바꾼다.
+ * 맨 윗줄(먹빛 테두리가 있던 줄)은 눈의 그늘빛으로 두어, 흰 눈밭 위에서도 그림의 윗선이 읽힌다.
+ * 얇은 것을 통째로 눈으로 바꾸지는 않는다(눈 아래에 그림이 한 점은 남는다).
+ */
+export function snowCap(px: Px, snow: Ramp, depth: number, seed: number): void {
+  const src = px.d.slice();
+  const { w, h } = px;
+  const at = (x: number, y: number): number => (x >= 0 && y >= 0 && x < w && y < h ? src[y * w + x] : 0);
+  const top = snow.length - 1;
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) {
+      if (at(x, y) === 0 || at(x, y - 1) !== 0) continue;
+      const d = Math.max(1, Math.round(depth * (0.5 + vnoise(x / 3.7, y / 9, seed) * 0.8)));
+      for (let k = 0; k <= d; k++) {
+        if (at(x, y + k) === 0 || at(x, y + k + 1) === 0) break;
+        px.set(x, y + k, k === 0 ? snow[2] : k === d ? snow[top - 1] : snow[top]);
+      }
     }
   }
 }

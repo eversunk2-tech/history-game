@@ -12,8 +12,10 @@
 // 도중에 인터넷이 끊겨도 받은 그림은 나온다. 아직 못 받았거나 받다가 실패한 자리에는 코드 그림이 나온다.
 
 import { signal } from '@preact/signals';
-import type { Season } from '../engine/types';
-import { backgroundNameIn, buildIndex, figureNameIn, type Pose } from './pictureNames';
+import { getPack } from '../content';
+import { SEASONS, type Season } from '../engine/types';
+import { game } from '../state/store';
+import { backgroundNameIn, buildIndex, figureNameIn, preloadOrder, type Pose, type SeasonPictures } from './pictureNames';
 
 export type { Pose };
 
@@ -62,30 +64,83 @@ function settle(name: string, url: string | null, broken = false): void {
   tick.value++;
 }
 
-/** 그림 하나를 뒤에서 받는다. 받은 것은 줄여 둔 파일 그대로 메모리에 쥐고 있는다. */
-function fetchPicture(name: string): void {
+/** 받는 중인 그림이 다 받아지면(또는 놓치면) 알릴 곳 */
+const waiting = new Map<string, (() => void)[]>();
+
+/**
+ * 그림 하나를 뒤에서 받는다. 받은 것은 줄여 둔 파일 그대로 메모리에 쥐고 있는다.
+ * 돌려주는 약속은 받기가 끝나면(받았든 놓쳤든) 풀린다. 이미 받았거나 받을 수 없는 이름이면 바로 풀린다.
+ */
+function fetchPicture(name: string): Promise<void> {
   const url = index.get(name);
-  if (!url || got.has(name) || pending.has(name)) return;
-  if (typeof window === 'undefined') return;
+  if (!url || got.has(name) || typeof window === 'undefined') return Promise.resolve();
+  const done = new Promise<void>((resolve) => waiting.set(name, [...(waiting.get(name) ?? []), resolve]));
+  if (pending.has(name)) return done;
   pending.add(name);
+  const finish = (result: string | null): void => {
+    settle(name, result);
+    for (const resolve of waiting.get(name) ?? []) resolve();
+    waiting.delete(name);
+  };
   // 주소로 바로 그려 보는 길(파일을 폴더에서 바로 열었을 때처럼 fetch가 안 되는 곳)
   const direct = (): void => {
     const img = new Image();
-    img.onload = () => settle(name, url);
-    img.onerror = () => settle(name, null);
+    img.onload = () => finish(url);
+    img.onerror = () => finish(null);
     img.src = url;
   };
   if (typeof fetch !== 'function' || typeof URL.createObjectURL !== 'function') {
     direct();
-    return;
+    return done;
   }
   fetch(url)
     .then((res) => {
       if (!res.ok) throw new Error(String(res.status));
       return res.blob();
     })
-    .then((blob) => settle(name, URL.createObjectURL(blob)))
+    .then((blob) => finish(URL.createObjectURL(blob)))
     .catch(direct);
+  return done;
+}
+
+// ── 미리 받기: 차례대로, 한 번에 둘씩 ─────────────────────────────
+// 한꺼번에 서른 장을 받으면 느린 망에서 첫 대화의 사람이 한참 도트 대역으로 서 있다(Review 1-라 36번).
+// 지금 계절의 배경과 사람부터 한 번에 둘씩 받는다. 화면이 지금 쓰려는 그림은 차례를 기다리지 않는다(pictureSrc가 바로 받는다).
+
+/** 한 번에 받는 수 */
+export const PRELOAD_AT_ONCE = 2;
+const queue: string[] = [];
+let active = 0;
+
+function pump(): void {
+  while (active < PRELOAD_AT_ONCE && queue.length > 0) {
+    const name = queue.shift() as string;
+    if (got.has(name) || failed.has(name)) continue;
+    active += 1;
+    void fetchPicture(name).finally(() => {
+      active -= 1;
+      pump();
+    });
+  }
+}
+
+/** 그 이야기의 계절마다 대화 장면이 쓰는 배경 자리와 서는 사람(콘텐츠에서 읽는다). role을 주면 그 역할의 일만. */
+function planOf(storyId: string, role?: string): SeasonPictures[] {
+  const p = getPack(storyId);
+  if (!p) return [];
+  return SEASONS.map((season) => {
+    const places: string[] = [];
+    const people: string[] = [];
+    for (const h of p.happenings) {
+      if (h.season !== season || (role && h.roles && !h.roles.includes(role))) continue;
+      if (!places.includes(h.stage.place)) places.push(h.stage.place);
+      for (const member of h.stage.cast ?? []) {
+        const pic = p.situation.people[member.who]?.pic ?? member.who;
+        if (!people.includes(pic)) people.push(pic);
+      }
+    }
+    return { season, places, people };
+  });
 }
 
 // 인터넷이 돌아오면 못 받은 그림을 다시 받는다
@@ -98,11 +153,23 @@ if (typeof window !== 'undefined') {
   });
 }
 
-/** 그 이야기의 그림을 뒤에서 모두 미리 받아 둔다(이야기를 열 때 부른다). 기다리게 하지 않는다. */
+/**
+ * 그 이야기의 그림을 뒤에서 모두 미리 받아 둔다(이야기를 열 때 부른다). 기다리게 하지 않는다.
+ * 차례는 지금 판의 계절부터(판이 없으면 봄부터 — 새로 시작하는 이야기다). 이미 받는 줄이 있으면 새 차례로 다시 세운다.
+ */
 export function preloadStory(storyId: string): void {
-  for (const name of index.keys()) {
-    if (name.startsWith(`bg/${storyId}/`) || name.startsWith(`char/${storyId}/`)) fetchPicture(name);
-  }
+  const g = game.value;
+  const mine = g && g.situationId === storyId ? g : null;
+  const from = mine ? SEASONS[Math.min(mine.seasonIndex, SEASONS.length - 1)] : SEASONS[0];
+  const order = preloadOrder([...index.keys()], storyId, planOf(storyId, mine?.role), from);
+  queue.length = 0;
+  queue.push(...order.filter((name) => !got.has(name) && !pending.has(name)));
+  pump();
+}
+
+/** 미리 받는 줄에 남은 이름(개발용·시험용) */
+export function preloadQueue(): string[] {
+  return [...queue];
 }
 
 const hasName = (name: string): boolean => index.has(name);

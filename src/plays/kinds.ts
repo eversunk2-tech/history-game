@@ -13,4 +13,12 @@ export interface PlayKind {
 export const PLAY_KINDS: Record<string, PlayKind> = {
   /** 볍씨 뿌리기: even 고루 뿌림 · patchy 듬성듬성 · left 어른께 맡김 */
   sow: { title: '볍씨 뿌리기', results: ['even', 'patchy', 'left'] },
+  /** 김매기(여름): clean 말끔히 맴 · rough 풀이 남음 · left 어른께 맡김 */
+  weed: { title: '김매기', results: ['clean', 'rough', 'left'] },
+  /** 쌀과 베로 값 치르기(가을): exact 알맞게 건넴 · generous 넉넉히 얹어 줌 · left 어른께 맡김 */
+  pay: { title: '쌀과 베로 값 치르기', results: ['exact', 'generous', 'left'] },
+  /** 가을걷이와 나라 몫(가을): all 다 거둠 · some 이삭을 남김 · left 어른께 맡김 */
+  harvest: { title: '가을걷이와 나라 몫', results: ['all', 'some', 'left'] },
+  /** 베 짜기(겨울 덤): bolt 한 필을 다 짬 · half 반쯤 짬 · left 어른께 맡김 */
+  weave: { title: '베 짜기', results: ['bolt', 'half', 'left'] },
 };

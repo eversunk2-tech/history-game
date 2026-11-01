@@ -2,6 +2,8 @@
 // 바깥 그림 파일을 쓰지 않는다. 모든 그림은 여기 버퍼에 한 점씩 찍어서 만든다.
 // 빛깔은 0xAABBGGRR(작은 끝 순서)로 묶은 수 하나다. 0은 비어 있는 점이다.
 
+import { mulberry32 } from '../engine/rng';
+
 export type Color = number;
 
 export const CLEAR: Color = 0;
@@ -104,17 +106,8 @@ export function bayer(x: number, y: number): number {
   return (BAYER[((y & 3) << 2) | (x & 3)] + 0.5) / 16;
 }
 
-/** 씨앗 있는 난수(순서대로 뽑는 것). mulberry32. */
-export function rngOf(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+/** 씨앗 있는 난수(순서대로 뽑는 것). 엔진의 mulberry32와 같은 셈이다(같은 씨앗이면 같은 그림). */
+export const rngOf: (seed: number) => () => number = mulberry32;
 
 export const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
 

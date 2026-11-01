@@ -4,13 +4,13 @@ import type { Season } from '../engine/types';
 import { shadesFor, thingDefs } from './catalog';
 import * as critters from './critters';
 import { paintGround, waterFrames, type Ground, type GroundMap, type Shade } from './ground';
-import { MASTER } from './master';
+import { MASTER, toneOf } from './master';
 import { paletteOf, type Palette } from './palette';
-import { HEROES, VILLAGERS, footShadow, personSheet } from './people';
+import { GUISES, HEROES, VILLAGERS, footShadow, personSheet } from './people';
 import { Px, strip, toCanvas } from './px';
 import { Snapper } from './quant';
 import type { SpriteDef } from './shapes';
-import type { Placed } from '../map/types';
+import type { Placed, Weather } from '../map/types';
 
 export interface Img {
   canvas: HTMLCanvasElement;
@@ -23,6 +23,8 @@ export interface Img {
   ax: number;
   ay: number;
   seq: number[];
+  /** 장을 넘기는 빠르기(초당 장 수) */
+  rate: number;
   sort: number;
   shades: NonNullable<SpriteDef['shades']>;
   smoke?: { x: number; y: number };
@@ -62,6 +64,7 @@ function imgOf(frames: Px[], ax: number, ay: number, def?: Partial<SpriteDef>): 
     ax,
     ay,
     seq: def?.seq ?? frames.map((_, i) => i),
+    rate: def?.rate ?? 1.7,
     sort: def?.sort ?? 0,
     shades: def?.shades ?? [],
     smoke: def?.smoke,
@@ -71,6 +74,7 @@ function imgOf(frames: Px[], ax: number, ay: number, def?: Partial<SpriteDef>): 
 
 export interface Atlas {
   season: Season;
+  weather: Weather;
   pal: Palette;
   things: Map<string, Img>;
   people: Map<string, HTMLCanvasElement>;
@@ -90,6 +94,13 @@ export interface Atlas {
   arrows: Img[];
   foot: Img;
   butterflies: Img[];
+  /** 여름의 잠자리(빛깔 둘), 논의 벼를 지나가는 바람결, 논에 들어선 사람의 발치를 가리는 벼 */
+  dragonflies: Img[];
+  cropGust: Img;
+  cropFront: Img;
+  /** 비: 빗줄기(길이 셋)와 땅에 튀는 물방울(석 장) */
+  rain: Img[];
+  splash: Img;
   /** 냇물의 물결(가로로 이어 붙인 장들) */
   water: HTMLCanvasElement;
   waterN: number;
@@ -98,13 +109,13 @@ export interface Atlas {
 
 const single = (px: Px, ax = Math.floor(px.w / 2), ay = px.h - 1): Img => imgOf([px], ax, ay);
 
-export function buildAtlas(season: Season): Atlas {
-  const pal = paletteOf(season);
-  snap = new Snapper(MASTER[season]);
+export function buildAtlas(season: Season, weather: Weather = 'clear'): Atlas {
+  const pal = paletteOf(season, weather);
+  snap = new Snapper(MASTER[toneOf(season, weather)]);
   const things = new Map<string, Img>();
   for (const [key, def] of thingDefs(pal)) things.set(key, imgOf(def.frames, def.ax, def.ay, def));
   const people = new Map<string, HTMLCanvasElement>();
-  for (const [name, p] of Object.entries({ ...HEROES, ...VILLAGERS })) people.set(name, toCanvas(snap.apply(personSheet(p))));
+  for (const [name, p] of Object.entries({ ...HEROES, ...VILLAGERS, ...GUISES })) people.set(name, toCanvas(snap.apply(personSheet(p))));
   const crit = new Map<string, Img>();
   const add = (name: string, c: critters.Critter): void => void crit.set(name, imgOf(c.frames, c.ax, c.ay));
   add('hen', critters.hen());
@@ -115,10 +126,13 @@ export function buildAtlas(season: Season): Atlas {
   add('plowTeam', critters.plowTeam());
   add('magpie', critters.magpie());
   add('egret', critters.egret());
+  add('sparrow', critters.sparrow());
   const water = waterFrames(pal).map((f) => snap.apply(f));
   const arrows = critters.arrowMarks().map((px) => single(px, Math.floor(px.w / 2), Math.floor(px.h / 2)));
+  const rain = critters.rainSprites(pal);
   return {
     season,
+    weather: pal.rain ? 'rain' : 'clear',
     pal,
     things,
     people,
@@ -142,6 +156,11 @@ export function buildAtlas(season: Season): Atlas {
     arrows,
     foot: single(footShadow(), 8, 3),
     butterflies: [critters.butterfly('white'), critters.butterfly('yellow')].map((c) => imgOf(c.frames, c.ax, c.ay)),
+    dragonflies: [critters.dragonfly('blue'), critters.dragonfly('amber')].map((c) => imgOf(c.frames, c.ax, c.ay)),
+    cropGust: imgOf(critters.cropGustFrames(pal), 0, 0),
+    cropFront: single(critters.cropFront(pal), 7, 3),
+    rain: rain.streaks.map((px) => single(px, 0, px.h - 1)),
+    splash: imgOf(rain.splash, 3, 2),
     water: toCanvas(strip(water)),
     waterN: water.length,
     snap,

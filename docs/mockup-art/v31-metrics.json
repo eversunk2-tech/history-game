@@ -1,0 +1,106 @@
+{
+  "note": "3.1차 시안(2배, 타일 32점). 그림 점 단위로 잰다. 사람은 (나) 부드러운 테두리(정함).",
+  "warmth": {
+    "greenHue": 97.3,
+    "warmth": 50,
+    "darkWarmth": 6.7,
+    "darkShare": 4.5,
+    "lum": 0.548
+  },
+  "groundOrphans": {
+    "perTileAvg": 17.25,
+    "perTileMax": 44,
+    "per1000": 16.85
+  },
+  "groundHarsh": 0.1,
+  "groundChecker": 3.48,
+  "groundHarshChecker": 0.08,
+  "monotony": {
+    "grass": {
+      "blocks": 588,
+      "lumaStd": 5.79,
+      "warmStd": 4.2,
+      "tones": 7,
+      "flatPct": 12.4
+    },
+    "dirt": {
+      "blocks": 625,
+      "lumaStd": 6.32,
+      "warmStd": 3.5,
+      "tones": 11,
+      "flatPct": 16.4
+    }
+  },
+  "sceneColors": 60,
+  "thingOrphansPer1000": {
+    "blossom": 22,
+    "gate": 5.1,
+    "oak": 44.4,
+    "jars": 4.9,
+    "choga": 11.3,
+    "well": 17.7
+  },
+  "thingHarshPer1000": {
+    "blossom": 0.76,
+    "gate": 1.05,
+    "oak": 23.48,
+    "jars": 1.62,
+    "choga": 2.26,
+    "well": 9.9
+  },
+  "thingGrime": {
+    "gate": {
+      "grimePct": 27,
+      "rough": 4.85
+    },
+    "choga": {
+      "grimePct": 20.1,
+      "rough": 5.62
+    },
+    "wall": {
+      "grimePct": 34.2,
+      "rough": 6.37
+    }
+  },
+  "washDarkPct": {
+    "gate": 2.9,
+    "choga": 6,
+    "wall": 1.9
+  },
+  "blotch": {
+    "grass": 3.9,
+    "dirt": 3.61
+  },
+  "people": {
+    "hero": {
+      "outlineShare": 0.265,
+      "orphansPer1000": 4.5,
+      "edgeContrast": 0.4,
+      "body": 0.608,
+      "edge": 0.239,
+      "ground": 0.619,
+      "bodyMinusGround": -0.011,
+      "groundMinusEdge": 0.38
+    },
+    "woman": {
+      "outlineShare": 0.08,
+      "orphansPer1000": 6,
+      "edgeContrast": 0.384,
+      "body": 0.615,
+      "edge": 0.263,
+      "ground": 0.655,
+      "bodyMinusGround": -0.041,
+      "groundMinusEdge": 0.393
+    },
+    "elder": {
+      "outlineShare": 0.227,
+      "orphansPer1000": 16.1,
+      "edgeContrast": 0.319,
+      "body": 0.734,
+      "edge": 0.257,
+      "ground": 0.598,
+      "bodyMinusGround": 0.136,
+      "groundMinusEdge": 0.342
+    }
+  }
+}

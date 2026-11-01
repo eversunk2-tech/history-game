@@ -35,17 +35,26 @@ export const drawLabels: Partial<
   },
 };
 
-/** 장소 아홉 곳 (spec 8절). 장면의 place는 이 가운데 하나여야 한다. */
+/**
+ * 대화 장면의 배경(Happening.stage.place)의 이름. 그림 자리 `bg/<이야기>/<place>-<계절>`의 <place>가 이 id다.
+ * 위 여섯은 봄부터 쓰던 것, 아래 여덟은 ① 1395년의 여름·가을·겨울에 더한 것이다.
+ */
 export const places: Place[] = [
+  { id: 'entrance', label: '마을 어귀' },
+  { id: 'paddy', label: '논' },
+  { id: 'well', label: '우물가' },
+  { id: 'temple', label: '뒷산 절' },
+  { id: 'hill', label: '뒷산' },
   { id: 'yard', label: '집 마당' },
-  { id: 'field', label: '논밭' },
-  { id: 'market', label: '장터와 길' },
-  { id: 'school', label: '글방' },
-  { id: 'office', label: '관아 앞' },
-  { id: 'village', label: '마을 어귀' },
-  { id: 'capital', label: '도읍 공사장' },
-  { id: 'fortress', label: '산성 길' },
-  { id: 'tramway', label: '한성 전찻길' },
+  { id: 'stream', label: '냇가' },
+  { id: 'road', label: '마을 밖 큰길' },
+  { id: 'threshing', label: '타작 마당' },
+  { id: 'pass', label: '고갯마루' },
+  { id: 'hyanggyo', label: '향교 가는 길' },
+  { id: 'manor', label: '양반 댁 대문 앞' },
+  { id: 'room', label: '집 안' },
+  // 겨울 덤 「곡식이 떨어진 옆집」. 우리 집 마당(yard)과 다른 집이라는 것이 보이게 따로 둔다(review 7번).
+  { id: 'neighbor', label: '옆집 앞' },
 ];
 
 export function placeLabel(id: string): string {

@@ -3,7 +3,8 @@
 // 계절이 바뀌면 풀·잎·논·물의 단계만 바뀌고 나머지(나무, 짚, 흙벽, 돌, 옷)는 그대로다.
 
 import type { Season } from '../engine/types';
-import { hex, type Color } from './px';
+import type { Weather } from '../map/types';
+import { blue, green, hex, red, rgb, type Color } from './px';
 
 export type Ramp = readonly Color[];
 
@@ -40,12 +41,15 @@ export interface Palette {
   clay: Ramp; // 흙벽
   plaster: Ramp; // 한지·회벽
   tile: Ramp; // 기와
+  snow: Ramp; // 눈(겨울의 지붕과 가지, 쓸어 모은 눈)
   /** 논의 모습: 물 댄 논 → 푸른 벼 → 누런 벼 → 빈 논 */
   paddyState: 'water' | 'green' | 'gold' | 'bare';
   /** 꽃이 피는 철인가(들꽃, 꽃나무, 꽃잎) */
   flowers: boolean;
   /** 날리는 것 */
   drift: 'petal' | 'none' | 'leaf' | 'snow';
+  /** 비가 오는가(큰비가 온 해의 여름: 빛깔이 젖어 가라앉고 냇물이 흙탕물이 된다) */
+  rain: boolean;
   /** 화면 전체에 살짝 씌우는 빛(없으면 null) */
   wash: string | null;
 }
@@ -66,6 +70,7 @@ const THATCH_OLD = R('#45382b', '#5f4f3c', '#7b684c', '#97835f', '#b19f79', '#c9
 const CLAY = R('#86603f', '#a67c55', '#c49c70', '#dcba8e', '#edd5ae');
 const PLASTER = R('#b3a58d', '#d5c8ad', '#ece2ca', '#faf4e3');
 const TILE = R('#20242d', '#303744', '#46505f', '#606b79', '#838c95', '#a6adb0');
+const SNOW = R('#7f93ab', '#a9bacb', '#cfdbe3', '#eaf1f2', '#ffffff');
 
 const SPRING: Palette = {
   season: 'spring',
@@ -98,9 +103,11 @@ const SPRING: Palette = {
   clay: CLAY,
   plaster: PLASTER,
   tile: TILE,
+  snow: SNOW,
   paddyState: 'water',
   flowers: true,
   drift: 'petal',
+  rain: false,
   wash: null,
 };
 
@@ -117,7 +124,7 @@ const SUMMER: Palette = {
   blossomWhite: R('#2c6537', '#40843c', '#5fa245', '#8cbf58'),
   azalea: R('#1f4830', '#2c6537', '#40843c', '#5fa245'),
   water: R('#1b4a5f', '#266a7c', '#378c98', '#58adb0', '#8dcfc6', '#c9eee1', '#f2fcf2'),
-  crop: R('#2b5f3a', '#3f8a40', '#62ae48', '#93cf5c'),
+  crop: R('#1d4f3a', '#2c7347', '#4a9c50', '#93d463'),
   paddyState: 'green',
   flowers: false,
   drift: 'none',
@@ -167,10 +174,49 @@ const WINTER: Palette = {
   wash: 'rgba(170, 200, 235, 0.07)',
 };
 
+/** 비에 젖은 빛: 어둡게 가라앉히고 푸른 쪽으로 조금 민다 */
+const damp = (ramp: Ramp, k = 0.86): Ramp =>
+  ramp.map((c) => rgb(Math.round(red(c) * k * 0.93), Math.round(green(c) * k * 0.97), Math.round(Math.min(255, blue(c) * k * 1.05))));
+
+// 큰비가 온 해의 여름: 여름의 빛을 젖은 빛으로 가라앉힌다. 냇물과 논물은 흙탕물이다.
+const RAINY: Palette = {
+  ...SUMMER,
+  grass: damp(SUMMER.grass, 0.88),
+  grassTip: damp(SUMMER.grassTip, 0.88),
+  forest: damp(SUMMER.forest, 0.88),
+  leaf: damp(SUMMER.leaf, 0.88),
+  leafWarm: damp(SUMMER.leafWarm, 0.88),
+  leafDeep: damp(SUMMER.leafDeep, 0.9),
+  pine: damp(SUMMER.pine, 0.9),
+  blossom: damp(SUMMER.blossom, 0.88),
+  blossomWhite: damp(SUMMER.blossomWhite, 0.88),
+  azalea: damp(SUMMER.azalea, 0.88),
+  crop: damp(SUMMER.crop, 0.9),
+  path: damp(PATH, 0.78),
+  yard: damp(YARD, 0.78),
+  soil: damp(SOIL, 0.88),
+  mud: damp(MUD, 0.9),
+  stone: damp(STONE, 0.88),
+  wood: damp(WOOD, 0.88),
+  bark: damp(BARK, 0.88),
+  pineBark: damp(PINE_BARK, 0.88),
+  thatch: damp(THATCH, 0.82),
+  thatchOld: damp(THATCH_OLD, 0.84),
+  clay: damp(CLAY, 0.86),
+  plaster: damp(PLASTER, 0.9),
+  tile: damp(TILE, 0.92),
+  // 불어난 냇물: 흙이 섞여 흐린 잿빛 풀빛(길의 흙빛과 헷갈리지 않게 찬 빛을 남긴다). 잠긴 논의 물은 조금 더 누렇다.
+  water: R('#2f4a4d', '#3f6263', '#557d78', '#73988c', '#9bb5a3', '#c5d4bf', '#e9efdc'),
+  paddy: R('#4d5a4c', '#647260', '#7d8a76', '#99a48e', '#b9c0a8', '#d9dcc6'),
+  rain: true,
+  wash: 'rgba(70, 92, 124, 0.1)',
+};
+
 const ALL: Record<Season, Palette> = { spring: SPRING, summer: SUMMER, autumn: AUTUMN, winter: WINTER };
 
-export function paletteOf(season: Season): Palette {
-  return ALL[season];
+/** 그 계절의 빛깔 한 벌. 날씨는 여름에만 갈린다(비가 오면 젖은 빛). */
+export function paletteOf(season: Season, weather: Weather = 'clear'): Palette {
+  return season === 'summer' && weather === 'rain' ? RAINY : ALL[season];
 }
 
 // ── 옷과 몸의 빛깔 ── 꾸밈없고 수수하게. 물들이지 않은 무명·삼베가 바탕이다.

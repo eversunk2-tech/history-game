@@ -1,0 +1,26 @@
+{
+ "schema": 3,
+ "build": "dev",
+ "cleared": {
+  "s1395": [
+   {
+    "role": "farmer",
+    "look": "girl",
+    "ending": "s1395-letters",
+    "legacy": "s1395-legacy-tree"
+   }
+  ]
+ },
+ "cards": [
+  "s1395-direct-sowing",
+  "s1395-dano",
+  "s1395-hanseong",
+  "s1395-fifteen-thousand",
+  "s1395-jongmyo",
+  "s1395-state-share",
+  "s1395-rice-cloth",
+  "s1395-cloth-bolt",
+  "s1395-temple-rite",
+  "s1395-hyanggyo"
+ ]
+}

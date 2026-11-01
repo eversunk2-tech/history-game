@@ -5,8 +5,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPack } from '../src/content';
-import { canCloseSeason, doHappening, openChoiceIds, openHappenings, type DoInput } from '../src/engine/game';
-import type { GameState, Look, SituationPack } from '../src/engine/types';
+import { canCloseSeason, currentSeason, doHappening, openChoiceIds, openHappenings, seasonReady, type DoInput } from '../src/engine/game';
+import { SEASONS, type GameState, type Look, type SituationPack } from '../src/engine/types';
 import { BACKUP_KEY, SAVE_KEY, SCHEMA, packBits, parseSave } from '../src/state/storage';
 
 const env = vi.hoisted(() => {
@@ -131,6 +131,32 @@ function doMusts(s: Store, limit = 99): number {
   return n;
 }
 
+/** 지금 계절의 꼭 할 일을 다 하고 계절을 보낸 뒤 다음으로 넘긴다. 넘어간 화면을 돌려준다. */
+function passSeason(s: Store): string {
+  doMusts(s);
+  later();
+  s.closeSeasonNow();
+  expect(s.screen.value).toBe('seasonClose');
+  later();
+  s.goNextSeason();
+  return s.screen.value;
+}
+
+/** 만들어진 계절을 차례로 보낸다. 한 해가 다 만들어졌으면 한 해 돌아보기에서 멈춘다. 보낸 계절의 수를 돌려준다. */
+function passBuiltSeasons(s: Store): number {
+  for (let n = 1; n <= SEASONS.length; n++) {
+    const to = passSeason(s);
+    if (to !== 'map') return n;
+  }
+  throw new Error('한 해가 끝나지 않는다');
+}
+
+/** 농민 집의 네 계절이 모두 만들어졌는가(1-라부터) */
+const YEAR_BUILT = SEASONS.every((season) => seasonReady(PACK, 'farmer', season));
+
+// 견본 저장(글자 그대로)
+const SAVE_FILES = import.meta.glob<string>('./fixtures/saves/*.json', { eager: true, query: '?raw', import: 'default' });
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-03-02T09:00:00'));
@@ -203,7 +229,7 @@ describe('화면 차례', () => {
     expect(s.screen.value).toBe('rolePick');
   });
 
-  it('남자아이·여자아이 모습 모두: 꼭 할 일을 다 해야 봄을 보낼 수 있고, 보내면 계절 닫기 → "다음에 만들어요"', async () => {
+  it('남자아이·여자아이 모습 모두: 꼭 할 일을 다 해야 봄을 보낼 수 있고, 보내면 계절 닫기 → 여름의 맵', async () => {
     for (const look of ['boy', 'girl'] as const) {
       env.data.clear();
       const s = await boot();
@@ -221,11 +247,12 @@ describe('화면 차례', () => {
       expect(s.screen.value).toBe('seasonClose');
       expect(s.game.value?.phase).toBe('seasonClose');
       expect(saved()?.current?.phase).toBe('seasonClose');
-      expect(s.nextSeasonReady()).toBe(false); // 여름은 아직 만들지 않았다
+      expect(s.nextSeasonReady()).toBe(true); // 여름이 만들어져 있다(1-라부터)
       later();
       s.goNextSeason();
-      expect(s.screen.value).toBe('next');
+      expect(s.screen.value).toBe('map');
       expect(s.game.value?.seasonIndex).toBe(1);
+      expect(s.game.value?.phase).toBe('season');
       expect(saved()?.current?.seasonIndex).toBe(1);
       later();
       s.backToTitle();
@@ -434,7 +461,7 @@ describe('끄고 켜도 이어진다', () => {
     expect(s.game.value?.at).toBe('44,54');
   });
 
-  it('계절 닫기 화면에서 끄면 계절 닫기에서, 봄을 넘긴 뒤에 끄면 "다음에 만들어요"에서 이어진다', async () => {
+  it('계절 닫기 화면에서 끄면 계절 닫기에서, 봄을 넘긴 뒤에 끄면 여름의 맵에서 이어진다', async () => {
     let s = await boot();
     startSpring(s);
     doMusts(s);
@@ -448,13 +475,16 @@ describe('끄고 켜도 이어진다', () => {
     expect(s.game.value).toEqual(closed);
     later();
     s.goNextSeason();
-    expect(s.screen.value).toBe('next');
+    expect(s.screen.value).toBe('map');
+    const summer = s.game.value;
     s = await boot();
     expect(s.canContinue.value).toBe(true);
     later();
     s.continueGame();
-    expect(s.screen.value).toBe('next');
+    expect(s.screen.value).toBe('map');
+    expect(s.game.value).toEqual(summer);
     expect(s.game.value?.seasonIndex).toBe(1);
+    expect(s.game.value?.at).toBeUndefined();
   });
 
   it('새 계절로 넘어가면 가 본 칸은 비운다(계절마다 새로 걷는다)', async () => {
@@ -589,6 +619,349 @@ describe('"미션이 풀림" 종이를 보기 전에 꺼도 다음에 뜬다(rev
   });
 });
 
+describe('한 해를 끝맺는다(1-라)', () => {
+  it.runIf(YEAR_BUILT)('두 모습 모두: 계절 넷을 보내면 한 해 돌아보기, 남길 것을 고르면 이야기를 깬다 — 깬 기록이 진행 중인 해와 따로 남는다', async () => {
+    for (const look of ['girl', 'boy'] as const) {
+      env.data.clear();
+      const s = await boot();
+      startSpring(s, look);
+      // 계절이 바뀔 때마다: 그 계절의 맵, 서 있던 칸은 비워져 집 앞에서 시작한다, 해 ☀가 다시 찬다
+      for (let index = 1; index < SEASONS.length; index++) {
+        s.markPlace('46,34', ['village'], 'ff00');
+        expect(passSeason(s)).toBe('map');
+        const g = s.game.value!;
+        expect(g.seasonIndex).toBe(index);
+        expect(g.phase).toBe('season');
+        expect(g.at).toBeUndefined();
+        expect(s.walkedText()).toBe('');
+        expect(g.sunsLeft).toBeGreaterThan(0);
+        // 날씨는 여름에 들어설 때 뽑혀 저장에 적힌다
+        expect(g.draw).not.toBeNull();
+        expect(saved()?.current?.draw).toBe(g.draw);
+        expect(saved()?.current?.seasonIndex).toBe(index);
+      }
+      // 겨울을 보내면 한 해가 끝난다
+      expect(passSeason(s)).toBe('review');
+      expect(s.game.value?.phase).toBe('done');
+      expect(saved()?.current?.phase).toBe('done');
+      const cards = s.game.value!.cards;
+      const ended = s.game.value!;
+      const legacy = PACK.situation.legacy[1].id;
+      later();
+      s.finishYear(legacy);
+      expect(s.screen.value).toBe('book');
+      expect(s.game.value).toBeNull();
+      // 깬 기록: 역할, 모습, 한 해 이름, 남긴 것. 진행 중인 해는 내려놓는다.
+      const record = (saved()?.cleared as Record<string, { role: string; look: string; ending: string; legacy: string }[]>).s1395;
+      expect(record).toHaveLength(1);
+      expect(record[0].role).toBe('farmer');
+      expect(record[0].look).toBe(look);
+      expect(record[0].legacy).toBe(legacy);
+      expect(PACK.situation.endings.some((e) => e.id === record[0].ending)).toBe(true);
+      // 꼴 4: 그 해의 줄거리(날씨, 처음과 계절마다의 수치, 한 일마다 고른 것, 놀이의 끝, 푼 미션, 카드)가 id와 수로 남는다(review 41번)
+      const story = record[0] as unknown as { draw: string | null; flow: number[][]; picks: Record<string, string>; plays: Record<string, string>; solved: string[]; cards: string[] };
+      expect(story.draw).toBe(ended.draw);
+      expect(story.flow).toEqual(ended.flow.map((st) => [st.living, st.body, st.trust]));
+      expect(story.flow).toHaveLength(SEASONS.length + 1);
+      expect(Object.keys(story.picks)).toEqual(ended.history.map((d) => d.happeningId));
+      for (const deed of ended.history) {
+        expect(story.picks[deed.happeningId]).toBe(deed.choiceId ?? '');
+        if (deed.play) expect(story.plays[deed.happeningId]).toBe(deed.play);
+      }
+      expect(Object.keys(story.plays).length).toBeGreaterThan(0);
+      expect(story.solved).toEqual(ended.solved);
+      expect(story.cards).toEqual(ended.cards);
+      // 한 줄이 작다(학생 기기의 저장 한 칸이 커지지 않게)
+      expect(JSON.stringify(record[0]).length).toBeLessThan(2000);
+      expect(saved()?.current).toBeUndefined();
+      expect(saved()?.cards).toEqual(expect.arrayContaining(cards));
+      expect(s.canContinue.value).toBe(false);
+    }
+  });
+
+  it.runIf(YEAR_BUILT)('깬 이야기를 다른 모습으로 다시 한다: 깬 기록은 남고, 다시 깨면 줄이 는다', async () => {
+    let s = await boot();
+    startSpring(s, 'girl');
+    passBuiltSeasons(s);
+    later();
+    s.finishYear(PACK.situation.legacy[0].id);
+    // 끄고 켜도 깬 기록이 남아 있다
+    s = await boot();
+    expect(s.save.value.cleared.s1395).toHaveLength(1);
+    expect(s.canContinue.value).toBe(false);
+    // 같은 이야기를 남자아이 모습으로 다시
+    later();
+    s.goBook();
+    later();
+    s.openStory('s1395');
+    later();
+    s.settleRole('farmer', 'boy');
+    later();
+    s.beginYear();
+    expect(s.screen.value).toBe('map');
+    // 하는 도중에도 앞의 깬 기록은 그대로다
+    expect((saved()?.cleared as Record<string, unknown[]>).s1395).toHaveLength(1);
+    passBuiltSeasons(s);
+    later();
+    s.finishYear(PACK.situation.legacy[2].id);
+    const records = (saved()?.cleared as Record<string, { look: string; legacy: string }[]>).s1395;
+    expect(records.map((r) => r.look)).toEqual(['girl', 'boy']);
+    expect(records[1].legacy).toBe(PACK.situation.legacy[2].id);
+  });
+
+  it.runIf(YEAR_BUILT)('한 해 돌아보기에서 끄면 이어 하기로 돌아보기가 다시 열린다', async () => {
+    let s = await boot();
+    startSpring(s);
+    passBuiltSeasons(s);
+    expect(s.screen.value).toBe('review');
+    const before = s.game.value;
+    s = await boot();
+    expect(s.canContinue.value).toBe(true);
+    later();
+    s.continueGame();
+    expect(s.screen.value).toBe('review');
+    expect(s.game.value).toEqual(before);
+    later();
+    s.finishYear(PACK.situation.legacy[0].id);
+    expect(s.screen.value).toBe('book');
+  });
+
+  it.runIf(YEAR_BUILT)('계절마다 도중에 끄고 켜도 그 계절의 맵에서 그 판 그대로 이어진다', async () => {
+    let s = await boot();
+    startSpring(s);
+    for (let index = 0; index < SEASONS.length; index++) {
+      // 그 계절의 꼭 할 일을 하나 한 뒤에 끈다
+      const first = openHappenings(PACK, s.game.value!).find((v) => v.must && !v.noSun);
+      if (first) doOne(s, first.happening.id);
+      s.markPlace('40,36', ['village'], 'f0f0');
+      env.state.visibility = 'hidden';
+      env.fire('visibilitychange');
+      const before = s.game.value!;
+      s = await boot();
+      later();
+      s.continueGame();
+      expect(s.screen.value, SEASONS[index]).toBe('map');
+      expect(s.game.value, SEASONS[index]).toEqual(before);
+      expect(currentSeason(s.game.value!)).toBe(SEASONS[index]);
+      expect(s.walkedText()).toBe('f0f0');
+      passSeason(s);
+    }
+    expect(s.screen.value).toBe('review');
+  });
+
+  it('닫지 않은 "미션이 풀림" 종이는 계절을 보내면 버려진다: 다음 계절의 맵에 지난 계절의 종이가 뜨지 않고 저장에도 남지 않는다', async () => {
+    let s = await boot();
+    startSpring(s);
+    // 꼭 할 일을 하되 종이는 하나도 넘기지 않는다(대화 장면만 닫는다)
+    for (let n = 0; n < 40 && !canCloseSeason(PACK, s.game.value!); n++) {
+      const g = s.game.value!;
+      const next = openHappenings(PACK, g).find((v) => v.must && !v.noSun)!.happening.id;
+      later();
+      s.openTalk(next);
+      s.commitTalk(inputFor(g, next));
+      s.closeTalk();
+      // 종이가 떠 있어도 엔진의 판은 이미 나아가 있다 — 화면에서는 종이가 맵을 덮지만, 가게는 그와 상관없이 버틴다
+      if (s.missionQueue.value.length > 0) s.missionQueue.value = [];
+    }
+    expect(saved()?.papers?.length).toBeGreaterThan(0);
+    later();
+    s.closeSeasonNow();
+    expect(s.screen.value).toBe('seasonClose');
+    expect(s.missionQueue.value).toEqual([]);
+    expect(saved()?.papers).toBeUndefined();
+    // 계절 닫기에서 끄고 켜도 종이가 되살아나지 않는다
+    s = await boot();
+    later();
+    s.continueGame();
+    expect(s.screen.value).toBe('seasonClose');
+    expect(s.missionQueue.value).toEqual([]);
+    later();
+    s.goNextSeason();
+    expect(s.missionQueue.value).toEqual([]);
+    expect(saved()?.papers).toBeUndefined();
+    if (s.screen.value !== 'map') return; // 여름이 아직 만들어지지 않았다
+    // 여름에 푼 미션의 종이만 뜬다
+    const springSolved = [...s.game.value!.solved];
+    doMusts(s);
+    expect(s.game.value!.solved.length).toBeGreaterThan(springSolved.length);
+    expect(saved()?.papers).toBeUndefined();
+  });
+
+  it.runIf(YEAR_BUILT)('여름·가을·겨울에도 종이를 보기 전에 끄면 다음에 뜬다', async () => {
+    let s = await boot();
+    startSpring(s);
+    for (let index = 1; index < SEASONS.length; index++) {
+      expect(passSeason(s)).toBe('map');
+      // 미션이 풀리는 일까지 가서, 종이를 넘기지 않고 끈다
+      let owedIds: string[] = [];
+      for (let n = 0; n < 40 && owedIds.length === 0; n++) {
+        const g = s.game.value!;
+        const next = openHappenings(PACK, g).find((v) => v.must && !v.noSun)!.happening.id;
+        later();
+        s.openTalk(next);
+        const deed = s.commitTalk(inputFor(g, next))!;
+        s.closeTalk();
+        if (deed.solved.length > 0) owedIds = deed.solved;
+        else closePapers(s);
+      }
+      expect(owedIds.length, SEASONS[index]).toBeGreaterThan(0);
+      expect(saved()?.papers).toEqual(owedIds);
+      s = await boot();
+      later();
+      s.continueGame();
+      expect(s.screen.value).toBe('map');
+      expect(s.missionQueue.value, SEASONS[index]).toEqual(owedIds);
+      closePapers(s);
+      expect(saved()?.papers).toBeUndefined();
+    }
+  });
+
+  it('한 해가 끝나기 전에는 이야기를 깰 수 없다', async () => {
+    const s = await boot();
+    startSpring(s);
+    later();
+    s.finishYear(PACK.situation.legacy[0].id);
+    expect(s.screen.value).toBe('map');
+    expect(saved()?.cleared).toEqual({});
+    doMusts(s);
+    later();
+    s.closeSeasonNow();
+    later();
+    s.finishYear(PACK.situation.legacy[0].id);
+    expect(s.screen.value).toBe('seasonClose');
+    expect(saved()?.cleared).toEqual({});
+  });
+
+  it('모르는 남길 것을 넘겨도 멈추지 않는다(빈 것으로 적힌다)', async () => {
+    const s = await boot();
+    startSpring(s);
+    passBuiltSeasons(s);
+    if (s.screen.value !== 'review') return; // 한 해가 아직 다 만들어지지 않았다
+    later();
+    s.finishYear('없는 것');
+    expect(s.screen.value).toBe('book');
+    expect((saved()?.cleared as Record<string, { legacy: string }[]>).s1395[0].legacy).toBe('');
+  });
+});
+
+describe('실제 옛 판(4a1d0a6 — 운영 주소의 판)을 눌러 뜬 저장(review 34번 ㉠)', () => {
+  const file = (name: string): string => SAVE_FILES[`./fixtures/saves/${name}.json`];
+
+  it.runIf(YEAR_BUILT)('"다음에 만들어요" 화면의 저장: 여름의 맵, 집 앞에서(서 있던 칸 없음, 가 본 칸 비움) 계절 첫 줄이 뜰 형편으로, 그때 뽑힌 날씨 그대로', async () => {
+    const raw = file('schema3-old-spring-over');
+    const old = JSON.parse(raw).current as GameState;
+    env.data.set(SAVE_KEY, raw);
+    const s = await boot();
+    expect(s.loadStatus.value).toBe('migrated');
+    expect(s.canContinue.value).toBe(true);
+    later();
+    s.continueGame();
+    expect(s.screen.value).toBe('map');
+    const g = s.game.value!;
+    expect(currentSeason(g)).toBe('summer');
+    expect(g.at).toBeUndefined();
+    expect(s.walkedText()).toBe('');
+    // 맵은 서 있던 칸이 없고 이 계절에 한 일이 없을 때 계절의 첫 줄을 띄운다(MapScreen)
+    expect(g.history.filter((d) => d.season === 'summer')).toHaveLength(0);
+    expect(g.draw).toBe(old.draw);
+    expect(g.done).toEqual(old.done);
+    // 한 번 저장하면 꼴 4로 적힌다
+    s.saveNow();
+    expect(saved()?.schema).toBe(4);
+    passBuiltSeasons(s);
+    expect(s.screen.value).toBe('review');
+  });
+
+  it.runIf(YEAR_BUILT)('봄 도중 · 봄을 다 하고 안 보냄 · 봄을 닫은 직후의 저장이 제자리에서 이어져 한 해 끝까지 간다', async () => {
+    for (const [name, first] of [
+      ['schema3-old-spring-mid', 'map'],
+      ['schema3-old-spring-done', 'map'],
+      ['schema3-old-spring-closed', 'seasonClose'],
+    ] as const) {
+      env.data.clear();
+      const raw = file(name);
+      const old = JSON.parse(raw).current as GameState;
+      env.data.set(SAVE_KEY, raw);
+      const s = await boot();
+      later();
+      s.continueGame();
+      expect(s.screen.value, name).toBe(first);
+      expect(s.game.value!.at, name).toBe(old.at);
+      expect(s.game.value!.done, name).toEqual(old.done);
+      if (first === 'seasonClose') {
+        later();
+        s.goNextSeason();
+        expect(s.screen.value).toBe('map');
+        // 봄을 다 하고 안 보낸 판은 보내는 순간(여름에 들어서며) 날씨가 적힌다
+        expect(s.game.value!.draw).not.toBeNull();
+        expect(s.game.value!.at).toBeUndefined();
+      }
+      passBuiltSeasons(s);
+      expect(s.screen.value, name).toBe('review');
+    }
+  });
+});
+
+describe('봄까지 한 옛 저장(1-다와 태블릿 바퀴의 판이 만든 것)', () => {
+  const overs = Object.keys(SAVE_FILES).filter((path) => path.includes('-spring-over'));
+
+  it('견본이 있다: 꼴 2와 꼴 3의 "봄을 보내고 여름으로 넘어간" 저장', () => {
+    expect(overs.map((path) => path.split('/').pop()).sort()).toEqual(expect.arrayContaining(['schema2-spring-over.json', 'schema3-spring-over.json']));
+  });
+
+  it.runIf(YEAR_BUILT)('여름이 생긴 이 판에서 "이어 하기"를 누르면 여름의 맵에서 이어진다(집 앞에서, 그때 뽑힌 날씨 그대로)', async () => {
+    for (const path of overs) {
+      env.data.clear();
+      env.data.set(SAVE_KEY, SAVE_FILES[path]);
+      const old = JSON.parse(SAVE_FILES[path]).current as GameState;
+      const s = await boot();
+      expect(['ok', 'migrated'], path).toContain(s.loadStatus.value);
+      expect(s.canContinue.value, path).toBe(true);
+      later();
+      s.continueGame();
+      expect(s.screen.value, path).toBe('map');
+      const g = s.game.value!;
+      expect(g.seasonIndex).toBe(1);
+      expect(currentSeason(g)).toBe('summer');
+      // 봄에 한 일과 정한 것이 그대로 넘어온다
+      expect(g.done).toEqual(old.done);
+      expect(g.flags).toEqual(old.flags);
+      expect(g.solved).toEqual(old.solved);
+      expect(g.stats).toEqual(old.stats);
+      // 날씨는 봄을 닫고 넘어갈 때 이미 뽑혀 저장에 적혀 있었다 — 그대로 쓴다
+      expect(g.draw).toBe(old.draw);
+      expect(g.draw).not.toBeNull();
+      // 그 판으로 한 해를 끝까지 간다
+      passBuiltSeasons(s);
+      expect(s.screen.value, path).toBe('review');
+      later();
+      s.finishYear(PACK.situation.legacy[0].id);
+      expect(s.screen.value).toBe('book');
+    }
+  });
+
+  it.runIf(YEAR_BUILT)('봄의 한가운데·봄을 보낸 바로 뒤의 옛 저장도 한 해를 끝까지 간다', async () => {
+    const olds = Object.keys(SAVE_FILES).filter((path) => /-spring-(mid|paper|closed)\.json$/.test(path));
+    expect(olds.length).toBeGreaterThanOrEqual(5);
+    for (const path of olds) {
+      env.data.clear();
+      env.data.set(SAVE_KEY, SAVE_FILES[path]);
+      const s = await boot();
+      later();
+      s.continueGame();
+      expect(['map', 'seasonClose'], path).toContain(s.screen.value);
+      closePapers(s);
+      if (s.screen.value === 'seasonClose') {
+        later();
+        s.goNextSeason();
+        expect(s.screen.value, path).toBe('map');
+      }
+      passBuiltSeasons(s);
+      expect(s.screen.value, path).toBe('review');
+    }
+  });
+});
+
 describe('새 판', () => {
   it('새 판을 만들 때마다 판의 번호가 는다(맵이 앞 판의 자리를 버린다 — review 14번)', async () => {
     env.state.search = '?seed=7';
@@ -629,7 +1002,14 @@ describe('저장이 안 되거나 읽을 수 없을 때', () => {
     expect(s.screen.value).toBe('seasonClose');
     later();
     s.goNextSeason();
-    expect(s.screen.value).toBe('next');
+    expect(s.screen.value).toBe('map');
+    // 저장이 안 되어도 한 해를 끝까지 하고 이야기책으로 돌아간다(깬 기록은 이 창에만 남는다)
+    for (let n = 0; n < SEASONS.length && s.screen.value === 'map'; n++) passSeason(s);
+    expect(s.screen.value).toBe('review');
+    later();
+    s.finishYear(PACK.situation.legacy[0].id);
+    expect(s.screen.value).toBe('book');
+    expect(s.save.value.cleared.s1395).toHaveLength(1);
     expect(env.data.size).toBe(0);
   });
 
@@ -916,34 +1296,47 @@ describe('주인공 그림의 이름', () => {
 });
 
 // ── 저장 견본 만들기 ─────────────────────────────────────────────
-// VITE_MAKE_SAVES=1 npx vitest run tests/store.test.ts 로 돌리면 이 판이 만든 저장을 tests/fixtures/saves/에 적는다.
 // 저장의 꼴(schema)을 올릴 때는 옛 견본을 지우지 말고 새 번호의 견본을 더한다(옛 견본이 계속 읽히는지 tests/storage.test.ts가 본다).
+//   VITE_MAKE_SAVES=spring npx vitest run tests/store.test.ts  … 봄의 견본(schemaN-spring-*.json)을 적는다.
+//       꼴 2·3의 봄 견본은 봄만 있던 판(1-다, 태블릿 바퀴)이 만든 것이다 — 꼴을 올리기 전에는 다시 적지 않는다.
+//   VITE_MAKE_SAVES=1 npx vitest run tests/store.test.ts       … 한 해가 다 있는 판(1-라부터)의 견본(schemaN-year-*.json)을 적는다.
 
-describe.runIf(import.meta.env.VITE_MAKE_SAVES === '1')('저장 견본 만들기', () => {
-  it(`꼴 ${SCHEMA}의 견본을 적는다`, async () => {
-    // 파일을 쓰는 것은 이 시험뿐이다. 이름을 이어 붙여 불러온다(이 프로젝트에는 Node의 형 정의를 두지 않는다).
+const MAKE_SAVES = import.meta.env.VITE_MAKE_SAVES as string | undefined;
+
+describe.runIf(MAKE_SAVES === '1' || MAKE_SAVES === 'spring')('저장 견본 만들기', () => {
+  // 파일을 쓰는 것은 이 시험뿐이다. 이름을 이어 붙여 불러온다(이 프로젝트에는 Node의 형 정의를 두지 않는다).
+  async function writer(): Promise<(name: string) => void> {
     const fs = (await import(/* @vite-ignore */ ['node', 'fs'].join(':'))) as {
       mkdirSync(path: string, options: { recursive: boolean }): void;
       writeFileSync(path: string, text: string): void;
     };
     const dir = decodeURIComponent(new URL('./fixtures/saves/', import.meta.url).pathname);
     fs.mkdirSync(dir, { recursive: true });
-    const walked = (n: number): string => packBits(Uint8Array.from({ length: 96 * 72 }, (_, i) => (i % 96 > 24 && i % 96 < 24 + n && Math.floor(i / 96) > 28 && Math.floor(i / 96) < 60 ? 1 : 0)));
-    const write = (name: string): void => {
+    return (name: string): void => {
       const raw = env.data.get(SAVE_KEY)!;
       expect(parseSave(raw).status).toBe('ok');
       fs.writeFileSync(`${dir}${name}`, `${JSON.stringify(JSON.parse(raw), null, 1)}\n`);
     };
+  }
+  const walked = (n: number): string => packBits(Uint8Array.from({ length: 96 * 72 }, (_, i) => (i % 96 > 24 && i % 96 < 24 + n && Math.floor(i / 96) > 28 && Math.floor(i / 96) < 60 ? 1 : 0)));
+
+  /** 그 계절의 한가운데: 꼭 할 일 하나와 덤 하나를 하고 맵에 서 있다 */
+  function midSeason(s: Store, at: string, n: number): void {
+    const must = openHappenings(PACK, s.game.value!).find((v) => v.must && !v.noSun)!.happening.id;
+    doOne(s, must);
+    const extra = openHappenings(PACK, s.game.value!).find((v) => !v.must && !v.noSun);
+    if (extra) doOne(s, extra.happening.id);
+    s.markPlace(at, ['village', 'fields'], walked(n));
+    s.saveNow();
+  }
+
+  it.runIf(MAKE_SAVES === 'spring')(`꼴 ${SCHEMA}의 봄 견본을 적는다`, async () => {
+    const write = await writer();
     const s = await boot();
     env.state.search = '?seed=1395';
     startSpring(s, 'girl');
     // 봄의 한가운데: 꼭 할 일 하나와 덤 하나를 하고, 우물가에 서 있다
-    const must = openHappenings(PACK, s.game.value!).find((v) => v.must)!.happening.id;
-    doOne(s, must);
-    const extra = openHappenings(PACK, s.game.value!).find((v) => !v.must && !v.noSun)!.happening.id;
-    doOne(s, extra);
-    s.markPlace('46,34', ['village'], walked(20));
-    s.saveNow();
+    midSeason(s, '46,34', 20);
     write(`schema${SCHEMA}-spring-mid.json`);
     // 미션을 푸는 일의 결과를 보는 중(종이가 아직 뜨지 않았다)
     for (let step = 0; step < 12; step++) {
@@ -968,11 +1361,38 @@ describe.runIf(import.meta.env.VITE_MAKE_SAVES === '1')('저장 견본 만들기
     later();
     s.closeSeasonNow();
     write(`schema${SCHEMA}-spring-closed.json`);
-    // 여름으로 넘어간 뒤(여름이 아직 없어 "다음에 만들어요")
+    // 여름으로 넘어간 뒤
     later();
     s.goNextSeason();
     s.markPlace('44,54', ['village', 'fields'], walked(30));
     s.saveNow();
     write(`schema${SCHEMA}-spring-over.json`);
+  });
+
+  it.runIf(MAKE_SAVES === '1' && YEAR_BUILT)(`꼴 ${SCHEMA}의 한 해 견본을 적는다(여름·가을·겨울의 한가운데, 한 해 돌아보기, 깬 뒤, 깨고 다시 하는 중)`, async () => {
+    const write = await writer();
+    let s = await boot();
+    env.state.search = '?seed=1395';
+    startSpring(s, 'girl');
+    const spots = ['44,54', '40,36', '46,34'];
+    for (let index = 1; index < SEASONS.length; index++) {
+      expect(passSeason(s)).toBe('map');
+      midSeason(s, spots[index - 1], 18 + index * 4);
+      write(`schema${SCHEMA}-year-${SEASONS[index]}-mid.json`);
+    }
+    // 겨울을 보내고 한 해 돌아보기에 서 있다
+    expect(passSeason(s)).toBe('review');
+    s.saveNow();
+    write(`schema${SCHEMA}-year-review.json`);
+    // 남길 것을 골라 이야기를 깬 뒤(진행 중인 해가 없다)
+    later();
+    s.finishYear(PACK.situation.legacy[0].id);
+    write(`schema${SCHEMA}-year-cleared.json`);
+    // 깬 이야기를 다른 모습으로 다시 하는 중(깬 기록과 진행 중인 해가 함께 있다)
+    s = await boot();
+    env.state.search = '?seed=2';
+    startSpring(s, 'boy');
+    midSeason(s, '46,34', 20);
+    write(`schema${SCHEMA}-year-again-mid.json`);
   });
 });

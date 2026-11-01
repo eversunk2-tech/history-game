@@ -11,7 +11,7 @@ import { T, TILE } from '../map/types';
 import { buildAtlas, paintedGround, type Atlas, type Img } from '../pixel/atlas';
 import { shadesAt, thingKey } from '../pixel/catalog';
 import type { Shade } from '../pixel/ground';
-import { COL, HEROES, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W, SHEET_COLS, VILLAGERS } from '../pixel/people';
+import { COL, GUISES, HEROES, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W, SHEET_COLS, VILLAGERS } from '../pixel/people';
 import { artSeason, backToTitle } from '../state/store';
 
 /** 땅의 갈래를 모두 이웃하게 놓은 작은 견본 맵 */
@@ -207,7 +207,9 @@ export function Sheet(): JSX.Element {
     });
   }, [atlas]);
 
-  const people = Object.keys({ ...HEROES, ...VILLAGERS });
+  // ?who=teacher,student 로 몇 사람만 볼 수 있다(새로 그린 사람을 찍어 볼 때). 같은 사람의 다른 차림(GUISES)도 함께 늘어놓는다.
+  const whoOnly = new URLSearchParams(window.location.search).get('who')?.split(',');
+  const people = Object.keys({ ...HEROES, ...VILLAGERS, ...GUISES }).filter((name) => !whoOnly || whoOnly.includes(name));
   const perRow = 2;
   const cellW = PERSON_W * SHEET_COLS + 12;
   const peopleH = Math.ceil(people.length / perRow) * (PERSON_H * 4 + 10) + 64;
@@ -332,7 +334,7 @@ export function Sheet(): JSX.Element {
             )}
             {show('etc') && (
               <Section
-                title="짐승과 표시와 날리는 것 — 닭, 병아리, 개, 소, 논 가는 소, 까치, 나비 / 깃발, 말풍선, 자물쇠, 화살표 / 꽃잎, 연기, 물빛 반짝임, 구름 그림자"
+                title="짐승과 표시와 날리는 것 — 닭, 병아리, 개, 소, 논 가는 소, 까치, 물새, 참새 / 깃발, 말풍선, 막힌 길, 화살표 / 꽃잎·가랑잎·눈, 연기, 물빛 반짝임, 나비, 잠자리, 비, 벼의 물결, 구름 그림자"
                 width={560}
                 height={200}
                 zoom={zoom}
@@ -342,7 +344,7 @@ export function Sheet(): JSX.Element {
                   ctx.fillStyle = '#85b853';
                   ctx.fillRect(0, 0, 560, 200);
                   let x = 8;
-                  for (const name of ['hen', 'rooster', 'chick', 'dog', 'ox', 'plowTeam', 'magpie', 'egret']) {
+                  for (const name of ['hen', 'rooster', 'chick', 'dog', 'ox', 'plowTeam', 'magpie', 'egret', 'sparrow']) {
                     const img = atlas.critters.get(name);
                     if (!img) continue;
                     for (let f = 0; f < img.n; f++) {
@@ -352,7 +354,7 @@ export function Sheet(): JSX.Element {
                     x += 6;
                   }
                   x = 8;
-                  for (const name of ['hen', 'rooster', 'chick', 'dog', 'ox', 'plowTeam', 'magpie', 'egret']) {
+                  for (const name of ['hen', 'rooster', 'chick', 'dog', 'ox', 'plowTeam', 'magpie', 'egret', 'sparrow']) {
                     const img = atlas.critters.get(name);
                     if (!img) continue;
                     const f = Math.floor(t * 5) % img.n;
@@ -392,6 +394,19 @@ export function Sheet(): JSX.Element {
                     ctx.drawImage(bf.canvas, (Math.floor(t * 9) % 2) * bf.w, 0, bf.w, bf.h, x + 4, 140, bf.w, bf.h);
                     x += 12;
                   }
+                  // 계절의 날림: 잠자리(여름), 빗줄기와 물방울(큰비가 온 여름), 벼의 물결
+                  x += 6;
+                  for (const fly of atlas.dragonflies) {
+                    ctx.drawImage(fly.canvas, (Math.floor(t * 16) % 2) * fly.w, 0, fly.w, fly.h, x, 140, fly.w, fly.h);
+                    x += 12;
+                  }
+                  for (const drop of atlas.rain) {
+                    ctx.drawImage(drop.canvas, x, 136);
+                    x += 8;
+                  }
+                  ctx.drawImage(atlas.splash.canvas, (Math.floor(t * 8) % atlas.splash.n) * atlas.splash.w, 0, atlas.splash.w, atlas.splash.h, x, 142, atlas.splash.w, atlas.splash.h);
+                  x += 12;
+                  ctx.drawImage(atlas.cropGust.canvas, (Math.floor(t * 3) % atlas.cropGust.n) * atlas.cropGust.w, 0, atlas.cropGust.w, atlas.cropGust.h, x, 141, atlas.cropGust.w, atlas.cropGust.h);
                   ctx.drawImage(atlas.cloud.canvas, 330, 100);
                 }}
               />

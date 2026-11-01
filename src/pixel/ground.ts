@@ -76,14 +76,18 @@ export interface GroundMap {
   w: number;
   h: number;
   terrain: Uint8Array;
+  /** 칸마다 1이면 논의 벼가 성기다(큰비가 온 해의 가을 — 쓸려 간 자리에 흙탕이 앉았다) */
+  thin?: Uint8Array;
 }
 
 export interface Ground {
   px: Px;
   /** 칸마다: 물결이 비쳐 보이는 점이 있는가 */
   wet: Uint8Array;
-  /** 칸마다: 물 댄 논인가(반짝임을 놓을 곳) */
+  /** 칸마다: 물 댄 논인가(반짝임과 잔물결을 놓을 곳). 큰비가 온 여름에는 물에 잠긴 논이다. */
   glint: Uint8Array;
+  /** 칸마다: 벼가 서 있는 논인가(바람에 벼가 물결친다) */
+  crop: Uint8Array;
 }
 
 export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade[] = []): Ground {
@@ -277,6 +281,19 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
   const { grass, forest, path, yard, soil, mud, stone, water, paddy, crop, wood } = pal;
   const paddyState = pal.paddyState;
   const SAND = mix(path[3], water[4], 0.35);
+  const ICE = mix(water[5], pal.snow[3], 0.55);
+  // 가을 숲 바닥과 나무 아래의 가랑잎 빛
+  const LEAVES: Color[] = [pal.leaf[3], pal.leaf[4], pal.leaf[5], pal.leafWarm[3], pal.leafWarm[4], pal.leafDeep[3], pal.leafDeep[4], pal.bark[2]];
+  const fallenLeaf = (x: number, y: number): Color => LEAVES[Math.floor(hash2(x, y, 119) * LEAVES.length)];
+  // 비 온 날의 웅덩이: 낮은 데에 고인 물이 하늘빛을 비춘다. 둘레의 젖은 흙은 짙다.
+  const PUDDLE: Color[] = [mix(water[2], stone[1], 0.5), mix(water[4], stone[3], 0.45), mix(water[5], stone[4], 0.4)];
+  const puddled = (c: Color, x: number, y: number, wetRim: Color): Color => {
+    const p = fbm(x / 10.5, y / 5.5, 240);
+    if (p < 0.635) return c;
+    if (p < 0.665) return wetRim;
+    if (p > 0.76 && hash2(x >> 1, y, 241) < 0.6) return PUDDLE[2];
+    return PUDDLE[vnoise(x / 4.5, y / 1.9, 242) > 0.55 ? 1 : 0];
+  };
 
   for (let y = 0; y < H; y++) {
     const ty = y >> 4;
@@ -316,8 +333,9 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
           if (a < 0.75) v += 0.8;
           c = forest[clamp(Math.round(v), 0, 4)];
           const hsh = hash2(x >> 1, y, 113);
-          // 떨어진 잎과 잔가지
-          if (hsh < 0.022) c = pal.thatch[1];
+          // 떨어진 잎과 잔가지. 가을에는 가랑잎이 수북하다
+          if (pal.drift === 'leaf' && hsh < 0.13) c = fallenLeaf(x, y);
+          else if (hsh < 0.022) c = pal.thatch[1];
           else if (hsh < 0.034) c = pal.bark[2];
           else if (hsh > 0.985) c = forest[4];
           break;
@@ -334,6 +352,7 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
           const up = kAt(x, y - 1);
           if (up !== K.path && up !== K.yard && up !== K.rock) v = Math.min(v, 1.4); // 풀 아래의 그늘
           c = path[clamp(Math.round(v), 1, 5)];
+          if (pal.rain && a > 0.8) c = puddled(c, x, y, path[0]);
           break;
         }
         case K.ridge: {
@@ -353,6 +372,7 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
           const up = kAt(x, y - 1);
           if (up !== K.path && up !== K.yard) v = Math.min(v, 0.8);
           c = yard[clamp(Math.round(v), 0, 4)];
+          if (pal.rain && a > 0.8) c = puddled(c, x, y, yard[0]);
           break;
         }
         case K.rock: {
@@ -366,13 +386,14 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
         case K.soil:
         case K.paddy:
         case K.field: {
-          c = plotColor(k === K.soil && paddyState !== 'water' ? K.paddy : k, x, y, a);
+          c = plotColor(k, x, y, a);
           // 논둑 턱의 그늘
+          const wetPlot = (k === K.paddy && paddyState === 'water') || (k === K.soil && paddyState === 'green');
           const up1 = kAt(x, y - 1);
           const up2 = kAt(x, y - 2);
           if (!isPlot(up1)) c = soil[0];
-          else if (!isPlot(up2)) c = k === K.paddy && paddyState === 'water' ? mud[0] : soil[0];
-          else if (!isPlot(kAt(x - 1, y)) || !isPlot(kAt(x + 1, y))) c = k === K.paddy && paddyState === 'water' ? mud[1] : soil[1];
+          else if (!isPlot(up2)) c = wetPlot ? mud[0] : soil[0];
+          else if (!isPlot(kAt(x - 1, y)) || !isPlot(kAt(x + 1, y))) c = wetPlot ? mud[1] : soil[1];
           break;
         }
         case K.water:
@@ -393,6 +414,12 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
           else if (!isWet(kAt(x, y + 1))) c = hash2(x >> 1, y, 304) < 0.7 ? water[6] : withAlpha(water[5], 200);
           else if (!isWet(kAt(x, y + 2))) c = hash2(x >> 1, y, 305) < 0.4 ? withAlpha(water[5], 170) : withAlpha(SAND, 150);
           else if (!isWet(kAt(x - 1, y)) || !isWet(kAt(x + 1, y))) c = withAlpha(water[1], 190);
+          else if (pal.season === 'winter' && k === K.water && a < 0.8 + (vnoise(x / 6.1, y / 3.3, 306) - 0.5) * 0.24) {
+            // 겨울: 물가의 얕은 곳에 살얼음이 끼었다(가운데는 흐른다)
+            const f = vnoise(x / 3.7, y / 2.1, 307);
+            c = f > 0.72 ? pal.snow[4] : f > 0.3 ? ICE : pal.snow[2];
+            if (hash2(x >> 1, y, 308) < 0.04) c = pal.snow[1];
+          }
           else if (a < 0.6) c = withAlpha(SAND, 140);
           else if (a < 0.72) c = bayer(x, y) < 0.5 ? withAlpha(SAND, 110) : withAlpha(SAND, 50);
           else if (k === K.deep) c = withAlpha(water[0], 92);
@@ -414,6 +441,8 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
           else if (step === 2) c = stone[2];
           else c = stone[1];
           if (joint && step < 2) c = stone[3];
+          // 겨울: 디딤돌 위에 눈이 얹혔다(가운데는 밟혀서 돌이 드러났다)
+          if (pal.season === 'winter' && step < 2 && (fx < 5 || fx > 10 || hash2(fx, fy, 612 + tx) < 0.3)) c = pal.snow[step === 0 ? 4 : 3];
           if (fx === 0 || fx === 15) c = stone[1];
           break;
         }
@@ -422,7 +451,59 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
     }
   }
 
+  /**
+   * 벼 포기의 자리. 볍씨를 논에 바로 흩어 뿌렸으므로 줄이 없다: 고르지 않게 흩어진 포기들 가운데
+   * 이 점에 가장 가까운 포기를 찾아, 그 가운데에서 얼마나 떨어졌는지(ox, oy)와 포기마다 다른 값(h)을 돌려준다.
+   * (cw, ch)는 포기 하나가 차지하는 넓이(점)다.
+   */
+  function tuftAt(x: number, y: number, cw: number, ch: number): { ox: number; oy: number; h: number } {
+    const gx = Math.floor(x / cw);
+    const gy = Math.floor(y / ch);
+    let best = Infinity;
+    let ox = 0;
+    let oy = 0;
+    let h = 0;
+    for (let j = -1; j <= 1; j++) {
+      for (let i = -1; i <= 1; i++) {
+        const cx = (gx + i + 0.08 + hash2(gx + i, gy + j, 445) * 0.84) * cw;
+        const cy = (gy + j + 0.08 + hash2(gx + i, gy + j, 446) * 0.84) * ch;
+        const dx = x + 0.5 - cx;
+        const dy = y + 0.5 - cy;
+        const d = dx * dx * (ch / cw) + dy * dy * (cw / ch);
+        if (d < best) {
+          best = d;
+          ox = dx;
+          oy = dy;
+          h = hash2(gx + i, gy + j, 447);
+        }
+      }
+    }
+    return { ox, oy, h };
+  }
+
+  /** 물이 찬 논의 물빛(봄의 물 댄 논, 큰비에 잠긴 논) */
+  function paddyWater(x: number, y: number, a: number): Color {
+    let v = 2.7 + (fbm(x / 34, y / 8, 421) - 0.5) * 3.0;
+    if (fbm(x / 47, y / 31, 422) > 0.6) v += 1;
+    if (hash2(x >> 2, y, 423) < 0.03) v += 1.2;
+    let c = paddy[clamp(Math.round(v), 1, 5)];
+    // 가장자리는 얕아서 논바닥의 흙빛이 비친다
+    if (a < 0.66) c = mud[2];
+    else if (a < 0.8) c = bayer(x, y) < (0.8 - a) / 0.14 ? mud[3] : c;
+    else if (a < 0.9 && bayer(x, y) < 0.25) c = mud[3];
+    return c;
+  }
+
+  /** 큰물에 쓸려 간 자리: 흙탕이 마른 잿빛 흙에 쓰러진 짚이 물결 따라 누워 있다 */
+  function silt(x: number, y: number): Color {
+    const f = vnoise(x / 3.1, y / 1.6, 461);
+    if (hash2(x >> 2, y, 462) < 0.09 && f > 0.4) return pal.thatch[(x + y) % 3 === 0 ? 3 : 2];
+    const v = 2.3 + (fbm(x / 13, y / 5, 463) - 0.5) * 2.2 + (f - 0.5) * 0.8;
+    return [soil[1], soil[2], mix(soil[3], stone[3], 0.35), mix(soil[4], stone[4], 0.4)][clamp(Math.round(v), 0, 3)];
+  }
+
   function plotColor(k: number, x: number, y: number, a: number): Color {
+    const thin = map.thin ? map.thin[(y >> 4) * w + (x >> 4)] === 1 : false;
     if (k === K.field) {
       const yy = y + Math.round((vnoise(x / 13, y / 29, 401) - 0.5) * 2);
       const band = ((yy % 6) + 6) % 6;
@@ -431,10 +512,15 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
       if (hsh < 0.14) v -= 1;
       else if (hsh > 0.86) v += 1;
       let c = soil[clamp(v, 0, 4)];
-      if (pal.season === 'winter' && band >= 2 && band <= 3 && hsh > 0.4) c = grass[5];
+      // 겨울: 고랑에 눈이 쌓이고 이랑의 등은 흙이 드러난다
+      if (pal.season === 'winter') {
+        if (band === 0 || band === 5 || band === 1) c = grass[band === 0 ? 4 : 5];
+        else if (hsh > 0.55) c = grass[6];
+      }
       return c;
     }
-    if (k === K.soil) {
+    if (k === K.soil && paddyState === 'water') {
+      // 봄: 갈아엎은 논
       const yy = y + Math.round((vnoise(x / 9, y / 31, 411) - 0.5) * 3);
       const band = ((yy % 5) + 5) % 5;
       let v = [0, 1, 3, 2, 1][band];
@@ -444,32 +530,74 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
       if (fbm(x / 19, y / 13, 413) < 0.38) v -= 1;
       return soil[clamp(v, 0, 4)];
     }
-    // 논
-    if (paddyState === 'water') {
-      let v = 2.7 + (fbm(x / 34, y / 8, 421) - 0.5) * 3.0;
-      if (fbm(x / 47, y / 31, 422) > 0.6) v += 1;
-      if (hash2(x >> 2, y, 423) < 0.03) v += 1.2;
-      let c = paddy[clamp(Math.round(v), 1, 5)];
-      // 가장자리는 얕아서 논바닥의 흙빛이 비친다
-      if (a < 0.66) c = mud[2];
-      else if (a < 0.8) c = bayer(x, y) < (0.8 - a) / 0.14 ? mud[3] : c;
-      else if (a < 0.9 && bayer(x, y) < 0.25) c = mud[3];
+    if (paddyState === 'water') return paddyWater(x, y, a);
+
+    if (paddyState === 'bare') {
+      // 겨울: 빈 논에 눈이 쌓였다. 벼 그루터기가 눈 위로 삐죽하고, 군데군데 언 흙이 드러난다.
+      const t = tuftAt(x, y, 5, 4);
+      const m = fbm(x / 21, y / 15, 432);
+      const f = vnoise(x / 2.4, y / 2.4, 431);
+      const edge = (k === K.soil ? 0.37 : 0.29) + (bayer(x, y) - 0.5) * 0.05;
+      const bare = m < edge;
+      if (k === K.paddy && fbm(x / 27, y / 9, 434) > 0.69 && !bare) {
+        // 물이 고였던 자리의 얼음
+        const crack = hash2(x + Math.round(vnoise(x / 5, y / 5, 435) * 4), y >> 2, 436) < 0.05;
+        return crack ? pal.snow[4] : vnoise(x / 6, y / 2.2, 437) > 0.6 ? pal.snow[3] : ICE;
+      }
+      const stub = t.h < 0.5 && Math.abs(t.ox) < 0.7 && t.oy > -1.3 && t.oy < 0.5;
+      if (stub) return t.oy < -0.4 ? crop[2] : crop[0];
+      if (bare) {
+        // 언 흙: 서리가 희끗희끗하다
+        if (hash2(x, y, 438) < 0.12) return grass[3];
+        return soil[clamp(Math.round(2.9 + (f - 0.5) * 1.8), 2, 4)];
+      }
+      if (t.h < 0.5 && t.ox >= 0.7 && t.ox < 1.8 && t.oy > -0.3 && t.oy < 0.8) return grass[3]; // 그루터기의 그늘
+      return grass[clamp(Math.round(5 + (f - 0.5) * 1.5 + (m - 0.55) * 2.6), 4, 6)];
+    }
+    if (k === K.soil && paddyState === 'green') {
+      // 큰비에 잠긴 논: 흙탕물 위로 벼의 끝만 보인다
+      const t = tuftAt(x, y, 4, 5);
+      const c = paddyWater(x, y, a);
+      if (a < 0.8) return c;
+      if (t.h < 0.6 && Math.abs(t.ox) < 1.3 && t.oy > -1.6 && t.oy < 0.5) return t.oy < -0.7 ? crop[3] : t.ox < 0 ? crop[2] : crop[1];
+      if (t.h < 0.6 && Math.abs(t.ox) < 1.3 && t.oy >= 0.5 && t.oy < 1.5) return paddy[1]; // 물에 비친 그늘
       return c;
     }
-    if (paddyState === 'bare') {
-      const f = vnoise(x / 2.4, y / 2.4, 431);
-      const m = fbm(x / 21, y / 15, 432);
-      if (m > 0.52) return grass[clamp(Math.round(4 + (f - 0.5) * 2), 3, 6)]; // 눈이 덮인 곳
-      const hsh = hash2(x, y >> 1, 433);
-      if (hsh < 0.1) return crop[2]; // 벼 그루터기
-      return soil[clamp(Math.round(2.4 + (f - 0.5) * 2), 1, 4)];
+    if (k === K.soil && paddyState === 'gold') {
+      // 가을: 벼를 벤 논. 마른 논바닥에 그루터기가 흩어져 있다. 큰물이 쓸고 간 논은 그루터기가 드물고 흙탕이 앉았다.
+      const t = tuftAt(x, y, 5, 4);
+      const f = vnoise(x / 2.6, y / 2.6, 451);
+      const m = fbm(x / 19, y / 13, 452);
+      const keep = thin ? 0.28 : 0.72;
+      if (t.h < keep && Math.abs(t.ox) < 0.9 && t.oy > -1.3 && t.oy < 0.6) return t.oy < -0.4 ? pal.thatch[5] : t.ox < 0 ? pal.thatch[3] : pal.thatch[2];
+      if (t.h < keep && t.ox >= 0.9 && t.ox < 2 && t.oy > -0.2 && t.oy < 1.0) return soil[1]; // 그루터기의 그늘
+      if (thin && fbm(x / 17, y / 9, 464) > 0.5) return silt(x, y);
+      if (hash2(x, y, 453) < 0.016) return pal.thatch[4]; // 떨어진 지푸라기
+      const dry = [soil[2], soil[3], soil[4], mix(soil[4], pal.yard[2], 0.5), mix(soil[4], pal.yard[3], 0.6)];
+      return dry[clamp(Math.round(2.5 + (f - 0.5) * 1.7 + (m - 0.5) * 2.4), 0, 4)];
     }
-    // 푸른 벼, 누런 벼: 흩어 뿌린 벼라 줄이 없다
-    const f = vnoise(x / 1.7, y / 3.1, 441);
+    // 푸른 벼, 누런 벼: 포기는 위로 길다. 위쪽(잎 끝, 이삭)이 밝고 밑동은 어두우며, 포기 사이로 논바닥이 어둡게 비친다.
+    const t = tuftAt(x, y, 4, 5);
+    const gold = paddyState === 'gold';
+    // 큰물이 쓸고 간 논(큰비가 온 해의 가을): 남은 포기만 듬성듬성 서 있고 그 사이는 흙탕이 앉았다
+    if (thin && gold && (t.h > 0.38 || fbm(x / 21, y / 11, 465) > 0.62)) return a < 0.62 ? soil[2] : silt(x, y);
     const m = fbm(x / 17, y / 13, 442);
-    let v = 1.4 + (f - 0.5) * 3.2 + (m - 0.5) * 1.4;
-    if (hash2(x, y >> 1, 443) > 0.93) v += 1;
-    return crop[clamp(Math.round(v), 0, 3)];
+    let v = 1.55 - t.oy * 0.5 + (t.h - 0.5) * 1.0 + (m - 0.5) * 1.5;
+    if (t.ox > 1.1) v -= 0.9; // 포기의 오른쪽은 그늘
+    else if (t.ox < -1.2) v += 0.25;
+    // 이삭은 포기의 위쪽에 누렇게 숙인다
+    if (gold && t.oy < -0.9) v += 0.6;
+    if (hash2(x, y >> 1, 443) > 0.955) v += 1;
+    let c = crop[clamp(Math.round(v), 0, 3)];
+    // 포기 사이의 빈 곳: 여름에는 논물이 하늘을 비추고, 가을에는 마른 논바닥이 보인다
+    const gap = t.oy > 1.5 && t.h < 0.62;
+    if (gap) c = gold ? mix(crop[0], soil[0], 0.55) : t.h < 0.07 ? paddy[3] : mix(crop[0], water[0], 0.5);
+    // 벼 사이에 섞여 자란 풀(여름): 빛이 누렇고 키가 들쭉날쭉하다
+    if (!gold && t.h > 0.92 && t.oy < 0.8 && Math.abs(t.ox) < 1.6) c = t.oy < -1 ? pal.leafWarm[5] : t.oy < 0 ? pal.leafWarm[4] : pal.leafWarm[2];
+    // 논 가장자리는 벼가 성기다
+    if (a < 0.62) c = gold ? soil[2] : mud[1];
+    else if (a < 0.74 && bayer(x, y) < 0.5) c = gold ? soil[3] : mud[2];
+    return c;
   }
 
   function bankColor(x: number, y: number, tx: number, ty: number): Color {
@@ -700,8 +828,9 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
     }
   }
 
-  // 밭이랑의 새싹(봄·여름), 가을에는 누런 포기
+  // 밭이랑에 자란 것: 봄의 새싹, 여름의 우거진 잎, 가을의 누런 포기와 거둔 이랑. 겨울에는 비어 있다.
   if (pal.season !== 'winter') {
+    const season = pal.season;
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x += 1) {
         if (kind[y * W + x] !== K.field) continue;
@@ -710,11 +839,41 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
         if (band !== 2) continue;
         const cell = Math.floor(x / 4);
         if (x % 4 !== Math.floor(hash2(cell, yy, 761) * 3)) continue;
-        if (hash2(cell, yy, 762) > 0.78) continue;
-        put(x, y, crop[2], K.field);
-        put(x, y - 1, crop[3], K.field);
-        if (pal.season !== 'spring' || hash2(cell, yy, 763) > 0.5) put(x + 1, y - 1, crop[1], K.field);
-        if (pal.season !== 'spring') put(x, y - 2, crop[3], K.field);
+        if (hash2(cell, yy, 762) > (season === 'summer' ? 0.92 : 0.78)) continue;
+        if (season === 'spring') {
+          put(x, y, crop[2], K.field);
+          put(x, y - 1, crop[3], K.field);
+          if (hash2(cell, yy, 763) > 0.5) put(x + 1, y - 1, crop[1], K.field);
+        } else if (season === 'summer') {
+          // 잎이 우거져 이랑을 덮는다(고랑만 어둡게 남는다)
+          const big = hash2(cell, yy, 763) > 0.35;
+          put(x - 1, y + 1, crop[0], K.field);
+          put(x, y + 1, crop[0], K.field);
+          put(x + 1, y + 1, crop[0], K.field);
+          put(x - 2, y, crop[1], K.field);
+          put(x - 1, y, crop[1], K.field);
+          put(x, y, crop[2], K.field);
+          put(x + 1, y, crop[1], K.field);
+          put(x + 2, y, crop[0], K.field);
+          put(x - 1, y - 1, crop[2], K.field);
+          put(x, y - 1, crop[3], K.field);
+          put(x + 1, y - 1, crop[2], K.field);
+          if (big) {
+            put(x - 2, y - 1, crop[2], K.field);
+            put(x, y - 2, crop[3], K.field);
+            put(x - 1, y - 2, crop[3], K.field);
+            put(x + 1, y - 2, crop[1], K.field);
+          }
+        } else if (hash2(Math.floor(yy / 6), Math.floor(x / 44), 765) < 0.42) {
+          // 가을: 거둔 이랑에는 마른 줄기만 남았다
+          if (hash2(cell, yy, 766) < 0.5) put(x, y, pal.thatch[2], K.field);
+        } else {
+          put(x, y, crop[1], K.field);
+          put(x, y - 1, crop[3], K.field);
+          put(x + 1, y - 1, crop[2], K.field);
+          put(x, y - 2, crop[2], K.field);
+          if (hash2(cell, yy, 763) > 0.5) put(x - 1, y - 1, crop[1], K.field);
+        }
       }
     }
   }
@@ -730,14 +889,18 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
         const jy = Math.round((hash2(tx, ty, 772) - 0.5) * 2);
         const cx = ox + 8 + jx;
         const cy = oy + 8 + jy;
+        // 큰비가 온 해에는 물이 불어 돌의 머리만 보인다
+        const sunk = pal.rain ? 0.5 : 1;
         for (let j = -6; j <= 6; j++) {
           for (let i = -7; i <= 7; i++) {
             const d = (i * i) / 44 + (j * j) / 21;
-            if (d > 1) continue;
+            if (d > sunk) continue;
             const lit = (-i * 0.5 - j * 0.9) / 6;
             let c = stone[clamp(Math.round(3.3 + lit * 1.6), 2, 5)];
-            if (d > 0.74 && j > 0) c = stone[1];
+            if (d > 0.74 * sunk && j > 0) c = stone[1];
             if (hash2(cx + i, cy + j, 773) < 0.06) c = stone[2];
+            // 겨울: 돌 위에 눈이 얹혔다
+            if (pal.season === 'winter' && j < 1 && d < 0.8) c = pal.snow[j < -2 ? 4 : 3];
             out.set(cx + i, cy + j, c);
           }
         }
@@ -779,6 +942,26 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
             }
           }
         }
+      }
+    }
+  }
+
+  // 가을: 나무 아래에 가랑잎이 떨어져 쌓였다(나무 그림자의 자리 둘레에)
+  if (pal.drift === 'leaf') {
+    for (const s of shades) {
+      if (!s.dapple) continue;
+      const count = Math.round(s.rx * s.ry * 0.5);
+      for (let k = 0; k < count; k++) {
+        const ang = hash2(k, Math.round(s.cx), 831) * Math.PI * 2;
+        const far = Math.sqrt(hash2(k, Math.round(s.cy), 832)) * 1.25;
+        const x = Math.round(s.cx - 4 + Math.cos(ang) * s.rx * far);
+        const y = Math.round(s.cy + Math.sin(ang) * s.ry * far * 1.2);
+        if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
+        const kk = kind[y * W + x];
+        if (kk !== K.grass && kk !== K.forest && kk !== K.thicket && kk !== K.path && kk !== K.yard && kk !== K.ridge) continue;
+        const c = fallenLeaf(x, y);
+        out.d[y * W + x] = c;
+        if (hash2(x, y, 833) < 0.4 && kind[y * W + x + 1] === kk) out.d[y * W + x + 1] = fallenLeaf(x + 1, y);
       }
     }
   }
@@ -866,6 +1049,7 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
   // 칸마다 물결이 보이는지, 논물인지
   const wet = new Uint8Array(w * h);
   const glint = new Uint8Array(w * h);
+  const standing = new Uint8Array(w * h);
   for (let ty = 0; ty < h; ty++) {
     for (let tx = 0; tx < w; tx++) {
       let holes = false;
@@ -878,10 +1062,12 @@ export function paintGround(map: GroundMap, pal: Palette, shades: readonly Shade
         }
       }
       wet[ty * w + tx] = holes ? 1 : 0;
-      glint[ty * w + tx] = terrain[ty * w + tx] === T.paddy && paddyState === 'water' ? 1 : 0;
+      const t = terrain[ty * w + tx];
+      glint[ty * w + tx] = (t === T.paddy && paddyState === 'water') || (t === T.soil && paddyState === 'green') ? 1 : 0;
+      standing[ty * w + tx] = t === T.paddy && (paddyState === 'green' || paddyState === 'gold') && !(map.thin && map.thin[ty * w + tx]) ? 1 : 0;
     }
   }
-  return { px: out, wet, glint };
+  return { px: out, wet, glint, crop: standing };
 }
 
 /**
@@ -900,10 +1086,12 @@ export function waterFrames(pal: Palette, frames = 24): Px[] {
         const n1 = tnoise((x + ph * S) / 8, y / 4, 8, 16, 901);
         const n2 = tnoise((x - ph * S) / 16, (y + ph * S) / 8, 4, 8, 902);
         const n3 = tnoise(x / 4 + ph * 16, y / 2, 16, 32, 903);
-        const v = n1 * 0.5 + n2 * 0.35 + n3 * 0.15;
+        // 불어난 물은 한쪽으로 세차게 흐른다: 거슬러 흐르는 무늬(n2)를 줄여, 물마루가 X꼴로 줄지어 되풀이되지 않게 한다
+        const v = pal.rain ? n1 * 0.62 + n2 * 0.1 + n3 * 0.28 : n1 * 0.5 + n2 * 0.35 + n3 * 0.15;
         let c = water[2];
-        if (v > 0.715) c = water[4];
-        else if (v > 0.61) c = water[3];
+        // 불어난 물은 물살이 세어 흰 물마루가 많다
+        if (v > (pal.rain ? 0.69 : 0.715)) c = water[pal.rain ? 5 : 4];
+        else if (v > (pal.rain ? 0.57 : 0.61)) c = water[3];
         else if (v < 0.33) c = water[1];
         px.d[y * S + x] = c;
       }

@@ -1,5 +1,9 @@
 // 나무와 덤불과 풀. 코드로 한 점씩 찍는다.
 // 넓은 잎 나무(참나무 갈래), 작은 나무, 소나무, 봄꽃 핀 나무(살구·산벚), 버드나무, 마을 어귀의 큰 느티나무.
+//
+// 계절: 봄·여름·가을은 그림 벌의 잎빛이 바뀐다(새순 → 짙은 잎 → 단풍. 꽃나무의 꽃과 진달래·개나리는 봄에만 핀다).
+// 겨울에는 잎 뭉치를 그리지 않고, 잎 뭉치가 있던 자리로 뻗은 앙상한 가지와 그 위에 얹힌 눈을 그린다(bareCrown).
+// 소나무는 겨울에도 푸르고 솔잎 층마다 눈이 얹힌다.
 
 import type { Palette, Ramp } from './palette';
 import { Px, clamp, hash2, rngOf, type Color } from './px';
@@ -25,6 +29,8 @@ function tree(
     bottomHeavy?: boolean;
     shades: SpriteDef['shades'];
     sort?: number;
+    /** 잎이 진 나무인가(가지에는 테두리를 두르지 않는다 — 잔가지가 뭉개지지 않게) */
+    bare?: boolean;
   },
 ): SpriteDef {
   const base = new Px(w, h);
@@ -32,7 +38,7 @@ function tree(
   base.outline(opts.trunkRim);
   const leaves = new Px(w, h);
   drawCanopy(leaves);
-  rim(leaves, opts.leafRim, opts.leafSoft);
+  if (!opts.bare) rim(leaves, opts.leafRim, opts.leafSoft);
   const amount = opts.amount ?? 1;
   const frames = [0, amount, -amount].map((a) => {
     const f = base.clone();
@@ -124,6 +130,111 @@ function leafMasses(
     });
 }
 
+// ── 겨울: 잎이 진 나무갓 ───────────────────────────────────────
+// 잎 뭉치가 있던 자리마다 굵은 가지가 뻗고, 그 끝에서 잔가지가 부채처럼 갈라진다. 가지 위에는 눈이 얹힌다.
+
+/** 가지에 눈을 얹는다: 위가 비어 있는 가지의 점 위에 흰 점을 놓는다 */
+function snowOnTwigs(px: Px, snow: Ramp, seed: number, share = 0.62): void {
+  const hits: [number, number, boolean][] = [];
+  for (let y = 1; y < px.h; y++) {
+    for (let x = 0; x < px.w; x++) {
+      if (px.get(x, y) === 0 || px.get(x, y - 1) !== 0) continue;
+      const r = hash2(x >> 1, y, seed);
+      if (r < share) hits.push([x, y - 1, r < share * 0.35]);
+    }
+  }
+  const top = snow.length - 1;
+  for (const [x, y, thick] of hits) {
+    px.set(x, y, snow[top]);
+    // 굵은 가지 위에는 눈이 두 점 두께로 쌓인다
+    if (thick && px.get(x, y - 1) === 0 && px.get(x, y + 2) !== 0) px.set(x, y - 1, snow[top - 1]);
+  }
+}
+
+function bareCrown(
+  px: Px,
+  masses: readonly Mass[],
+  bark: Ramp,
+  opts: { seed: number; hubs: readonly (readonly [number, number])[]; snow?: Ramp; twigs?: number },
+): void {
+  const rnd = rngOf(opts.seed * 53 + 7);
+  const dark = bark[1];
+  const mid = bark[2];
+  // 큰 뭉치부터(굵은 가지를 먼저 긋는다)
+  for (const m of [...masses].sort((a, b) => b.r - a.r)) {
+    const tx = m.x + (rnd() - 0.5) * m.r * 0.3;
+    const ty = m.y + m.r * 0.25;
+    // 가장 가까운 갈림목에서 뭉치의 가운데로
+    let hub = opts.hubs[0];
+    let best = Infinity;
+    for (const h of opts.hubs) {
+      const d = Math.hypot(h[0] - tx, h[1] - ty) + (h[1] < ty ? 30 : 0);
+      if (d < best) {
+        best = d;
+        hub = h;
+      }
+    }
+    const thick = m.r > 16 ? 4 : m.r > 9.5 ? 3 : 2;
+    branch(px, bark, hub[0], hub[1], tx, ty, thick);
+    const n = Math.max(3, Math.round((m.r / 2.4) * (opts.twigs ?? 1)));
+    for (let k = 0; k < n; k++) {
+      const ang = -Math.PI / 2 + ((k + 0.5) / n - 0.5) * Math.PI * 1.55 + (rnd() - 0.5) * 0.5;
+      const len = m.r * (0.6 + rnd() * 0.5);
+      const ex = tx + Math.cos(ang) * len;
+      const ey = ty + Math.sin(ang) * len * 0.85 - m.r * 0.2;
+      // 가운데가 살짝 휜 가지와 곁가지 둘
+      const mx = (tx + ex) / 2 + (rnd() - 0.5) * 3;
+      const my = (ty + ey) / 2 - 1 - rnd() * 2;
+      px.line(tx, ty, mx, my, mid);
+      px.line(mx, my, ex, ey, dark);
+      const side = rnd() < 0.5 ? -1 : 1;
+      const a2 = ang + side * (0.5 + rnd() * 0.5);
+      px.line(mx, my, mx + Math.cos(a2) * len * 0.5, my + Math.sin(a2) * len * 0.42, dark);
+      if (len > 7) {
+        const a3 = ang - side * (0.4 + rnd() * 0.4);
+        const qx = mx + (ex - mx) * 0.5;
+        const qy = my + (ey - my) * 0.5;
+        px.line(qx, qy, qx + Math.cos(a3) * len * 0.34, qy + Math.sin(a3) * len * 0.3, dark);
+      }
+    }
+  }
+  if (opts.snow) snowOnTwigs(px, opts.snow, opts.seed + 3);
+}
+
+/** 겨울의 덤불: 밑동에서 부채처럼 뻗은 잔가지와 그 위에 소복이 얹힌 눈 */
+function bareShrub(pal: Palette, variant: number, seed: number): SpriteDef {
+  const W = 24;
+  const H = 20;
+  const px = new Px(W, H);
+  const rnd = rngOf(seed * 17 + variant);
+  const bark = pal.bark;
+  const n = 9 + variant;
+  for (let k = 0; k < n; k++) {
+    const ang = -Math.PI / 2 + ((k + 0.5) / n - 0.5) * Math.PI * 1.25;
+    const len = 8 + rnd() * 5;
+    const ex = 12 + Math.cos(ang) * len * 1.05;
+    const ey = 17 + Math.sin(ang) * len;
+    px.line(12 + (k % 3) - 1, 17, ex, ey, bark[k % 2 === 0 ? 2 : 1]);
+    const a2 = ang + (rnd() - 0.5) * 1.4;
+    px.line((12 + ex) / 2, (17 + ey) / 2, (12 + ex) / 2 + Math.cos(a2) * 4, (17 + ey) / 2 + Math.sin(a2) * 4, bark[1]);
+  }
+  // 덤불 위에 얹힌 눈: 가지 끝을 덮은 낮은 덩이
+  const snow = pal.snow;
+  for (let y = 2; y < 12; y++) {
+    for (let x = 2; x < W - 2; x++) {
+      const dx = (x + 0.5 - 12) / 9.5;
+      const dy = (y + 0.5 - 8) / 4.2;
+      const d = dx * dx + dy * dy + (hash2(x >> 1, y, seed + 5) - 0.5) * 0.55;
+      if (d > 1 || (dy > 0.25 && hash2(x, y, seed + 6) < 0.55)) continue;
+      px.set(x, y, snow[clamp(Math.round(3.6 - dx * 1.1 - dy * 1.3), 1, snow.length - 1)]);
+    }
+  }
+  const frames = [0, 1, -1].map((a) => (a === 0 ? px : sway(px, a, 2, 14)));
+  return { frames, ax: 12, ay: 18, seq: [0, 1, 0, 2], shades: [{ dx: 3, dy: -1, rx: 9, ry: 3, strength: 0.2 }] };
+}
+
+const WINTER_SHADE = 0.2;
+
 // ── 넓은 잎 나무 ──────────────────────────────────────────────
 // 꼴 여섯 가지 × 잎 빛 세 벌(새순의 연두, 풀빛, 짙은 풀빛).
 const OAK_SHAPES: Mass[][] = [
@@ -186,13 +297,17 @@ export const oak: Maker = (pal, variant) => {
   const shape = OAK_SHAPES[variant % OAK_SHAPES.length];
   const rnd = rngOf(900 + variant * 13);
   const masses = shape.map((m) => ({ ...m, x: m.x + (rnd() - 0.5) * 2, y: m.y + (rnd() - 0.5) * 2 }));
+  const winter = pal.season === 'winter';
   return tree(
     W,
     H,
     (px) => {
-      trunk(px, pal.bark, { x: 28, yTop: 34, yBot: 62, wTop: 5, wBot: 7, roots: true, seed: 3 + variant, curve: 0.7 });
+      trunk(px, pal.bark, { x: 28, yTop: winter ? 30 : 34, yBot: 62, wTop: winter ? 4 : 5, wBot: 7, roots: true, seed: 3 + variant, curve: 0.7 });
     },
-    (px) => leafMasses(px, masses, leaf, pal.bark, { seed: 100 + variant * 17, clump: [5, 4], from: [28, 42] }),
+    (px) =>
+      winter
+        ? bareCrown(px, masses, pal.bark, { seed: 100 + variant * 17, hubs: [[28, 38], [27, 31]], snow: pal.snow })
+        : leafMasses(px, masses, leaf, pal.bark, { seed: 100 + variant * 17, clump: [5, 4], from: [28, 42] }),
     {
       ax: 28,
       ay: 63,
@@ -201,7 +316,8 @@ export const oak: Maker = (pal, variant) => {
       leafSoft: leaf[1],
       swayTop: 2,
       swayBot: 42,
-      shades: [{ dx: 7, dy: 0, rx: 20, ry: 7.5, dapple: true, strength: 0.3 }],
+      bare: winter,
+      shades: [{ dx: 7, dy: 0, rx: 20, ry: 7.5, dapple: true, strength: winter ? WINTER_SHADE : 0.3 }],
     },
   );
 };
@@ -232,11 +348,15 @@ export const young: Maker = (pal, variant) => {
     ],
   ];
   const masses = shapes[variant % shapes.length];
+  const winter = pal.season === 'winter';
   return tree(
     W,
     H,
-    (px) => trunk(px, pal.bark, { x: 17, yTop: 22, yBot: 40, wTop: 3, wBot: 4, roots: false, seed: 9 + variant, curve: 0.5 }),
-    (px) => leafMasses(px, masses, leaf, pal.bark, { seed: 200 + variant * 13, clump: [4, 3], from: [17, 28] }),
+    (px) => trunk(px, pal.bark, { x: 17, yTop: winter ? 18 : 22, yBot: 40, wTop: winter ? 2 : 3, wBot: 4, roots: false, seed: 9 + variant, curve: 0.5 }),
+    (px) =>
+      winter
+        ? bareCrown(px, masses, pal.bark, { seed: 200 + variant * 13, hubs: [[17, 26], [17, 19]], snow: pal.snow })
+        : leafMasses(px, masses, leaf, pal.bark, { seed: 200 + variant * 13, clump: [4, 3], from: [17, 28] }),
     {
       ax: 17,
       ay: 41,
@@ -245,10 +365,22 @@ export const young: Maker = (pal, variant) => {
       leafSoft: leaf[1],
       swayTop: 2,
       swayBot: 30,
-      shades: [{ dx: 5, dy: 0, rx: 12, ry: 5, dapple: true, strength: 0.28 }],
+      bare: winter,
+      shades: [{ dx: 5, dy: 0, rx: 12, ry: 5, dapple: true, strength: winter ? WINTER_SHADE : 0.28 }],
     },
   );
 };
+
+/** 겨울: 솔잎 층마다 위쪽에 눈이 얹힌다(층의 아래쪽은 푸른 솔잎이 보인다) */
+function snowyPads(pal: Palette, pads: Blob[]): Blob[] {
+  if (pal.season !== 'winter') return pads;
+  const out: Blob[] = [];
+  for (const p of pads) {
+    const sq = p.squash ?? 1;
+    out.push(p, { x: p.x - p.r * 0.06, y: p.y - p.r * sq * 0.42, r: p.r * 0.86, squash: sq * 0.62, lift: (p.lift ?? 0) + p.r * 0.2, ramp: pal.snow });
+  }
+  return out;
+}
 
 // ── 소나무 ───────────────────────────────────────────────────
 // 붉은 줄기가 조금 휘고, 솔잎이 층층이 납작한 뭉치로 얹힌다.
@@ -267,6 +399,7 @@ function pineOf(pal: Palette, variant: number, small: boolean): SpriteDef {
   ];
   if (variant === 2) pads = pads.slice(0, 4).map((p, i) => ({ ...p, x: p.x + (i % 2 ? 2 : -2), r: p.r * 1.05 }));
   pads = jitter(pads, 71 + variant + (small ? 9 : 0), 1.4);
+  pads = snowyPads(pal, pads);
   const yBot = H - 4;
   return tree(
     W,
@@ -328,7 +461,7 @@ export const oldpine: Maker = (pal, variant) => {
       // 부러진 곁가지
       branch(px, pal.pineBark, cx - dir * 1, 66, cx - dir * 11, 61, 2);
     },
-    (px) => canopy(px, pads, pal.pine, { seed: 330 + variant * 19, clump: [4, 3], spiky: 2.4 }),
+    (px) => canopy(px, snowyPads(pal, pads), pal.pine, { seed: 330 + variant * 19, clump: [4, 3], spiky: 2.4 }),
     {
       ax: cx - dir * 2,
       ay: 87,
@@ -363,23 +496,27 @@ export const blossom: Maker = (pal, variant) => {
   ];
   blobs = jitter(blobs, 91 + variant, 1.8);
   if (variant === 2) blobs = blobs.map((b) => ({ ...b, x: W - b.x }));
+  const winter = pal.season === 'winter';
   return tree(
     W,
     H,
     (px) => {
-      trunk(px, pal.bark, { x: 23, yTop: 28, yBot: 48, wTop: 3, wBot: 5, roots: false, seed: 17 + variant, curve: 1.1 });
+      trunk(px, pal.bark, { x: 23, yTop: winter ? 24 : 28, yBot: 48, wTop: winter ? 2 : 3, wBot: 5, roots: false, seed: 17 + variant, curve: 1.1 });
       branch(px, pal.bark, 22, 36, 14, 28, 2);
       branch(px, pal.bark, 24, 38, 32, 29, 2);
     },
     (px) =>
-      canopy(px, blobs, petals, {
-        seed: 400 + variant * 23,
-        clump: [5, 4],
-        accent: { ramp: pal.leafWarm, share: 0.14 },
-        bias: 0.06,
-        crease: 0.13,
-        sparkle: 0.09,
-      }),
+      winter
+        ? bareCrown(px, blobs, pal.bark, { seed: 400 + variant * 23, hubs: [[23, 32], [15, 28], [31, 29]], snow: pal.snow })
+        : canopy(px, blobs, petals, {
+            seed: 400 + variant * 23,
+            clump: [5, 4],
+            // 꽃 사이의 새잎(봄). 꽃이 진 뒤에는 잎만 무성하다.
+            accent: { ramp: pal.leafWarm, share: 0.14 },
+            bias: 0.06,
+            crease: pal.flowers ? 0.13 : 0.22,
+            sparkle: pal.flowers ? 0.09 : 0,
+          }),
     {
       ax: 23,
       ay: 49,
@@ -388,7 +525,8 @@ export const blossom: Maker = (pal, variant) => {
       leafSoft: petals[1],
       swayTop: 2,
       swayBot: 34,
-      shades: [{ dx: 6, dy: 0, rx: 16, ry: 6, dapple: true, strength: 0.26 }],
+      bare: winter,
+      shades: [{ dx: 6, dy: 0, rx: 16, ry: 6, dapple: true, strength: winter ? WINTER_SHADE : 0.26 }],
     },
   );
 };
@@ -425,6 +563,27 @@ export const willow: Maker = (pal, variant) => {
         seed: 23 + variant,
       }),
     (px) => {
+      if (pal.season === 'winter') {
+        // 겨울: 잎이 진 가지가 실처럼 늘어진다
+        bareCrown(px, blobs, pal.bark, { seed: 500 + variant * 29, hubs: [[cx, 24], [cx, 18]], snow: pal.snow, twigs: 0.7 });
+        for (let x = 3; x < W - 3; x++) {
+          if (hash2(x, variant, 525) < 0.42) continue;
+          let y0 = -1;
+          for (let y = 0; y < 34; y++) {
+            if (px.get(x, y) !== 0) {
+              y0 = y;
+              break;
+            }
+          }
+          if (y0 < 0) continue;
+          const len = Math.round(12 + hash2(x, variant, 526) * 22);
+          for (let k = 1; k < len && y0 + k < H - 8; k++) {
+            if (hash2(x, y0 + k, 527) < 0.1) continue;
+            px.set(x + Math.round(Math.sin(k / 7 + x) * 0.6), y0 + k, leaf[k > len - 3 ? 3 : 2]);
+          }
+        }
+        return;
+      }
       canopy(px, blobs, leaf, { seed: 500 + variant * 29, clump: [4, 4] });
       // 늘어진 가지: 세로로 길게 드리운 잎의 줄
       const n = leaf.length - 1;
@@ -462,7 +621,8 @@ export const willow: Maker = (pal, variant) => {
       swayBot: 52,
       bottomHeavy: true,
       amount: 2,
-      shades: [{ dx: 6, dy: 0, rx: 20, ry: 7.5, dapple: true, strength: 0.28 }],
+      bare: pal.season === 'winter',
+      shades: [{ dx: 6, dy: 0, rx: 20, ry: 7.5, dapple: true, strength: pal.season === 'winter' ? WINTER_SHADE : 0.28 }],
     },
   );
 };
@@ -532,7 +692,16 @@ export const zelkova: Maker = (pal) => {
       branch(px, bark, cx - 2, 96, cx + 2, 46, 11);
       branch(px, bark, cx + 10, 98, cx + 52, 62, 10);
     },
-    (px) => leafMasses(px, masses, leaf, bark, { seed: 600, clump: [7, 6], from: [cx, 92], core: 0.4 }),
+    (px) =>
+      pal.season === 'winter'
+        ? bareCrown(px, masses, bark, {
+            seed: 600,
+            // 세 갈래 큰 가지의 끝과 가운데에서 다시 갈라진다
+            hubs: [[cx - 50, 60], [cx + 2, 46], [cx + 52, 62], [cx - 30, 78], [cx + 30, 80], [cx, 70]],
+            snow: pal.snow,
+            twigs: 1.25,
+          })
+        : leafMasses(px, masses, leaf, bark, { seed: 600, clump: [7, 6], from: [cx, 92], core: 0.4 }),
     {
       ax: cx,
       ay: 178,
@@ -541,7 +710,8 @@ export const zelkova: Maker = (pal) => {
       leafSoft: leaf[1],
       swayTop: 0,
       swayBot: 104,
-      shades: [{ dx: 18, dy: 3, rx: 86, ry: 27, dapple: true, broad: true, strength: 0.3 }],
+      bare: pal.season === 'winter',
+      shades: [{ dx: 18, dy: 3, rx: 86, ry: 27, dapple: true, broad: true, strength: pal.season === 'winter' ? WINTER_SHADE : 0.3 }],
       sort: -2,
     },
   );
@@ -572,7 +742,10 @@ export const bigtree: Maker = (pal) => {
       // 그네를 맬 만한 굵은 곁가지
       branch(px, pal.bark, cx + 4, 64, cx + 34, 59, 3);
     },
-    (px) => leafMasses(px, masses, leaf, pal.bark, { seed: 700, clump: [6, 5], from: [cx, 52], core: 0.38 }),
+    (px) =>
+      pal.season === 'winter'
+        ? bareCrown(px, masses, pal.bark, { seed: 700, hubs: [[cx, 50], [cx - 12, 40], [cx + 14, 40], [cx, 32]], snow: pal.snow, twigs: 1.15 })
+        : leafMasses(px, masses, leaf, pal.bark, { seed: 700, clump: [6, 5], from: [cx, 52], core: 0.38 }),
     {
       ax: cx,
       ay: 94,
@@ -581,7 +754,8 @@ export const bigtree: Maker = (pal) => {
       leafSoft: leaf[1],
       swayTop: 0,
       swayBot: 60,
-      shades: [{ dx: 10, dy: 1, rx: 40, ry: 13, dapple: true, broad: true, strength: 0.3 }],
+      bare: pal.season === 'winter',
+      shades: [{ dx: 10, dy: 1, rx: 40, ry: 13, dapple: true, broad: true, strength: pal.season === 'winter' ? WINTER_SHADE : 0.3 }],
       sort: -2,
     },
   );
@@ -589,6 +763,7 @@ export const bigtree: Maker = (pal) => {
 
 // ── 덤불 ─────────────────────────────────────────────────────
 function shrub(pal: Palette, variant: number, kind: 'bush' | 'azalea' | 'forsythia'): SpriteDef {
+  if (pal.season === 'winter') return bareShrub(pal, variant, 140 + kind.length * 3);
   const W = 24;
   const H = 20;
   const leaf: Ramp = kind === 'forsythia' ? pal.leafWarm : pal.leaf;
@@ -602,11 +777,14 @@ function shrub(pal: Palette, variant: number, kind: 'bush' | 'azalea' | 'forsyth
     131 + variant + (kind === 'azalea' ? 5 : kind === 'forsythia' ? 9 : 0),
     1.2,
   );
+  // 진달래와 개나리는 봄에만 꽃이 핀다. 다른 계절에는 잎만 무성하다.
   const accent =
     kind === 'azalea'
       ? { ramp: pal.azalea, share: 0.62 }
       : kind === 'forsythia'
-        ? { ramp: pal.yellow, share: 0.7 }
+        ? pal.flowers
+          ? { ramp: pal.yellow, share: 0.7 }
+          : { ramp: pal.leaf, share: 0.4 }
         : variant === 2
           ? { ramp: pal.leafWarm, share: 0.3 }
           : undefined;

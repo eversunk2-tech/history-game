@@ -1,0 +1,774 @@
+{
+ "note": "make-before.mjs가 쓴다. 느티골(봄)의 대문 앞. 좌표는 맵의 점(칸 = 16점).",
+ "cam": {
+  "x": 676,
+  "y": 392
+ },
+ "view": {
+  "w": 341,
+  "h": 256
+ },
+ "tiles": {
+  "x0": 41,
+  "y0": 23,
+  "codes": "gmFTpyrsPfwdbBkKS"
+ },
+ "terrain": [
+  "gppggyyyyyyyyyyyyyygggggg",
+  "gppggyyyyyyyyyyyyyygggggg",
+  "ggpggyyyyyyyyyyyyyygggggg",
+  "ggpggyyyyyyyyyyyyyyggyyyp",
+  "ggppgggggggppggggggggyypp",
+  "gggpgggggggpppppppppppppp",
+  "gggppggggggppgggggggggggg",
+  "ggggpygggggppgggggggggggg",
+  "gggyyyyygggppgggggggggggg",
+  "ygyyyyyygggppggggggyggggg",
+  "yygyyyyppppppgggyyyyyyggg",
+  "yyggypyggggppgggyypyyyggg",
+  "yggggpgggggppgggggpyggggg",
+  "gggggpgggggppgggggpgggggg",
+  "ppppppppppppppppppppppppp",
+  "ppppppppppppppppppppppppp",
+  "gggpgyyyyyygggggggggggggg",
+  "gggpyyyyyyyyyyggggggggggg",
+  "gggpyyyyyyyyyyygggggggggg",
+  "gggpyyyyyyyyyyggggggggggg",
+  "gggpgyyyyyyyggggggggggggg"
+ ],
+ "things": [
+  {
+   "kind": "wallH",
+   "variant": 0,
+   "tx": 45,
+   "ty": 27,
+   "ax": 728,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 2,
+   "tx": 46,
+   "ty": 27,
+   "ax": 744,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 2,
+   "tx": 47,
+   "ty": 27,
+   "ax": 760,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 2,
+   "tx": 48,
+   "ty": 27,
+   "ax": 776,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 0,
+   "tx": 49,
+   "ty": 27,
+   "ax": 792,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 1,
+   "tx": 50,
+   "ty": 27,
+   "ax": 808,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 2,
+   "tx": 51,
+   "ty": 27,
+   "ax": 824,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 0,
+   "tx": 54,
+   "ty": 27,
+   "ax": 872,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 0,
+   "tx": 55,
+   "ty": 27,
+   "ax": 888,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 2,
+   "tx": 56,
+   "ty": 27,
+   "ax": 904,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 1,
+   "tx": 57,
+   "ty": 27,
+   "ax": 920,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 2,
+   "tx": 58,
+   "ty": 27,
+   "ax": 936,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 2,
+   "tx": 59,
+   "ty": 27,
+   "ax": 952,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallH",
+   "variant": 2,
+   "tx": 60,
+   "ty": 27,
+   "ax": 968,
+   "ay": 444,
+   "w": 16,
+   "h": 30
+  },
+  {
+   "kind": "wallV",
+   "variant": 1,
+   "tx": 45,
+   "ty": 24,
+   "ax": 728,
+   "ay": 396,
+   "w": 14,
+   "h": 38
+  },
+  {
+   "kind": "wallV",
+   "variant": 0,
+   "tx": 45,
+   "ty": 25,
+   "ax": 728,
+   "ay": 412,
+   "w": 14,
+   "h": 38
+  },
+  {
+   "kind": "wallV",
+   "variant": 0,
+   "tx": 45,
+   "ty": 26,
+   "ax": 728,
+   "ay": 428,
+   "w": 14,
+   "h": 38
+  },
+  {
+   "kind": "wallV",
+   "variant": 1,
+   "tx": 60,
+   "ty": 24,
+   "ax": 968,
+   "ay": 396,
+   "w": 14,
+   "h": 38
+  },
+  {
+   "kind": "wallV",
+   "variant": 0,
+   "tx": 60,
+   "ty": 25,
+   "ax": 968,
+   "ay": 412,
+   "w": 14,
+   "h": 38
+  },
+  {
+   "kind": "wallV",
+   "variant": 0,
+   "tx": 60,
+   "ty": 26,
+   "ax": 968,
+   "ay": 428,
+   "w": 14,
+   "h": 38
+  },
+  {
+   "kind": "gate",
+   "variant": 0,
+   "tx": 51,
+   "ty": 27,
+   "ax": 824,
+   "ay": 444,
+   "w": 64,
+   "h": 62
+  },
+  {
+   "kind": "blossom",
+   "variant": 1,
+   "tx": 58,
+   "ty": 25,
+   "ax": 936,
+   "ay": 412,
+   "w": 46,
+   "h": 52
+  },
+  {
+   "kind": "flatstone",
+   "variant": 0,
+   "tx": 57,
+   "ty": 25,
+   "ax": 920,
+   "ay": 412,
+   "w": 22,
+   "h": 14
+  },
+  {
+   "kind": "jars",
+   "variant": 1,
+   "tx": 42,
+   "ty": 32,
+   "ax": 688,
+   "ay": 526,
+   "w": 34,
+   "h": 30
+  },
+  {
+   "kind": "fenceH",
+   "variant": 1,
+   "tx": 41,
+   "ty": 36,
+   "ax": 664,
+   "ay": 588,
+   "w": 16,
+   "h": 22
+  },
+  {
+   "kind": "fenceH",
+   "variant": 0,
+   "tx": 42,
+   "ty": 36,
+   "ax": 680,
+   "ay": 588,
+   "w": 16,
+   "h": 22
+  },
+  {
+   "kind": "fenceH",
+   "variant": 0,
+   "tx": 43,
+   "ty": 36,
+   "ax": 696,
+   "ay": 588,
+   "w": 16,
+   "h": 22
+  },
+  {
+   "kind": "fenceH",
+   "variant": 1,
+   "tx": 44,
+   "ty": 36,
+   "ax": 712,
+   "ay": 588,
+   "w": 16,
+   "h": 22
+  },
+  {
+   "kind": "blossom",
+   "variant": 0,
+   "tx": 44,
+   "ty": 31,
+   "ax": 712,
+   "ay": 508,
+   "w": 46,
+   "h": 52
+  },
+  {
+   "kind": "well",
+   "variant": 0,
+   "tx": 46,
+   "ty": 33,
+   "ax": 752,
+   "ay": 542,
+   "w": 38,
+   "h": 34
+  },
+  {
+   "kind": "oak",
+   "variant": 0,
+   "tx": 49,
+   "ty": 31,
+   "ax": 792,
+   "ay": 508,
+   "w": 56,
+   "h": 66
+  },
+  {
+   "kind": "flatstone",
+   "variant": 1,
+   "tx": 44,
+   "ty": 34,
+   "ax": 712,
+   "ay": 556,
+   "w": 22,
+   "h": 14
+  },
+  {
+   "kind": "choga",
+   "variant": 4,
+   "tx": 57,
+   "ty": 32,
+   "ax": 960,
+   "ay": 526,
+   "w": 108,
+   "h": 94
+  },
+  {
+   "kind": "jars",
+   "variant": 0,
+   "tx": 63,
+   "ty": 32,
+   "ax": 1024,
+   "ay": 526,
+   "w": 34,
+   "h": 30
+  },
+  {
+   "kind": "blossom",
+   "variant": 2,
+   "tx": 55,
+   "ty": 31,
+   "ax": 888,
+   "ay": 508,
+   "w": 46,
+   "h": 52
+  },
+  {
+   "kind": "stonewallH",
+   "variant": 0,
+   "tx": 56,
+   "ty": 36,
+   "ax": 904,
+   "ay": 588,
+   "w": 16,
+   "h": 18
+  },
+  {
+   "kind": "stonewallH",
+   "variant": 2,
+   "tx": 57,
+   "ty": 36,
+   "ax": 920,
+   "ay": 588,
+   "w": 16,
+   "h": 18
+  },
+  {
+   "kind": "stonewallH",
+   "variant": 2,
+   "tx": 58,
+   "ty": 36,
+   "ax": 936,
+   "ay": 588,
+   "w": 16,
+   "h": 18
+  },
+  {
+   "kind": "stonewallH",
+   "variant": 2,
+   "tx": 61,
+   "ty": 36,
+   "ax": 984,
+   "ay": 588,
+   "w": 16,
+   "h": 18
+  },
+  {
+   "kind": "stonewallH",
+   "variant": 2,
+   "tx": 62,
+   "ty": 36,
+   "ax": 1000,
+   "ay": 588,
+   "w": 16,
+   "h": 18
+  },
+  {
+   "kind": "stonewallH",
+   "variant": 1,
+   "tx": 63,
+   "ty": 36,
+   "ax": 1016,
+   "ay": 588,
+   "w": 16,
+   "h": 18
+  },
+  {
+   "kind": "stonewallH",
+   "variant": 0,
+   "tx": 64,
+   "ty": 36,
+   "ax": 1032,
+   "ay": 588,
+   "w": 16,
+   "h": 18
+  },
+  {
+   "kind": "tuft",
+   "variant": 0,
+   "tx": 41,
+   "ty": 28,
+   "ax": 670,
+   "ay": 465,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 3,
+   "tx": 55,
+   "ty": 29,
+   "ax": 889,
+   "ay": 477,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 1,
+   "tx": 58,
+   "ty": 29,
+   "ax": 939,
+   "ay": 474,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 2,
+   "tx": 60,
+   "ty": 29,
+   "ax": 966,
+   "ay": 475,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 2,
+   "tx": 42,
+   "ty": 30,
+   "ax": 675,
+   "ay": 487,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 1,
+   "tx": 54,
+   "ty": 31,
+   "ax": 876,
+   "ay": 507,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 0,
+   "tx": 55,
+   "ty": 33,
+   "ax": 884,
+   "ay": 538,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 3,
+   "tx": 56,
+   "ty": 33,
+   "ax": 900,
+   "ay": 537,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 0,
+   "tx": 51,
+   "ty": 34,
+   "ax": 820,
+   "ay": 552,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 1,
+   "tx": 55,
+   "ty": 35,
+   "ax": 891,
+   "ay": 567,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 3,
+   "tx": 57,
+   "ty": 35,
+   "ax": 920,
+   "ay": 567,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 3,
+   "tx": 55,
+   "ty": 39,
+   "ax": 890,
+   "ay": 632,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 2,
+   "tx": 57,
+   "ty": 39,
+   "ax": 921,
+   "ay": 635,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 1,
+   "tx": 62,
+   "ty": 39,
+   "ax": 1001,
+   "ay": 633,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 3,
+   "tx": 64,
+   "ty": 39,
+   "ax": 1029,
+   "ay": 633,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 3,
+   "tx": 42,
+   "ty": 40,
+   "ax": 675,
+   "ay": 651,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 2,
+   "tx": 60,
+   "ty": 40,
+   "ax": 973,
+   "ay": 655,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 1,
+   "tx": 42,
+   "ty": 41,
+   "ax": 679,
+   "ay": 667,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 2,
+   "tx": 42,
+   "ty": 42,
+   "ax": 674,
+   "ay": 688,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 3,
+   "tx": 55,
+   "ty": 42,
+   "ax": 888,
+   "ay": 687,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 1,
+   "tx": 43,
+   "ty": 43,
+   "ax": 692,
+   "ay": 696,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 0,
+   "tx": 55,
+   "ty": 43,
+   "ax": 894,
+   "ay": 699,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "tuft",
+   "variant": 3,
+   "tx": 51,
+   "ty": 44,
+   "ax": 821,
+   "ay": 713,
+   "w": 12,
+   "h": 10
+  },
+  {
+   "kind": "flower",
+   "variant": 1,
+   "tx": 54,
+   "ty": 31,
+   "ax": 868,
+   "ay": 510,
+   "w": 10,
+   "h": 11
+  },
+  {
+   "kind": "flower",
+   "variant": 4,
+   "tx": 54,
+   "ty": 36,
+   "ax": 869,
+   "ay": 589,
+   "w": 10,
+   "h": 11
+  },
+  {
+   "kind": "rockS",
+   "variant": 1,
+   "tx": 44,
+   "ty": 23,
+   "ax": 717,
+   "ay": 384,
+   "w": 12,
+   "h": 9
+  }
+ ],
+ "people": [
+  {
+   "id": "hero",
+   "sprite": "farmer-boy",
+   "x": 840,
+   "y": 494,
+   "dir": "down",
+   "act": "idle",
+   "frame": 0,
+   "label": "주인공(농민 집 아이)"
+  },
+  {
+   "id": "elder",
+   "sprite": "elderMan",
+   "x": 918,
+   "y": 556,
+   "dir": "down",
+   "act": "idle",
+   "frame": 0,
+   "label": "마을 어른"
+  },
+  {
+   "id": "woman",
+   "sprite": "wellWoman",
+   "x": 784,
+   "y": 541,
+   "dir": "down",
+   "act": "work",
+   "frame": 1,
+   "label": "우물가 아주머니"
+  }
+ ],
+ "critters": [
+  {
+   "id": "hen",
+   "sprite": "hen",
+   "x": 968,
+   "y": 554,
+   "flip": false
+  },
+  {
+   "id": "magpie",
+   "sprite": "magpie",
+   "x": 920,
+   "y": 634,
+   "flip": true
+  }
+ ],
+ "close": {
+  "w": 40,
+  "h": 48,
+  "up": 40
+ }
+}

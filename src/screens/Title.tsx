@@ -5,15 +5,14 @@ import type { JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { Scenery } from '../art/Scenery';
 import { getPack } from '../content';
-import { seasonLabels } from '../content/labels';
 import { seasonReady } from '../engine/game';
-import { SEASONS } from '../engine/types';
 import { BUILD, type LoadStatus } from '../state/storage';
 import { canContinue, continueGame, dropCurrent, goBook, goSheet, loadStatus, save, wipeAll } from '../state/store';
 import { inTabOnTablet, standalone } from '../state/device';
 import { Ask } from '../ui/Ask';
 import { DeviceInfo } from '../ui/DeviceInfo';
 import { InstallGuide } from '../ui/InstallGuide';
+import { savedLineOf } from '../ui/year';
 
 /** 저장을 읽은 결과를 알리는 말(없으면 알리지 않는다) */
 const NOTICES: Partial<Record<LoadStatus, string>> = {
@@ -21,24 +20,21 @@ const NOTICES: Partial<Record<LoadStatus, string>> = {
   yearLost: '게임이 새로워져서 이 해는 봄부터 다시 해요. 깬 이야기와 수첩은 그대로예요.',
   unreadable: '기록을 읽을 수 없어서 처음부터 해요.',
   newer: '게임을 새로 받아야 해요. 이 화면을 닫고 다시 열어 주세요.',
+  clearedLost: '깬 이야기의 기록 가운데 읽을 수 없는 것이 있어서 빼 두었어요. 나머지는 그대로예요.',
 };
 
 /**
- * 하던 이야기 한 줄: "1395년 봄 · 농민 집 아이".
- * 만들어진 계절을 다 보내고 다음 계절이 아직 없는 저장이면 "1395년 봄까지 했어요 · 농민 집 아이"로 사실대로 적는다
- * (눌러 보면 "여름은 다음에 만들어요"가 뜨는데 "1395년 여름"이라고 적지 않는다).
+ * 하던 이야기 한 줄(셈은 ui/year.ts의 savedLineOf):
+ *   "1395년 여름 · 농민 집 아이" — 그 계절의 맵에서 이어진다.
+ *   "1395년 여름을 보내는 중 · 농민 집 아이" — 계절 닫기에서 이어진다.
+ *   "1395년 한 해 돌아보기 · 농민 집 아이" — 겨울까지 보내고 돌아보기를 마치지 않은 해.
+ *   "1395년 봄까지 했어요 · 농민 집 아이" — 다음 계절이 아직 만들어지지 않은 저장(눌러 보면 "다음에 만들어요"가 뜬다).
  */
 function savedLine(): string {
   const cur = save.value.current;
   const p = cur ? getPack(cur.situationId) : undefined;
   if (!cur || !p) return '';
-  const index = Math.max(0, Math.min(cur.seasonIndex, SEASONS.length - 1));
-  const role = p.situation.roles.find((r) => r.id === cur.role)?.label ?? '';
-  const tail = role ? ` · ${role}` : '';
-  if (cur.phase === 'season' && index > 0 && !seasonReady(p, cur.role, SEASONS[index])) {
-    return `${p.situation.year}년 ${seasonLabels[SEASONS[index - 1]].label}까지 했어요${tail}`;
-  }
-  return `${p.situation.year}년 ${seasonLabels[SEASONS[index]].label}${tail}`;
+  return savedLineOf(p, cur, (season) => seasonReady(p, cur.role, season));
 }
 
 // 이 창에서(다시 불러오기 전까지) 안내를 이미 닫았는가, 탭에서 시작한다는 것을 이미 알렸는가
@@ -63,6 +59,8 @@ export function Title(): JSX.Element {
   const blocked = status === 'newer';
   const resume = canContinue.value;
   const inYear = Boolean(save.value.current);
+  // 겨울까지 보내고 한 해 돌아보기를 아직 마치지 않은 해
+  const yearDone = save.value.current?.phase === 'done';
 
   const begin = (): void => {
     if (inYear) setAsk('restart');
@@ -163,13 +161,32 @@ export function Title(): JSX.Element {
           }}
         />
       )}
-      {ask === 'restart' && (
+      {ask === 'restart' && !yearDone && (
         <Ask
           ask="처음부터 다시 할까요?"
           note="하던 이야기는 지워져요. 깬 이야기와 수첩은 그대로예요."
           yes="처음부터 한다"
           no="그만둘래요"
           onNo={() => setAsk(null)}
+          onYes={() => {
+            setAsk(null);
+            dropCurrent();
+            goBook();
+          }}
+        />
+      )}
+      {ask === 'restart' && yearDone && (
+        // 겨울까지 보내고 한 해 돌아보기를 마치지 않은 해(Review 1-라 33번): 지우면 한 해 이름도 깬 기록도 남지 않는다.
+        // 그만두는 쪽이 "한 해 이름 받으러 가기"(돌아보기로 이어 간다)다.
+        <Ask
+          ask="한 해를 끝까지 살았어요. 아직 한 해 이름을 받지 않았어요."
+          note="지우면 이 해는 이야기책에 찍히지 않아요. 그래도 지울까요?"
+          yes="그래도 지운다"
+          no="한 해 이름 받으러 가기"
+          onNo={() => {
+            setAsk(null);
+            continueGame();
+          }}
           onYes={() => {
             setAsk(null);
             dropCurrent();

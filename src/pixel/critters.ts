@@ -341,6 +341,17 @@ export function magpie(): Critter {
   return { frames: [stand, hop, fly1, fly2].map((rows) => outlined(art(rows, key))), ax: 5, ay: 8 };
 }
 
+// ── 참새 ─────────────────────────────────────────────────────
+// 가을 타작 마당의 낟알에 모여든다. 까치처럼 다가가면 날아오른다(장의 차례도 까치와 같다: 섬, 쪼기, 날갯짓 둘).
+export function sparrow(): Critter {
+  const key = { b: hex('#8a5a34'), B: hex('#5c3a22'), w: hex('#e9dcc0'), k: hex('#2a2422'), y: hex('#6a5a48') };
+  const stand = ['.bb....', 'ybkb...', '.wBBBb.', '..wwBBB', '..y.y..'];
+  const peck = ['.......', '.bbBBb.', 'ybkwBBB', '.w.y.y.', '.......'];
+  const fly1 = ['...BB..', '.bbBB..', 'ybkwBBB', '..ww...', '.......'];
+  const fly2 = ['.......', '.bb....', 'ybkwBBB', '..wBB..', '...BB..'];
+  return { frames: [stand, peck, fly1, fly2].map((rows) => outlined(art(rows, key))), ax: 4, ay: 6 };
+}
+
 export function butterfly(tone: 'white' | 'yellow'): Critter {
   const c = tone === 'white' ? hex('#fbf8ee') : hex('#f4d653');
   const d = tone === 'white' ? hex('#cfc8b6') : hex('#c99a2a');
@@ -369,6 +380,76 @@ export function driftSprites(pal: Palette): Px[] {
     return [art(['w'], { w }), art(['ww', 'wg'], { w, g }), art(['g'], { g }), art(['w'], { w })];
   }
   return [];
+}
+
+/** 잠자리(두 장: 날개를 폄, 접음). 여름의 논과 냇가 위를 떠다닌다. 빛깔은 둘(밀잠자리의 잿빛 푸른빛, 누런빛). */
+export function dragonfly(tone: 'blue' | 'amber'): Critter {
+  const body = tone === 'blue' ? hex('#4a6e98') : hex('#c98d42');
+  const tail = tone === 'blue' ? hex('#304b72') : hex('#a56a2e');
+  const wing = hex('#f1fbf4', 215);
+  const open = art(['ww...ww', '.wwbww.', '...b...', '...t...', '...t...'], { w: wing, b: body, t: tail });
+  const shut = art(['.......', 'wwwbwww', '...b...', '...t...', '...t...'], { w: wing, b: body, t: tail });
+  return { frames: [open, shut], ax: 3, ay: 2 };
+}
+
+/** 빗줄기(비스듬히 떨어지는 짧은 줄 셋)와 땅에 닿아 튀는 물방울 자국(석 장) */
+export function rainSprites(pal: Palette): { streaks: Px[]; splash: Px[] } {
+  const a = withAlphaOf(pal.water[6], 190);
+  const b = withAlphaOf(pal.water[5], 130);
+  const streak = (len: number): Px => {
+    const px = new Px(Math.ceil(len / 3) + 1, len);
+    for (let k = 0; k < len; k++) px.set(Math.floor((len - 1 - k) / 3), k, k < len / 2 ? b : a);
+    return px;
+  };
+  const w = withAlphaOf(pal.water[6], 220);
+  const g = withAlphaOf(pal.water[5], 150);
+  const pad = (rows: string[]): Px => {
+    const out = new Px(7, 4);
+    out.blit(art(rows, { w, g }), 0, 0);
+    return out;
+  };
+  return {
+    streaks: [streak(9), streak(7), streak(5)],
+    splash: [pad(['.......', '...w...', '..www..', '.......']), pad(['.......', '..g.g..', '.w...w.', '..ggg..']), pad(['.g...g.', '.......', 'g.....g', '.......'])],
+  };
+}
+
+const withAlphaOf = (c: Color, a: number): Color => ((c & 0x00ffffff) | (a << 24)) >>> 0;
+
+/** 논의 벼를 지나가는 바람결: 벼가 눕는 밝은 결(석 장) */
+export function cropGustFrames(pal: Palette): Px[] {
+  const a = pal.crop[3];
+  const b = pal.crop[2];
+  const pad = (rows: string[]): Px => {
+    const out = new Px(12, 5);
+    out.blit(art(rows, { a, b }), 0, 0);
+    return out;
+  };
+  return [
+    pad(['............', '....b.b.....', '...b........', '............', '............']),
+    pad(['...a.a.a....', '..b.a.a.b...', '.b.b...b.b..', '....b.b.....', '............']),
+    pad(['......a.a...', '....b...b.b.', '............', '.....b......', '............']),
+  ];
+}
+
+/** 논에 들어선 사람의 발치를 가리는 벼 포기(사람이 벼 사이에 서 있는 것으로 보인다). 물에 잠긴 논에서는 물결이다. */
+export function cropFront(pal: Palette): Px {
+  if (pal.rain) {
+    const a = pal.paddy[5];
+    const b = pal.paddy[1];
+    return art(['...............', '..aaaa...aaa...', '.b....bbb...bb.', '...bbb.....b...'], { a, b });
+  }
+  const a = pal.crop[3];
+  const b = pal.crop[2];
+  const c = pal.crop[1];
+  const d = pal.crop[0];
+  return art(['.a..b.a...a.b..', 'ab.bcab.babcab.', 'cbbcbcbcbcbbcbc', 'dccdcdcdccdcdcd'], { a, b, c, d });
+}
+
+/** 그 계절·날씨에 화면에 날리는 것들을 모두(빛깔 한 벌을 짤 때 센다) */
+export function weatherSprites(pal: Palette): Px[] {
+  const rain = rainSprites(pal);
+  return [...dragonfly('blue').frames, ...dragonfly('amber').frames, ...rain.streaks, ...rain.splash, ...cropGustFrames(pal), cropFront(pal)];
 }
 
 /** 굴뚝 연기 한 덩이(크기 셋). 왼쪽 위는 밝고 오른쪽 아래는 잿빛이며, 가장자리는 점을 섞어 흩어진다. */

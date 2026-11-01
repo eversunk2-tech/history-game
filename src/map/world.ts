@@ -18,7 +18,7 @@ import {
   type Pt,
   type WalkGrid,
 } from './path';
-import { dwellerName, TILE, type Dir, type Dweller, type MapData, type Spot, type Who } from './types';
+import { dwellerName, T, TILE, type Dir, type Dweller, type MapData, type Spot, type Who } from './types';
 
 /** 주인공의 걸음(점/초). 초당 다섯 칸 — 맵의 서쪽 끝에서 동쪽 끝까지 19초쯤 걸린다(spec 9.1). */
 export const WALK_SPEED = 80;
@@ -115,10 +115,11 @@ export interface World {
   arrive: Arrive;
   /** 까닭을 이미 보여 준 문(멀어지면 지운다) */
   shownGate: string | null;
-  /** 닫힌 문 너머로 가려고 눌렀는가(지나가기만 할 때는 까닭을 띄우지 않는다) */
+  /**
+   * 닫힌 문이나 그 너머를 눌렀는가. 이때만 문 앞에 멈춰 서면 까닭이 뜬다
+   * (다른 곳을 누르고 가다가 문 곁에 멈췄을 때는 뜨지 않는다 — 1-라 review 23번).
+   */
   wish: boolean;
-  /** 누른 곳에 다다라 멈춰 섰는지 볼 차례인가(문 앞에 멈춰 서면 까닭이 뜬다) */
-  settle: boolean;
   /** 화살표가 피해 갈 화면의 네모들(할 일 쪽지, 작은 지도). 기기 화소. */
   avoid: { x0: number; y0: number; x1: number; y1: number }[];
   shownNote: string | null;
@@ -254,7 +255,6 @@ export function createWorld(map: MapData, who: Who, heroSprite: string, startAt?
     arrive: null,
     shownGate: null,
     wish: false,
-    settle: false,
     avoid: [],
     shownNote: null,
     paused: false,
@@ -381,7 +381,6 @@ function setRoute(world: World, to: [number, number], arrive: Arrive): boolean {
 export function walkToMark(world: World, mark: Mark): void {
   if (world.paused) return;
   world.wish = false;
-  world.settle = false;
   setRoute(world, mark.spot.stand, { kind: 'mark', mark });
 }
 
@@ -390,7 +389,6 @@ function walkToGate(world: World, lock: Lock): void {
   const from = tileOf(world.player);
   const to = nearestReachable(world.grid, from, lock.x / TILE, lock.y / TILE);
   world.wish = true;
-  world.settle = true;
   world.shownGate = null;
   world.target = null;
   setRoute(world, to, null);
@@ -433,6 +431,16 @@ function besideOf(world: World, actor: Actor): [number, number] | null {
   return best;
 }
 
+/** 문 너머를 눌렀다고 치는 거리의 바탕(문마다 Gate.aim으로 정한다): 문 바로 뒤까지 */
+const AIM_AT_GATE = 2;
+
+/** (fx, fy)칸에서 가장 가까운 문의 칸까지의 거리(칸, 가로세로 가운데 큰 쪽) */
+function gateDistance(world: World, index: number, fx: number, fy: number): number {
+  let best = Infinity;
+  for (const [x, y] of world.locks[index].closed.gate.tiles) best = Math.min(best, Math.max(Math.abs(x + 0.5 - fx), Math.abs(y + 0.5 - fy)));
+  return best;
+}
+
 /** (fx, fy)칸에서 `within`보다 가까운 문 너머의 칸이 있으면 그 문의 차례를, 없으면 -1을 돌려준다(세 칸 안에서만 찾는다) */
 function beyondNear(world: World, fx: number, fy: number, within: number): number {
   const { map, beyond } = world;
@@ -464,7 +472,6 @@ export function tapWorld(world: World, wx: number, wy: number): void {
   world.wish = false;
   // 다시 누르면 문 앞의 까닭도 다시 뜬다
   world.shownGate = null;
-  world.settle = true;
   // 표시(깃발, 말풍선)
   for (const mark of world.marks) {
     const p = spotPoint(mark.spot);
@@ -481,11 +488,14 @@ export function tapWorld(world: World, wx: number, wy: number): void {
       return;
     }
   }
-  // 사람
+  // 사람. 논 안에 들어선 사람(종아리까지 벼와 물에 잠겨 보인다)은 머리와 가슴만 누름 자리로 친다
+  // (논둑길을 누르다 곁의 논 안 사람이 눌리지 않게 — 1-라 review 24번)
   let hit: Actor | null = null;
   for (const a of world.actors) {
     if (!a.def || a.def.animal || a.hidden) continue;
-    if (Math.abs(wx - a.x) <= 9 && wy >= a.y - 28 && wy <= a.y + 4) {
+    const t = world.map.terrain[Math.floor(a.y / TILE) * world.map.w + Math.floor(a.x / TILE)];
+    const sunk = t === T.paddy || t === T.soil;
+    if (Math.abs(wx - a.x) <= (sunk ? 6 : 9) && wy >= a.y - 28 && wy <= a.y + (sunk ? -10 : 4)) {
       if (!hit || a.y > hit.y) hit = a;
     }
   }
@@ -501,7 +511,7 @@ export function tapWorld(world: World, wx: number, wy: number): void {
   // 닫힌 문의 칸이나 그 너머(문만 열리면 갈 수 있는 칸)를 눌렀으면 그 문 앞으로 간다.
   // 문 너머의 지붕이나 담을 눌렀을 때도 그렇다: 누른 곳에서 갈 수 있는 칸보다 문 너머의 칸이 더 가까우면 문 너머를 누른 것이다.
   const behind = beyondNear(world, wx / TILE, wy / TILE, Math.hypot(to[0] + 0.5 - wx / TILE, to[1] + 0.5 - wy / TILE));
-  if (behind >= 0) {
+  if (behind >= 0 && gateDistance(world, behind, wx / TILE, wy / TILE) <= (world.locks[behind].closed.gate.aim ?? AIM_AT_GATE)) {
     walkToGate(world, world.locks[behind]);
     return;
   }
@@ -556,7 +566,6 @@ function stepPlayer(world: World, dt: number, events: WorldEvent[]): void {
     // 자판으로 걷기 시작하면 누른 곳으로 가던 길은 버린다
     p.route = [];
     world.wish = false;
-    world.settle = true;
     world.arrive = null;
     world.target = null;
     for (const a of world.actors) a.held = false;
@@ -615,13 +624,14 @@ function stepPlayer(world: World, dt: number, events: WorldEvent[]): void {
   }
   p.t += dt;
 
-  // 닫힌 문 한 칸 안에 멈춰 서면 까닭이 뜬다. 문 앞을 지나가기만 할 때는 뜨지 않는다.
-  // 한 번 뜬 까닭은 다시 누르거나(tapWorld) 세 칸 넘게 물러났다 오면 다시 뜬다. 자판으로는 문의 칸을 밀 때도 뜬다.
+  // 문이나 그 너머를 누르고 와서 닫힌 문 한 칸 안에 멈춰 서면 까닭이 뜬다. 문 앞을 지나가거나, 다른 곳을 누르고 가다가
+  // 문 곁에 멈췄을 때는 뜨지 않는다. 한 번 뜬 까닭은 다시 누르거나(tapWorld) 세 칸 넘게 물러났다 오면 다시 뜬다.
+  // 자판으로는 문의 칸을 밀 때 뜬다.
   const [tx, ty] = tileOf(p);
   const near = closedGateNear(world.map, world.who, tx, ty, 1);
   const still = p.route.length === 0 && keys.x === 0 && keys.y === 0;
   if (near) {
-    let trying = still && (world.wish || world.settle);
+    let trying = still && world.wish;
     if (!trying && (keys.x !== 0 || keys.y !== 0)) {
       trying = near.gate.tiles.some(
         ([gx, gy]) => (gx === tx + keys.x && gy === ty + keys.y) || (gx === tx + keys.x && gy === ty) || (gx === tx && gy === ty + keys.y),
@@ -634,7 +644,8 @@ function stepPlayer(world: World, dt: number, events: WorldEvent[]): void {
   } else if (world.shownGate && !closedGateNear(world.map, world.who, tx, ty, 3)) {
     world.shownGate = null;
   }
-  if (still) world.settle = false;
+  // 멈춰 선 뒤에는 바람을 거둔다(그다음에 문 곁에 서는 것은 문을 누르고 온 것이 아니다)
+  if (still) world.wish = false;
   // 맵 끝의 길목
   const note = world.map.notes.find((n) => tx >= n.rect[0] && tx <= n.rect[2] && ty >= n.rect[1] && ty <= n.rect[3]);
   if (note) {
@@ -653,8 +664,8 @@ function stepActor(world: World, a: Actor, dt: number): void {
   const p = world.player;
   const nearPlayer = Math.hypot(p.x - a.x, p.y - a.y);
 
-  // 까치는 사람이 다가오면 날아올랐다가 돌아온다
-  if (def.sprite === 'magpie') {
+  // 까치와 참새는 사람이 다가오면 날아올랐다가 돌아온다
+  if (def.sprite === 'magpie' || def.sprite === 'sparrow') {
     if (a.act === 'fly') {
       a.x += 70 * dt;
       a.y -= 34 * dt;

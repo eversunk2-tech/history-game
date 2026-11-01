@@ -7,6 +7,8 @@ import './styles/map.css';
 import './styles/band.css';
 import './styles/talk.css';
 import './styles/device.css';
+import './styles/plays.css';
+import './styles/year.css';
 import { App } from './app/App';
 import { bundle } from './content';
 import { errorsOf, formatIssue, validateContent } from './content/validate';

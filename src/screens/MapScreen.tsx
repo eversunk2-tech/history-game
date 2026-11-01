@@ -8,6 +8,7 @@
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { getMap } from '../content';
+import { mapLook, seasonalMap } from '../content/maps';
 import {
   canCloseSeason,
   currentSeason,
@@ -27,7 +28,7 @@ import { scaleFor } from '../map/camera';
 import { render, stepScene, type View } from '../map/draw';
 import { tileOf } from '../map/path';
 import { openSession, type MapSession } from '../map/session';
-import { TILE, zoneAt, type MapData } from '../map/types';
+import { TILE, zoneAt, type MapData, type Weather } from '../map/types';
 import {
   dayLight,
   interact,
@@ -47,6 +48,7 @@ import { artSeason, game, gameNo, heroName, mapBusy, markPlace, missionQueue, op
 import { packBits, unpackBits } from '../state/storage';
 import { BagPanel, PastPanel } from '../ui/Panels';
 import { TopBand } from '../ui/TopBand';
+import { countWord } from '../ui/words';
 import { MissionDone } from './MissionDone';
 import { Talk } from './Talk';
 
@@ -65,12 +67,6 @@ interface Waiting {
   toast: Toast;
   ms: number;
   when?: () => boolean;
-}
-
-const COUNT_WORDS = ['', '하나', '둘', '셋', '넷', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
-/** 수를 우리말로(하나 · 둘 · 셋 …). 열을 넘으면 숫자 그대로. */
-function countWord(n: number): string {
-  return COUNT_WORDS[n] ?? String(n);
 }
 
 const KEY_DIRS: Record<string, [number, number]> = {
@@ -133,6 +129,8 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
   const miniBoxRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<World | null>(null);
   const [ready, setReady] = useState(false);
+  /** 맵의 판을 몇 번째로 세웠는가. 계절이나 맵의 모습이 바뀌어 판을 새로 지으면 하나 는다(새 판에 표시·사람·빛을 다시 건다). */
+  const [worldNo, setWorldNo] = useState(0);
   const [toast, setToast] = useState<Toast | null>(null);
   const [guide, setGuide] = useState<string | null>(null);
   // 쪽지는 접힌 채로 시작한다(처음 들어섰을 때 맵이 먼저 보이게). 머리줄에 화살표가 가리키는 일의 이름이 보인다.
@@ -151,7 +149,6 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
 
   const season = currentSeason(g);
   const role = roleOf(p, g.role);
-  const map = getMap(role.map);
   const busy = mapBusy.value;
   const talking = talk.value;
   const doneMission = missionQueue.value[0];
@@ -159,10 +156,21 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
   const missions = useMemo(() => missionViews(p, g), [p, g.done, g.solved, g.flags, g.sunsLeft, g.stats, g.items, g.phase, g.seasonIndex]);
   const openRef = useRef(open);
   openRef.current = open;
-  // 개발 때 견본의 계절 빛으로 맵을 볼 수 있다(?season=). 보통은 그 계절의 빛이다.
+  // 개발 때 견본의 계절로 맵을 볼 수 있다(?season=). 보통은 판의 계절이다.
   const tone = import.meta.env.DEV && artSeason.value !== 'spring' ? artSeason.value : season;
-  // 판의 번호가 들어 있어, 같은 씨앗·같은 모습으로 새 판을 열어도 앞 판의 자리를 이어받지 않는다
-  const key = `${gameNo.value}|${g.situationId}|${g.seed}|${g.seasonIndex}|${g.role}|${g.look}|${tone}`;
+  // 날씨: 큰비가 온 해('drought'가 뽑힌 해)의 여름에는 비가 오고 냇물이 불어난다. 여름에 들어설 때 뽑혀 판에 적힌다.
+  // 개발 때만 주소로 고를 수 있다(?draw=drought — 판에 뽑힌 것이 있으면 그것이 먼저다).
+  const drawn = g.draw ?? (import.meta.env.DEV ? new URLSearchParams(window.location.search).get('draw') : null);
+  const flood = drawn === 'drought';
+  const sky: Weather = tone === 'summer' && flood ? 'rain' : 'clear';
+  // 같은 맵이 계절마다 다른 모습으로 지어진다(자리와 처음 서는 칸은 같다).
+  // 이야기의 때에 따라서도 갈린다: 가을에는 장정들이 떠나고 돌아오고 가을걷이를 마치는 대로,
+  // 큰비가 온 해의 여름에는 단오를 보내기 전(비가 잠깐 멎었다)과 뒤로. 큰비가 온 해의 가을에는 낮은 논의 벼가 성기다.
+  const look = mapLook(role.map, tone, sky, { flags: g.flags, flood });
+  const map = useMemo(() => seasonalMap(role.map, tone, sky, { flags: g.flags, flood }) ?? getMap(role.map), [role.map, look]);
+  // 판의 번호가 들어 있어, 같은 씨앗·같은 모습으로 새 판을 열어도 앞 판의 자리를 이어받지 않는다.
+  // 계절이나 날씨, 맵의 모습이 바뀌면 열쇠가 달라져 맵의 판을 새로 짓는다(서 있던 칸과 가 본 칸은 이어받는다).
+  const key = `${gameNo.value}|${g.situationId}|${g.seed}|${g.seasonIndex}|${g.role}|${g.look}|${look}`;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -275,8 +283,9 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
         if (!now) continue;
         const seasonNow = seasonLabels[currentSeason(now)].label;
         const noSunLine = view.noSun ? `해 ☀가 다 져서 이번 ${seasonNow}에는 할 수 없어요.` : undefined;
-        // 해 ☀가 무엇인지는 처음 한 번, 한마디와 따로 띄운다(한꺼번에 세 줄을 읽게 하지 않는다 — review 30번)
-        const tellsSun = !view.noSun && !sunTold && deedsOfSeason(now, currentSeason(now)).every((deed) => deed.sun === 0);
+        // 해 ☀가 무엇인지는 봄에 처음 한 번, 한마디와 따로 띄운다(한꺼번에 세 줄을 읽게 하지 않는다 — review 30번).
+        // 여름부터는 띄우지 않는다(해가 줄어든 계절에는 계절의 첫머리에 따로 알린다 — 1-라 review 22번).
+        const tellsSun = !view.noSun && !sunTold && now.seasonIndex === 0 && deedsOfSeason(now, currentSeason(now)).every((deed) => deed.sun === 0);
         const lure = view.happening.lure;
         if (!lure && !noSunLine && !tellsSun) continue;
         lured.add(mark.id);
@@ -332,6 +341,8 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
           else {
             setToast(null);
             toastUntil = 0;
+            // 대화 장면이 열리는 순간 서 있는 칸을 적는다(도중에 닫았다 열어도 그 자리에 선다)
+            tellPlace(world);
             openTalk(e.mark.id);
           }
         } else if (e.type === 'dweller') {
@@ -343,7 +354,15 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
               Math.abs(m.spot.at[1] - e.dweller.at[1]) <= 3 &&
               openRef.current.some((v) => v.happening.id === m.id && !v.noSun && v.happening.stage.cast?.some((c) => c.who === person)),
           );
-          if (person && near) openTalk(near.id);
+          if (person && near?.must) {
+            tellPlace(world);
+            openTalk(near.id);
+          } else if (person && near) {
+            // 덤으로 하는 일은 사람을 눌러서는 열지 않는다(길을 가다 논 안의 사람을 잘못 눌러 해 ☀를 쓰지 않게).
+            // 무슨 일이 있는지만 알리고, 말풍선을 누르면 연다.
+            const view = openRef.current.find((v) => v.happening.id === near.id);
+            say({ head: `${near.spot.label} · 덤으로 할 일`, text: view?.happening.lure ?? '말풍선을 누르면 들러 볼 수 있어요.', locked: false }, 6000);
+          }
           // 이름은 누가 보느냐에 따라 다르다(제 식구면 "어머니", 남의 식구면 "농민 집 아주머니")
           else say({ head: e.name, text: e.dweller.about, locked: false }, 5000);
         }
@@ -399,6 +418,11 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       const [px, py] = tileOf(world.player);
       const at = `${px},${py}`;
       if (at === lastPlace) return;
+      // 새 계절에 들어와 처음 서는 칸에서 아직 움직이지 않았으면 적지 않는다
+      // (곧바로 닫았다 다시 열어도 "새 계절"로 열려 계절의 첫 줄이 뜨게 — 1-라 review 34번 ㉢)
+      const now = game.peek();
+      const first = map.start[now?.role ?? 'farmer'];
+      if (now && !now.at && first && px === first[0] && py === first[1]) return;
       lastPlace = at;
       markPlace(at, [...seen], packBits(world.visited));
     };
@@ -478,7 +502,6 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       session = openSession({
         key,
         map,
-        season: tone,
         who: { role: now.role, look: now.look },
         hero: heroName(now.role, now.look),
         at: parseAt(now.at),
@@ -500,6 +523,9 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       setMarks(world, marksOf(map, openRef.current));
       resize();
       worldRef.current = world;
+      // 새로 세운 판에 지금의 판을 건다: 이야기의 표시에 따라 자리에 없는 사람을 가린다(아래의 효과들도 다시 돈다)
+      setHidden(world, new Set(map.dwellers.filter((d) => d.shows && !meets(d.shows, factsOf(now))).map((d) => d.id)));
+      setWorldNo((n) => n + 1);
       if (import.meta.env.DEV) {
         dev.__world = world;
         dev.__scene = scene;
@@ -518,7 +544,8 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
         };
       }
       setReady(true);
-      canvas.focus({ preventScroll: true });
+      // 대화 장면이 떠 있는 동안 판을 새로 지었으면(가을에 맵의 모습이 바뀔 때) 초점은 대화 장면의 것이다
+      if (!overlaid()) canvas.focus({ preventScroll: true });
       // 계절에 처음 들어섰을 때: 볼 것을 한꺼번에 띄우지 않고 차례로 알린다.
       // ① 그 계절의 첫 줄 → ② 걷는 법과 화살표 → ③ 쪽지(아직 펴 보지 않았으면). 걷거나 눌러도 막지 않는다.
       const p0 = pack.peek();
@@ -528,6 +555,12 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
         if (now.seasonIndex === 0) {
           sayLater({ head: '', text: '가려는 곳을 누르면 걸어가요. 노란 화살표 쪽에 꼭 할 일이 있어요.', locked: false }, 7000, () => (game.peek()?.done.length ?? 0) === 0);
           sayLater({ head: '', text: `왼쪽 위의 쪽지를 누르면 ${seasonNow}에 할 일이 모두 보여요.`, locked: false }, 6000, () => !noteOpenedRef.current && (game.peek()?.done.length ?? 0) === 0);
+        } else if (now.sunsLeft < roleOf(p0, now.role).suns) {
+          // 기력이 낮은 채로 계절을 넘겨 해 ☀가 하나 줄었다. 계절의 첫 줄에 이어 한 줄로 알린다(review 32번).
+          sayLater({ head: '해 ☀', text: `기력이 낮아서 이번 ${seasonNow}의 해 ☀는 ${countWord(now.sunsLeft)}뿐이에요.`, locked: false }, 8000, () => {
+            const g0 = game.peek();
+            return Boolean(g0 && g0.phase === 'season' && deedsOfSeason(g0, currentSeason(g0)).length === 0);
+          });
         }
       }
       raf = requestAnimationFrame(loop);
@@ -537,6 +570,7 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
     observer.observe(stage);
 
     const onPointer = (ev: PointerEvent): void => {
+      canvas.classList.remove('keyed');
       if (!session || overlaid()) return;
       const { world } = session;
       const rect = canvas.getBoundingClientRect();
@@ -584,6 +618,10 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
         applyKeys();
         setNoteOpen(false);
         ev.preventDefault();
+        // 띠의 단추나 쪽지에 초점이 있어도 걷기 시작하면 초점이 맵으로 온다(그 뒤의 Enter가 단추를 누르지 않고 말을 건다).
+        // 자판으로 걷는 동안에는 맵에도 다른 단추와 같은 초점 테를 두른다(누르기로 돌아오면 지운다).
+        if (document.activeElement !== canvas) canvas.focus({ preventScroll: true });
+        canvas.classList.add('keyed');
         return;
       }
       if (k === 'Enter' || k === ' ') {
@@ -639,7 +677,7 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
     // 맵을 처음 열 때는 그 빛에서 바로 시작한다(천천히 바뀌는 것은 해를 쓴 뒤 맵으로 돌아왔을 때다)
     if (world.time === 0 || world.light === light) world.glow = { morning: light === 'morning' ? 1 : 0, dusk: light === 'dusk' ? 1 : 0 };
     world.light = light;
-  }, [light, ready]);
+  }, [light, ready, worldNo]);
 
   // 이야기가 흘러 자리를 옮긴 사람("우리 논에서 기다리마")은 그 자리에서 사라지고 옮겨 간 자리에 선다
   useEffect(() => {
@@ -647,13 +685,13 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
     if (!world || !map) return;
     const facts = factsOf(g);
     setHidden(world, new Set(map.dwellers.filter((d) => d.shows && !meets(d.shows, facts)).map((d) => d.id)));
-  }, [g.flags, g.stats, map, ready, busy]);
+  }, [g.flags, g.stats, map, ready, busy, worldNo]);
 
   // 일을 마치거나 새 일이 열리면 표시를 바꾼다
   useEffect(() => {
     const world = worldRef.current;
     if (world && map) setMarks(world, marksOf(map, open));
-  }, [open, map, ready]);
+  }, [open, map, ready, worldNo]);
 
   // 화살표: 일을 마칠 때마다 다음에 갈 곳을 가리킨다(결과가 알려 준 곳 → 아직 풀지 못한 꼭 할 일의 자리)
   const nextMust = missions.find((m) => m.mission.must && !m.solved && m.spot)?.spot ?? null;
@@ -663,7 +701,7 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
   }, [g.done.length, g.goTo, nextMust, ready]);
   useEffect(() => {
     if (worldRef.current) worldRef.current.guide = guide && open.some((v) => v.happening.spot === guide) ? guide : null;
-  }, [guide, open, ready]);
+  }, [guide, open, ready, worldNo]);
 
   // 창이 닫히면 초점을 캔버스로 돌린다(Enter·Space가 다시 말 걸기가 되게)
   useEffect(() => {
@@ -680,11 +718,10 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
     }, 0);
   };
 
-  /** 줄을 누르면 그 자리로 화살표가 뜨고, 화살표가 가려지지 않게 쪽지는 접힌다 */
+  /** 줄을 누르면 그 자리로 화살표가 뜨고, 화살표가 가려지지 않게 쪽지는 접힌다(이미 켜진 줄을 눌러도 화살표는 그대로다) */
   const pickGuide = (spot: string): void => {
-    const next = guide === spot ? null : spot;
-    setGuide(next);
-    if (next) setNoteOpen(false);
+    setGuide(spot);
+    setNoteOpen(false);
   };
 
   const seasonName = seasonLabels[season].label;

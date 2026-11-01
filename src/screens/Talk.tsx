@@ -9,28 +9,40 @@
 // 선택지가 뜨면 선 사람이 비켜선다(시안의 둘째 화면): 한 사람이면 왼쪽으로 물러나고 선택지가 오른쪽에,
 // 두 사람이면 양옆으로 물러나고 선택지가 가운데에 놓인다. 선택지가 몇 줄이 되든 얼굴을 가리지 않는다(자리는 talk.css).
 // 이 일로 미션이 풀리면 배움 쪽지 다음에 "미션이 풀림" 종이가 뜬다 — 쪽지의 글은 여기서 한 번만 읽고, 종이는 되풀이하지 않는다.
+//
+// 잠긴 선택지(형편이나 제도가 막은 일)는 점선 테·자물쇠·흐린 글에 흐리지 않은 까닭 한 줄로 보인다. 고를 수 없다.
+// 선택지가 모두 잠겨 있으면 막다른 길이 아니라는 것을 알린다: 엔진이 그 미션의 도움의 일을 맵에 열어 두었으므로,
+// "나중에 할게요"로 돌아가 그 자리로 가라고 대화창이 말해 준다(그 자리의 이름과 함께).
 
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Figure } from '../art/Figure';
 import type { Pose } from '../art/pictures';
 import { Scenery } from '../art/Scenery';
+import { standInSprite } from '../art/standIn';
 import { cardById } from '../content/cards';
 import { itemById } from '../content/items';
 import { statLabels } from '../content/labels';
-import { choiceViews, currentSeason, happeningOf, missionOfHappening, openHappenings, openingLines, type ChoiceView } from '../engine/game';
+import {
+  choiceViews,
+  currentSeason,
+  factsOf,
+  happeningOf,
+  missionOfHappening,
+  openHappenings,
+  openingLines,
+  type ChoiceView,
+  type HappeningView,
+} from '../engine/game';
 import { STATS, type Deed, type GameState, type Happening, type Line, type Mission, type Person, type Season, type SituationPack } from '../engine/types';
 import { PLAYS } from '../plays';
 import { closeTalk, commitTalk, game, pack } from '../state/store';
 import { focusInto, useModalKeys } from '../ui/focus';
+import { TapGate } from '../ui/taps';
 import { LockIcon, SunIcon } from '../ui/icons';
 import { spotLabel } from '../ui/where';
 import { changeWords, josa, ro, type ChangeWords } from '../ui/words';
 
-/** 잇달아 누른 것을 한 번으로 친다(두 번 두드려 한 창을 읽지 못하고 넘기는 일을 막는다) */
-const TAP_GAP_MS = 260;
-/** 맵에서 자리를 누른 손가락이 떼어지며 첫 창을 넘기지 않게, 뜬 바로 뒤에는 조금 더 기다린다 */
-const OPEN_GAP_MS = 380;
 /** 배움 쪽지는 뜬 바로 뒤에 닫히지 않는다(잇달아 누르다 읽지 못하고 넘기는 일을 막는다) */
 const NOTE_GAP_MS = 700;
 
@@ -44,13 +56,29 @@ interface Snap {
   people: Record<string, Person>;
   /** 지금은 이 일을 할 수 없는 까닭(해 ☀가 없음). 있으면 그 말만 보여 주고 닫는다. */
   blocked: string | null;
+  /** 선택지가 모두 잠겼을 때 보여 줄 말(도움의 길이 열린 자리를 알려 준다). 고를 것이 하나라도 있으면 null. */
+  stuck: string | null;
+}
+
+/** 선택지가 모두 잠겼을 때의 말: 도움의 일이 맵에 열려 있으면 그 자리를 알려 준다 */
+function stuckLine(p: SituationPack, g: GameState, choices: readonly ChoiceView[], mission: Mission | undefined, open: readonly HappeningView[]): string | null {
+  if (choices.length === 0 || choices.some((view) => !view.locked)) return null;
+  const rescue = mission?.rescue ? open.find((v) => v.happening.id === mission.rescue) : undefined;
+  if (!rescue) return '지금 형편으로는 고를 수 있는 것이 없어요. 돌아가서 다른 일부터 해 보아요.';
+  const where = spotLabel(p, g.role, rescue.happening.spot);
+  return where
+    ? `지금 형편으로는 고를 수 있는 것이 없어요. 그래도 길이 있어요. 돌아가서 ${ro(where)} 가 보아요.`
+    : '지금 형편으로는 고를 수 있는 것이 없어요. 그래도 길이 있어요. 돌아가서 맵의 깃발을 찾아가 보아요.';
 }
 
 /** 대화 장면이 열릴 때의 모습을 적어 둔다(일을 마치면 판이 바뀌므로 그 전의 것을 쥐고 있는다) */
 function snapOf(p: SituationPack, g: GameState, id: string): Snap | null {
   try {
     const happening = happeningOf(p, id);
-    const view = openHappenings(p, g).find((v) => v.happening.id === id);
+    const open = openHappenings(p, g);
+    const view = open.find((v) => v.happening.id === id);
+    const choices = choiceViews(p, g, id);
+    const mission = view?.mission ?? missionOfHappening(p, g.role, id);
     const blocked = !view
       ? '이 일은 지금 할 수 없어요.'
       : view.noSun
@@ -61,10 +89,11 @@ function snapOf(p: SituationPack, g: GameState, id: string): Snap | null {
       season: currentSeason(g),
       happening,
       opening: openingLines(p, g, id),
-      choices: choiceViews(p, g, id),
-      mission: view?.mission ?? missionOfHappening(p, g.role, id),
+      choices,
+      mission,
       people: p.situation.people ?? {},
       blocked,
+      stuck: stuckLine(p, g, choices, mission, open),
     };
   } catch (error) {
     console.error('[조선에서 한 해 살기] 대화 장면을 열 수 없다:', error);
@@ -72,7 +101,7 @@ function snapOf(p: SituationPack, g: GameState, id: string): Snap | null {
   }
 }
 
-type Step =
+export type Step =
   | { kind: 'blocked' }
   | { kind: 'open'; i: number }
   | { kind: 'choose' }
@@ -80,16 +109,6 @@ type Step =
   | { kind: 'result'; i: number }
   | { kind: 'change' }
   | { kind: 'note' };
-
-/** 그림 파일이 없을 때 세울 도트 인물: 자료에 적힌 것이 없으면 성별과 나이대로 고른다 */
-function spriteFor(who: string, person: Person | undefined): string {
-  if (person?.sprite) return person.sprite;
-  if (!person) return who;
-  if (person.age === 'old') return person.sex === 'f' ? 'granny' : 'elderMan';
-  if (person.age === 'child') return person.sex === 'f' ? 'girlKid' : 'boyKid';
-  if (person.age === 'young') return person.sex === 'f' ? 'sister' : 'brother';
-  return person.sex === 'f' ? 'wellWoman' : 'neighborMan';
-}
 
 type Side = 'left' | 'center' | 'right';
 
@@ -103,13 +122,28 @@ function sidesOf(cast: readonly { who: string; at?: Side }[]): Side[] {
   return flipped ? ['right', 'left'] : ['left', 'right'];
 }
 
-/** 그 사람이 가장 최근에 지은 표정(말한 창에 적힌 것) */
-function poseOf(who: string, lines: readonly Line[], upto: number): Pose {
+/**
+ * 지금 단계에서 대화창에 보이는 줄 묶음과 그 안의 자리.
+ * 결과 대화의 창이면 결과의 줄, 그 밖에는 여는 대화의 줄이다. 선택지를 고르는 동안에는 여는 대화의 마지막 줄이 남는다.
+ * 줄이 보이지 않는 단계("달라진 것", 일 놀이, 쪽지)는 -1이다.
+ */
+export function windowOf(step: Step, opening: Line[], result: Line[] | null): { lines: Line[]; at: number } {
+  const lines = step.kind === 'result' && result ? result : opening;
+  const at = step.kind === 'open' || step.kind === 'result' ? step.i : step.kind === 'choose' ? opening.length - 1 : -1;
+  return { lines, at };
+}
+
+/**
+ * 무대에 선 사람의 표정: 그 줄 묶음에서 그 사람이 가장 최근에 지은 표정(말한 창에 적힌 것).
+ * 아직 지은 표정이 없으면(그 사람이 말하기 전의 창, 결과 대화의 첫머리, "달라진 것" 창) 무대에 적힌 기본 표정을, 그것도 없으면 plain을 쓴다.
+ * (Review 1-라 11.8 ①: 굶는 동무가 첫 창과 "달라진 것" 창에서 plain — 웃는 얼굴 — 으로 섰다.)
+ */
+export function poseOf(member: { who: string; pose?: Pose }, lines: readonly Line[], upto: number): Pose {
   for (let i = Math.min(upto, lines.length - 1); i >= 0; i--) {
     const line = lines[i];
-    if (line.who === who && line.pose) return line.pose;
+    if (line.who === member.who && line.pose) return line.pose;
   }
-  return 'plain';
+  return member.pose ?? 'plain';
 }
 
 function changeRows(deed: Deed): ChangeWords[] {
@@ -132,15 +166,12 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
     return snap.choices.length > 0 ? { kind: 'choose' } : { kind: 'open', i: 0 };
   });
   const [deed, setDeed] = useState<Deed | null>(null);
-  const lastTap = useRef(Date.now() + (OPEN_GAP_MS - TAP_GAP_MS));
+  // 잇달아 누른 것을 한 번으로 친다(두 번 두드려 한 창을 읽지 못하고 넘기는 일을 막는다). 뜬 바로 뒤에는 조금 더 기다린다.
+  const gate = useRef<TapGate | null>(null);
+  if (!gate.current) gate.current = new TapGate(Date.now());
   const committed = useRef(false);
 
-  const tooSoon = (): boolean => {
-    const now = Date.now();
-    if (now - lastTap.current < TAP_GAP_MS) return true;
-    lastTap.current = now;
-    return false;
-  };
+  const tooSoon = (): boolean => !(gate.current as TapGate).pass(Date.now());
 
   /** 일을 마치고 나온 결과에서 다음에 보여 줄 것 */
   const afterResult = (d: Deed): Step | null => {
@@ -166,6 +197,8 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
     committed.current = true;
     const done = commitTalk({ id: happeningId, choiceId, play: played });
     if (!done) return; // 가게가 '이어 갈 수 없어요'로 보낸다
+    // 결과의 첫 창이 새로 뜬다: 놀이를 끝낸 그 누름(자판 Enter, 잇달아 두 번 누른 끝내기 단추)이 그 창을 넘기지 않게
+    gate.current?.hold(Date.now());
     setDeed(done);
     go(done.lines.length > 0 ? { kind: 'result', i: 0 } : afterResult(done));
   };
@@ -183,9 +216,11 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
 
   const advance = (): void => {
     if (!snap) return;
-    if (step.kind !== 'blocked' && step.kind !== 'open' && step.kind !== 'result' && step.kind !== 'change') return;
+    // 선택지가 모두 잠겨 있으면 대화창이 "돌아가기"가 된다(아무 일도 일어나지 않은 채 맵으로)
+    const stuckNow = step.kind === 'choose' && snap.stuck !== null && !committed.current;
+    if (step.kind !== 'blocked' && step.kind !== 'open' && step.kind !== 'result' && step.kind !== 'change' && !stuckNow) return;
     if (tooSoon()) return;
-    if (step.kind === 'blocked') {
+    if (step.kind === 'blocked' || stuckNow) {
       closeTalk();
     } else if (step.kind === 'open') {
       if (step.i < snap.opening.length - 1) setStep({ kind: 'open', i: step.i + 1 });
@@ -215,6 +250,13 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
   useModalKeys(rootRef, (ev) => {
     if (ev.key === 'Enter' || ev.key === ' ') {
       ev.preventDefault();
+      // 선택지 묶음에 초점이 있을 때(선택지가 뜬 바로 뒤): 첫 선택지로 초점을 옮길 뿐 고르지는 않는다
+      // (Enter를 잇달아 누르다 저절로 골라지지 않게 — 고르는 것은 그다음 Enter다)
+      const list = rootRef.current?.querySelector<HTMLElement>('.talk-choices');
+      if (step.kind === 'choose' && list && document.activeElement === list) {
+        rootRef.current?.querySelector<HTMLElement>('button.talk-choice')?.focus();
+        return;
+      }
       advance();
     } else if (step.kind === 'choose' && (ev.key === 'ArrowDown' || ev.key === 'ArrowUp')) {
       // 화살표로 선택지를 오간다(PC와 TV). 고르는 것은 Enter·Space다.
@@ -248,8 +290,7 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
   const g = game.value;
 
   // 지금 대화창에 보일 한 창
-  const lines = step.kind === 'result' && deed ? deed.lines : snap.opening;
-  const at = step.kind === 'open' || step.kind === 'result' ? step.i : step.kind === 'choose' ? snap.opening.length - 1 : -1;
+  const { lines, at } = windowOf(step, snap.opening, deed?.lines ?? null);
   const line: Line | null = at >= 0 && at < lines.length ? lines[at] : null;
   const speaker = line?.who;
   const nameOf = (who: string): string => people[who]?.label ?? who;
@@ -261,6 +302,7 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
   const playDef = play ? PLAYS[play.game] : undefined;
   // 고른 일을 마치러 갈 자리(있으면 쪽지에 알려 준다. 맵에서는 화살표가 그리로 옮겨 간다)
   const nextSpot = deed?.goTo && pack.value && g ? spotLabel(pack.value, g.role, deed.goTo) : null;
+  const firstOpen = snap.choices.find((view) => !view.locked)?.id;
   const tag = snap.mission ? `${snap.mission.must ? '꼭 할 일' : '덤 미션'} · ${snap.mission.title}` : happening.cost > 0 ? '덤으로 하는 일' : '';
 
   return (
@@ -290,8 +332,8 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
                 <Figure
                   story={snap.story}
                   pic={person?.pic ?? member.who}
-                  sprite={spriteFor(member.who, person)}
-                  pose={poseOf(member.who, lines, at)}
+                  sprite={standInSprite(member.who, person)}
+                  pose={poseOf(member, lines, at)}
                   fill={0.6}
                   label={nameOf(member.who)}
                 />
@@ -321,9 +363,21 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
         </div>
       )}
 
+      {step.kind === 'choose' && snap.stuck === null && (
+        // 자판으로 왔을 때만 보이는 한 줄(선택지 묶음에 초점이 있을 때 — talk.css). 손가락·마우스로는 보이지 않는다.
+        <p class="talk-keys" aria-hidden="true">
+          ↑↓로 고르고 Enter로 정해요
+        </p>
+      )}
       {step.kind === 'choose' && (
-        // 초점은 선택지 묶음에 둔다(첫 선택지에 두면 Enter를 잇달아 누르다 저절로 골라진다). 화살표나 Tab으로 들어간다.
-        <ul class="talk-choices" data-own data-autofocus tabIndex={-1} aria-label="어떻게 할까요? 화살표로 고르고 Enter로 정해요.">
+        // 초점은 선택지 묶음에 둔다(첫 선택지에 두면 Enter를 잇달아 누르다 저절로 골라진다). 화살표·Tab·Enter로 첫 선택지에 들어간다.
+        <ul
+          class={`talk-choices${snap.choices.length >= 4 ? ' many' : ''}`}
+          data-own
+          data-autofocus={snap.stuck === null ? true : undefined}
+          tabIndex={-1}
+          aria-label={snap.stuck === null ? '어떻게 할까요? 화살표로 고르고 Enter로 정해요.' : '지금은 고를 수 있는 것이 없어요.'}
+        >
           {snap.choices.map((view) => (
             <li key={view.id}>
               {view.locked ? (
@@ -335,7 +389,8 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
                   <span class="talk-choice-reason">{view.reason}</span>
                 </div>
               ) : (
-                <button type="button" class="talk-choice" onClick={() => choose(view)}>
+                // Tab의 첫 자리는 첫 선택지다("나중에 할게요"가 아니라 — focus.ts의 data-first-tab)
+                <button type="button" class="talk-choice" data-first-tab={view.id === firstOpen ? true : undefined} onClick={() => choose(view)}>
                   <span class="talk-choice-label">{view.label}</span>
                 </button>
               )}
@@ -346,7 +401,7 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
 
       {step.kind === 'play' && play && playDef && (
         <div class="talk-play" data-own>
-          <playDef.View rules={play.rules} onDone={(result) => commit(step.choiceId, result)} />
+          {g && <playDef.View rules={play.rules} facts={factsOf(g)} choice={step.choiceId} onDone={(result) => commit(step.choiceId, result)} />}
         </div>
       )}
 
@@ -370,11 +425,22 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
           </span>
         </button>
       )}
-      {step.kind === 'choose' && (
+      {step.kind === 'choose' && snap.stuck === null && (
         <div class={`talk-box still${speaker ? ' says' : ''}`}>
           {speaker && <span class="talk-name">{nameOf(speaker)}</span>}
           <span class="talk-text">{line ? line.text : '어떻게 할까?'}</span>
         </div>
+      )}
+      {step.kind === 'choose' && snap.stuck !== null && (
+        // 선택지가 모두 잠겼다: 막다른 길이 아니라는 것과 갈 곳을 알리고, 누르면 맵으로 돌아간다
+        <button type="button" class="talk-box" data-autofocus>
+          <span class="talk-text" aria-live="polite">
+            {snap.stuck}
+          </span>
+          <span class="talk-next" aria-hidden="true">
+            돌아가기 ▼
+          </span>
+        </button>
       )}
       {step.kind === 'blocked' && (
         <button type="button" class="talk-box" data-autofocus>

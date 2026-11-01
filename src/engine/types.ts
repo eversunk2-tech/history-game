@@ -51,6 +51,8 @@ export interface Condition {
   items?: string[];
   /** 고른 주인공 모습 */
   look?: Look;
+  /** [더함] 모은 생활 카드가 이만큼은 되어야(덤 미션 「생활 카드 열 장」) */
+  cardCount?: number;
 }
 
 /** 대화창 한 창. who가 없으면 "나"의 이야기 줄이다. */
@@ -76,8 +78,11 @@ export interface Outcome {
 export interface Choice extends Outcome {
   id: string;
   label: string;
-  /** 잠김 조건과 보여 줄 까닭. unless가 참이면 열리고, 거짓이면 잠긴다. */
-  lock?: { unless: Condition; reason: string };
+  /**
+   * 잠김 조건과 보여 줄 까닭. unless가 참이면 열리고, 거짓이면 잠긴다.
+   * [더함] reasons: 한 선택지가 여러 형편으로 잠길 때, 잠긴 동안 위에서부터 when이 처음 맞는 것의 까닭을 쓴다(없으면 reason).
+   */
+  lock?: { unless: Condition; reason: string; reasons?: { when: Condition; reason: string }[] };
   /**
    * 역할·수치·앞선 선택·뽑기·일 놀이의 끝난 모습에 따라 갈리는 결과.
    * 위에서부터 보아 when이 처음 맞는 것 하나가 바탕 결과를 통째로 갈음한다(합치지 않는다).
@@ -106,8 +111,12 @@ export interface Happening {
    * 할 일 쪽지의 덤 줄과, 맵에서 그 말풍선에 다가갔을 때 보인다. 예: "아주머니가 한양 이야기를 한다더라"
    */
   lure?: string;
-  /** 대화 장면의 배경(그림 자리의 자리 이름)과 선 사람(두 명까지) */
-  stage: { place: string; cast?: { who: string; at?: 'left' | 'center' | 'right' }[] };
+  /**
+   * 대화 장면의 배경(그림 자리의 자리 이름)과 선 사람(두 명까지).
+   * pose는 그 사람의 기본 표정이다: 그 사람이 표정을 적은 창이 나오기 전과 "달라진 것" 창에서 쓴다(없으면 plain).
+   * 예: 굶는 동무 `{ who: 'friend-girl', at: 'center', pose: 'worried' }`
+   */
+  stage: { place: string; cast?: { who: string; at?: 'left' | 'center' | 'right'; pose?: 'plain' | 'glad' | 'worried' }[] };
   /** 여는 대화 */
   lines: Line[];
   lineVariants?: { when: Condition; lines: Line[] }[];
@@ -345,6 +354,11 @@ export interface Closing {
   after: Stats;
   /** 나중에 나타난 결과의 줄들 */
   lines: string[];
+  /**
+   * [더함, 꼴 4] 줄마다 실제로 바뀐 수치(lines와 같은 차례, 0~10에 묶인 뒤의 값).
+   * 꼴 3까지의 저장에 든 닫기에는 없다 — 화면은 없으면 값을 붙이지 않는다.
+   */
+  effects?: Stats[];
   newCards: string[];
 }
 
@@ -389,4 +403,6 @@ export interface Facts {
   flags: readonly string[];
   draw: string | null;
   items: readonly string[];
+  /** [더함] 모은 생활 카드. 적지 않으면 한 장도 없는 것으로 본다(cardCount 조건이 읽는다). */
+  cards?: readonly string[];
 }

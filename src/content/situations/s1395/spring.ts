@@ -38,7 +38,8 @@ const WELL_CARD = ['s1395-palace-work'];
 // 볍씨 뿌리기의 결과 대화에서 함께 쓰는 아버지의 말(놀이가 끝난 모습마다 하나)
 const FATHER_EVEN: Line = { who: 'father', pose: 'glad', text: '고루 잘 뿌렸구나. 덕분에 볍씨가 한 줌 남았다.' };
 const FATHER_PATCHY: Line = { who: 'father', text: '뭉친 데도 있고 빈 데도 있구나. 괜찮다, 빈 데는 내가 덧뿌리마.' };
-const FATHER_LEFT: Line = { who: 'father', text: '그래, 오늘은 내가 뿌리마. 손놀림을 잘 봐 두어라.' };
+// 어른께 맡기면 "듬성듬성"과 수치가 같다(맡김이 하다 만 것보다 나은 일이 없고, 끝난 모습 셋의 차이는 1 안 — review 10번). 아버지의 일이 밀리는 것은 말로만 치른다.
+const FATHER_LEFT: Line = { who: 'father', text: '그래, 오늘은 내가 뿌리마. 내 일은 좀 밀리겠지만, 손놀림을 잘 봐 두어라.' };
 
 export const happenings: Happening[] = [
   // ── 꼭 푸는 미션 ① 돌아온 사람들, 떠나는 스님들 ─────────────────
@@ -235,6 +236,7 @@ export const happenings: Happening[] = [
           },
           {
             when: { flags: [FLAGS.sowLeft] },
+            effects: { body: -1 },
             setFlags: [FLAGS.sowLow],
             cards: SOW_CARD,
             lines: [FATHER_LEFT, { text: '아버지가 팔을 휘두를 때마다 볍씨가 퍼진다. 낮은 논이 다 찼다.' }],
@@ -258,6 +260,7 @@ export const happenings: Happening[] = [
           },
           {
             when: { flags: [FLAGS.sowLeft] },
+            effects: { body: -1 },
             setFlags: [FLAGS.sowSplit],
             cards: SOW_CARD,
             lines: [FATHER_LEFT, { text: '아버지와 어머니가 두 논을 오가며 볍씨를 뿌리신다.' }],

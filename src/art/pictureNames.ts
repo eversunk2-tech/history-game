@@ -6,6 +6,8 @@
 //   배경: 그 계절의 파일 → 같은 자리의 다른 계절(봄·여름·가을·겨울 차례로 처음 있는 것) → 없음(코드 그림)
 //   인물: 그 표정의 파일 → plain → 없음(코드 그림 — 맵의 도트 인물을 크게)
 //   확장자: 같은 이름에 파일이 여럿이면 webp · jpg · jpeg · png 차례로 하나를 고른다
+//
+// 미리 받는 차례(preloadOrder): 지금 계절의 대화 장면이 쓰는 배경 → 그 장면에 서는 사람 → 다음 계절 … → 그 밖의 것.
 
 import { SEASONS, type Season } from '../engine/types';
 
@@ -49,4 +51,45 @@ export function figureNameIn(has: (name: string) => boolean, story: string, pic:
   if (has(exact)) return exact;
   const plain = `char/${story}/${pic}-plain`;
   return has(plain) ? plain : null;
+}
+
+/** 계절 하나에 대화 장면이 쓰는 것: 배경의 자리 이름들과 서는 사람의 그림 이름들(나오는 차례대로) */
+export interface SeasonPictures {
+  season: Season;
+  places: readonly string[];
+  people: readonly string[];
+}
+
+const POSES: readonly Pose[] = ['plain', 'glad', 'worried'];
+
+/**
+ * 미리 받는 차례. 느린 망에서도 지금 할 대화 장면의 그림이 먼저 도착하게 한다(Review 1-라 36번).
+ *   1. 지금 계절(from)부터 계절마다: 그 계절의 배경(그 계절의 파일, 없으면 대신 나올 다른 계절의 파일) → 서는 사람(plain → glad → worried)
+ *   2. 남은 계절은 from 다음부터 돌아서(봄 → 여름 → 가을 → 겨울 → 다시 봄)
+ *   3. 그 밖에 이 이야기의 그림(쓰이지 않는 것까지 — 이름 차례로)
+ * names에 없는 이름은 넣지 않는다. 다른 이야기의 그림은 넣지 않는다. 같은 이름은 한 번만.
+ */
+export function preloadOrder(names: readonly string[], story: string, plan: readonly SeasonPictures[], from: Season = SEASONS[0]): string[] {
+  const have = new Set(names);
+  const has = (name: string): boolean => have.has(name);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (name: string | null): void => {
+    if (name && has(name) && !seen.has(name)) {
+      seen.add(name);
+      out.push(name);
+    }
+  };
+  const start = Math.max(0, SEASONS.indexOf(from));
+  for (let k = 0; k < SEASONS.length; k++) {
+    const season = SEASONS[(start + k) % SEASONS.length];
+    for (const one of plan.filter((p) => p.season === season)) {
+      for (const place of one.places) add(backgroundNameIn(has, story, place, season));
+      for (const pic of one.people) for (const pose of POSES) add(`char/${story}/${pic}-${pose}`);
+    }
+  }
+  for (const name of [...names].sort()) {
+    if (name.startsWith(`bg/${story}/`) || name.startsWith(`char/${story}/`)) add(name);
+  }
+  return out;
 }

@@ -1,0 +1,76 @@
+{
+  "note": "2차 시안(2배, 타일 32점). 그림 점 단위로 잰다. 외톨이 점은 맵 칸(그림 점 32×32)마다.",
+  "groundOrphans": {
+    "perTileAvg": 4.35,
+    "perTileMax": 20,
+    "per1000": 4.25
+  },
+  "groundChecker": 0.88,
+  "groundHarsh": 0.39,
+  "groundHarshChecker": 0.34,
+  "monotony": {
+    "grass": {
+      "blocks": 588,
+      "lumaStd": 5.67,
+      "warmStd": 5.04,
+      "tones": 8,
+      "flatPct": 15.1
+    },
+    "dirt": {
+      "blocks": 625,
+      "lumaStd": 5.87,
+      "warmStd": 3.15,
+      "tones": 6,
+      "flatPct": 37
+    }
+  },
+  "sceneColors": 96,
+  "thingOrphansPer1000": {
+    "blossom": 9.5,
+    "gate": 0,
+    "oak": 4.8,
+    "jars": 0,
+    "choga": 1.1,
+    "well": 11.9
+  },
+  "thingHarshPer1000": {
+    "blossom": 1.66,
+    "gate": 0,
+    "oak": 0.27,
+    "jars": 0,
+    "choga": 0.2,
+    "well": 10.94
+  },
+  "people": {
+    "hero": {
+      "outlineShare": 1,
+      "orphansPer1000": 4.5,
+      "edgeContrast": 0.436,
+      "body": 0.6,
+      "edge": 0.111,
+      "ground": 0.555,
+      "bodyMinusGround": 0.045,
+      "groundMinusEdge": 0.445
+    },
+    "woman": {
+      "outlineShare": 1,
+      "orphansPer1000": 6,
+      "edgeContrast": 0.462,
+      "body": 0.606,
+      "edge": 0.111,
+      "ground": 0.595,
+      "bodyMinusGround": 0.011,
+      "groundMinusEdge": 0.484
+    },
+    "elder": {
+      "outlineShare": 1,
+      "orphansPer1000": 16.1,
+      "edgeContrast": 0.405,
+      "body": 0.717,
+      "edge": 0.111,
+      "ground": 0.51,
+      "bodyMinusGround": 0.208,
+      "groundMinusEdge": 0.399
+    }
+  }
+}

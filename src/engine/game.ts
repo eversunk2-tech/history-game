@@ -55,6 +55,11 @@ export function missionsOf(pack: SituationPack, role: RoleId, season?: Season): 
  * (예: 이야기 셋을 모으는 덤 미션에서 하나를 들었으면 { have: 1, need: 3 }) 셀 수 없는 조건이면 null.
  */
 export function missionProgress(mission: Mission, state: GameState): { have: number; need: number } | null {
+  // 카드를 몇 장 모으는 미션: 모은 장수(다 모은 뒤에는 넘치지 않게)
+  const cardCount = mission.done.cardCount;
+  if (cardCount !== undefined && cardCount >= 2 && !mission.done.flags) {
+    return { have: Math.min(state.cards.length, cardCount), need: cardCount };
+  }
   const flags = mission.done.flags;
   if (!flags || flags.length < 2) return null;
   return { have: flags.filter((flag) => state.flags.includes(flag)).length, need: flags.length };
@@ -78,7 +83,7 @@ export function playableRoles(pack: SituationPack): RoleId[] {
 // ── 판 ───────────────────────────────────────────────────────
 
 export function factsOf(state: GameState): Facts {
-  return { role: state.role, look: state.look, stats: state.stats, flags: state.flags, draw: state.draw, items: state.items };
+  return { role: state.role, look: state.look, stats: state.stats, flags: state.flags, draw: state.draw, items: state.items, cards: state.cards };
 }
 
 export function currentSeason(state: GameState): Season {
@@ -136,7 +141,8 @@ export function choiceViews(pack: SituationPack, state: GameState, happeningId: 
     .filter((c) => isShown(c, facts))
     .map((c) => {
       const locked = isLocked(c, facts);
-      return { id: c.id, label: c.label, locked, reason: locked ? c.lock?.reason : undefined };
+      const reason = locked ? (c.lock?.reasons?.find((r) => meets(r.when, facts))?.reason ?? c.lock?.reason) : undefined;
+      return { id: c.id, label: c.label, locked, reason };
     });
 }
 
@@ -175,7 +181,13 @@ export function openHappenings(pack: SituationPack, state: GameState): Happening
   for (const m of missionsOf(pack, state.role, currentSeason(state))) {
     if (!m.rescue || state.solved.includes(m.id) || state.done.includes(m.rescue)) continue;
     const parts = list.filter((h) => m.parts.includes(h.id));
-    const stuck = parts.length === 0 || parts.every((h) => allLocked(pack, state, h));
+    // 아직 하지 않았지만 조건(shows)이 맞지 않아 나타나지 않은 일이 남아 있으면 막힌 것이 아니다:
+    // 앞의 일을 마쳐야 나타나는 일이다(가을걷이는 아버지가 돌아온 뒤에, 소금은 가을걷이 뒤에).
+    // 그런 일이 없는데도 나타난 일이 없거나, 나타난 일의 선택지가 모두 잠겼을 때만 도움의 일이 열린다.
+    const waiting = pack.happenings.some(
+      (h) => m.parts.includes(h.id) && belongs(h, state) && !state.done.includes(h.id) && h.shows !== undefined && !meets(h.shows, facts),
+    );
+    const stuck = parts.length === 0 ? !waiting : parts.every((h) => allLocked(pack, state, h));
     if (stuck) {
       const rescue = pack.happenings.find((h) => h.id === m.rescue);
       if (rescue && belongs(rescue, state)) list.push(rescue);
@@ -201,7 +213,9 @@ export function missionViews(pack: SituationPack, state: GameState): MissionView
     .slice()
     .sort((a, b) => Number(b.must) - Number(a.must))
     .map((mission) => {
-      const next = open.find((v) => v.mission?.id === mission.id);
+      // 선택지가 모두 잠긴 일보다 할 수 있는 일(도움의 일 포함)을 먼저 가리킨다
+      const mine = open.filter((v) => v.mission?.id === mission.id);
+      const next = mine.find((v) => !allLocked(pack, state, v.happening)) ?? mine[0];
       return { mission, solved: state.solved.includes(mission.id), spot: next?.happening.spot };
     });
 }
@@ -350,12 +364,15 @@ export function closeSeason(pack: SituationPack, state: GameState): GameState {
   let stats = state.stats;
   let cards = state.cards;
   const lines: string[] = [];
+  const effects: Stats[] = [];
   const newCards: string[] = [];
   const facts = factsOf(state);
   for (const later of pack.situation.later ?? []) {
     if (later.at !== season || !meets(later.when, facts)) continue;
-    stats = applyEffects(stats, later.effects).after;
+    const applied = applyEffects(stats, later.effects);
+    stats = applied.after;
     lines.push(later.line);
+    effects.push(applied.delta);
     for (const card of later.cards ?? []) {
       if (!cards.includes(card)) {
         cards = [...cards, card];
@@ -365,7 +382,7 @@ export function closeSeason(pack: SituationPack, state: GameState): GameState {
   }
   const delta = zeroStats();
   for (const stat of STATS) delta[stat] = stats[stat] - start[stat];
-  const closing: Closing = { season, delta, before: start, after: stats, lines, newCards };
+  const closing: Closing = { season, delta, before: start, after: stats, lines, effects, newCards };
   return {
     ...state,
     stats,

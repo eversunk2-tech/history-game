@@ -1,7 +1,10 @@
 // 맵 엔진의 셈과 느티골 맵의 검사. 캔버스 없이 돈다.
 
-import { describe, expect, it } from 'vitest';
-import { buildNeutigol, isGirl, neutigol } from '../src/content/maps/neutigol';
+import { describe, expect, it, vi } from 'vitest';
+import { mapLook, seasonalMap } from '../src/content/maps';
+import { buildNeutigol, isGirl, neutigol, stageOf, type Stage } from '../src/content/maps/neutigol';
+import { SEASONS, type Season } from '../src/engine/types';
+import { meets } from '../src/engine/conditions';
 import { MapBuilder } from '../src/map/build';
 import { cameraGoal, follow, scaleFor } from '../src/map/camera';
 import { closedGateNear, closedGates, gateOpen } from '../src/map/gates';
@@ -20,7 +23,7 @@ import {
   walkable,
   type WalkGrid,
 } from '../src/map/path';
-import { dwellerName, gateReason, houseOf, T, TILE, terrainWalkable, zoneAt, type Who } from '../src/map/types';
+import { dwellerName, gateReason, houseOf, T, TILE, terrainWalkable, zoneAt, type MapData, type Weather, type Who } from '../src/map/types';
 
 const WHO: Record<string, Who> = {
   farmerBoy: { role: 'farmer', look: 'boy' },
@@ -42,8 +45,7 @@ function gridOf(rows: string[]): WalkGrid {
 
 const CHARS = '.,:#=oroSW%~~xB^E+';
 
-function dump(): string {
-  const map = neutigol();
+function dump(map: MapData = neutigol()): string {
   const rows: string[] = [];
   const solid = new Set(map.objects.map((o) => `${o.tx},${o.ty}`));
   for (let y = 0; y < map.h; y++) {
@@ -74,7 +76,26 @@ function dump(): string {
 }
 
 // 맵을 글자 그림으로 떠 보고 싶을 때: VITE_DUMP_MAP=1 npx vitest run tests/map.test.ts
-if (import.meta.env.VITE_DUMP_MAP) console.log(`\n${dump()}\n`);
+if (import.meta.env.VITE_DUMP_MAP) console.log(`\n${dump(import.meta.env.VITE_DUMP_MAP === 'rain' ? neutigol('summer', 'rain', 'early') : neutigol())}\n`);
+
+/** 맵의 지문: 땅, 막힌 칸, 세운 것이 하나라도 달라지면 값이 달라진다 */
+function fingerprint(map: { terrain: Uint8Array; blocked: Uint8Array; objects: unknown[] }): string {
+  let h = 2166136261;
+  const eat = (v: number): void => {
+    h ^= v & 255;
+    h = Math.imul(h, 16777619) >>> 0;
+  };
+  for (const v of map.terrain) eat(v);
+  for (const v of map.blocked) eat(v + 7);
+  for (const ch of JSON.stringify(map.objects)) eat(ch.charCodeAt(0));
+  return `${h.toString(16)}/${map.objects.length}`;
+}
+
+// 봄의 맵이 달라지지 않았는지 볼 때: VITE_MAP_HASH=1 npx vitest run tests/map.test.ts
+if (import.meta.env.VITE_MAP_HASH) console.log(`\n지문 ${fingerprint(neutigol())}\n`);
+
+// 계절마다 맵을 짓고 그림을 찍는 시험은 무겁다. 다른 시험과 함께 돌 때도 시간에 걸리지 않게 넉넉히 준다.
+vi.setConfig({ testTimeout: 60_000 });
 
 describe('길 찾기', () => {
   it('막힌 곳을 돌아서 간다', () => {
@@ -667,7 +688,7 @@ describe('막힌 문과 길(spec 6.3)', () => {
     const who = WHO.daughter;
     const grid = gridFor(map, who);
     const from = map.start[who.role];
-    const end = nearestReachable(grid, from, 1.5, 37.5);
+    const end = nearestReachable(grid, from, 4.5, 37.5);
     const near = closedGateNear(map, who, end[0], end[1]);
     expect(near?.gate.id).toBe('hyanggyo');
     expect(near?.reason).toBe('여자는 향교에 다닐 수 없었어요');
@@ -754,5 +775,569 @@ describe('맵을 짓는 도구', () => {
     expect(b.free(8, 5)).toBe(true);
     b.put('tuft', 0, 0);
     expect(b.free(0, 0)).toBe(true); // 풀포기는 막지 않는다
+  });
+});
+
+// ── 네 계절의 느티골(바퀴 1-라) ─────────────────────────────────
+// 같은 맵이 계절(과 날씨, 가을의 때)에 따라 다른 모습으로 지어진다. 자리의 칸과 처음 서는 칸, 크기는 같다.
+
+const LOOKS: { name: string; season: Season; weather: Weather; stage: Stage; flood?: boolean }[] = [
+  { name: '봄', season: 'spring', weather: 'clear', stage: 'late' },
+  { name: '여름', season: 'summer', weather: 'clear', stage: 'late' },
+  { name: '큰비가 온 여름(단오 전)', season: 'summer', weather: 'rain', stage: 'early' },
+  { name: '큰비가 온 여름(단오 뒤)', season: 'summer', weather: 'rain', stage: 'late' },
+  { name: '가을(장정들이 떠나기 전)', season: 'autumn', weather: 'clear', stage: 'early' },
+  { name: '가을(떠난 뒤)', season: 'autumn', weather: 'clear', stage: 'gone' },
+  { name: '가을(돌아온 뒤)', season: 'autumn', weather: 'clear', stage: 'late' },
+  { name: '가을(가을걷이 뒤)', season: 'autumn', weather: 'clear', stage: 'done' },
+  { name: '큰비가 온 해의 가을(돌아온 뒤)', season: 'autumn', weather: 'clear', stage: 'late', flood: true },
+  { name: '큰비가 온 해의 가을(가을걷이 뒤)', season: 'autumn', weather: 'clear', stage: 'done', flood: true },
+  { name: '겨울', season: 'winter', weather: 'clear', stage: 'late' },
+];
+const mapOf = (look: (typeof LOOKS)[number]): MapData => neutigol(look.season, look.weather, look.stage, look.flood);
+
+// 여름·가을·겨울에 새로 쓰는 자리(대본 14절과 맞춘 이름)
+const NEW_SPOTS = ['streamside', 'streamBank', 'northRoad', 'westRoad', 'hyanggyoRoad', 'threshing', 'passTop', 'neighborHouse', 'highPaddy'];
+
+describe('네 계절의 느티골', () => {
+  const spring = neutigol();
+
+  it('계절을 적지 않으면 봄이고, 계절과 날씨가 맵에 적혀 있다. 날씨는 여름에만 갈린다', () => {
+    expect(spring.season).toBe('spring');
+    expect(spring.weather).toBe('clear');
+    for (const look of LOOKS) {
+      const map = mapOf(look);
+      expect(map.season, look.name).toBe(look.season);
+      expect(map.weather, look.name).toBe(look.weather);
+    }
+    for (const season of ['spring', 'autumn', 'winter'] as const) {
+      expect(neutigol(season, 'rain').weather, season).toBe('clear');
+      expect(neutigol(season, 'rain'), season).toBe(neutigol(season, 'clear'));
+    }
+    expect(neutigol('summer', 'rain')).not.toBe(neutigol('summer', 'clear'));
+  });
+
+  it('저장과 맞물리는 것은 계절이 바뀌어도 같다: 크기, 자리의 이름과 칸, 처음 서는 칸, 구역, 문의 이름', () => {
+    for (const look of LOOKS) {
+      const map = mapOf(look);
+      expect([map.w, map.h], look.name).toEqual([96, 72]);
+      expect(map.spots, look.name).toEqual(spring.spots);
+      expect(map.start, look.name).toEqual(spring.start);
+      expect(map.zones, look.name).toEqual(spring.zones);
+      expect(map.gates.map((g) => g.id), look.name).toEqual(spring.gates.map((g) => g.id));
+      for (const gate of map.gates) {
+        expect(gate.tiles.length, `${look.name} ${gate.id}`).toBeGreaterThan(0);
+        for (const [x, y] of gate.tiles) expect(map.blocked[y * map.w + x], `${look.name} ${gate.id}`).toBe(0);
+      }
+    }
+    // 봄의 자리 아홉과 처음 서는 칸은 1-다 그대로다(저장이 칸을 적는다)
+    const at = (id: string): unknown => spring.spots.find((s) => s.id === id)?.stand;
+    expect(spring.start).toEqual({ farmer: [39, 35], son: [52, 25], daughter: [53, 25], nobi: [64, 27] });
+    expect([at('tree'), at('treeShade'), at('home'), at('well'), at('ourPaddy'), at('neighborPaddy'), at('templeRoad'), at('temple'), at('woods')]).toEqual([
+      [29, 36],
+      [32, 35],
+      [39, 34],
+      [46, 34],
+      [44, 54],
+      [44, 57],
+      [69, 18],
+      [69, 12],
+      [39, 10],
+    ]);
+  });
+
+  it('언제 지어도 같은 맵이 나온다(계절마다)', () => {
+    for (const look of LOOKS) {
+      const a = mapOf(look);
+      const b = buildNeutigol(look.season, look.weather, look.stage, look.flood);
+      expect(fingerprint(b), look.name).toBe(fingerprint(a));
+      expect(b.dwellers, look.name).toEqual(a.dwellers);
+    }
+  });
+
+  it('끼이는 칸이 없다(계절마다): 문이 모두 열려 있으면 걸을 수 있는 칸은 서로 이어져 있다', () => {
+    for (const look of LOOKS) {
+      const map = mapOf(look);
+      const grid = gridFor(map, null);
+      const reach = reachFrom(grid, map.start.farmer[0], map.start.farmer[1]);
+      let walk = 0;
+      let reached = 0;
+      for (let i = 0; i < reach.length; i++) {
+        if (grid.blocked[i] === 0) walk++;
+        if (reach[i] > 0) reached++;
+      }
+      expect(reached, look.name).toBe(walk);
+      expect(walk, look.name).toBeGreaterThan(1500);
+    }
+  });
+
+  it('풀밭처럼 보이는데 못 들어가는 칸이 없다(계절마다)', () => {
+    for (const look of LOOKS) {
+      const map = buildNeutigol(look.season, look.weather, look.stage, look.flood);
+      const b = new MapBuilder(map.w, map.h, 1);
+      for (const o of map.objects) b.put(o.kind, o.tx, o.ty);
+      for (const d of map.dwellers) if (d.solid) b.solid[d.at[1] * map.w + d.at[0]] = 1;
+      const sealed: string[] = [];
+      for (let i = 0; i < map.w * map.h; i++) {
+        if (map.blocked[i] === 1 && terrainWalkable(map.terrain[i]) && b.solid[i] === 0) sealed.push(`${i % map.w},${Math.floor(i / map.w)}`);
+      }
+      expect(sealed, look.name).toEqual([]);
+    }
+  });
+
+  it('맵 가장자리로 걸어 나갈 수 없다(계절마다 — 길목 셋만 맵 끝에 닿는다)', () => {
+    for (const look of LOOKS) {
+      const map = mapOf(look);
+      const open: string[] = [];
+      for (let y = 0; y < map.h; y++) {
+        for (let x = 0; x < map.w; x++) {
+          if (x !== 0 && y !== 0 && x !== map.w - 1 && y !== map.h - 1) continue;
+          if (map.blocked[y * map.w + x] === 0) open.push(`${x},${y}`);
+        }
+      }
+      expect(open.every((key) => /^0,3[78]$|^2[45],0$|^95,2[1-5]$/.test(key)), `${look.name} ${open.join(' ')}`).toBe(true);
+    }
+  });
+
+  it('자리의 설 칸과 처음 서는 칸은 네 계절 모두 걸을 수 있다(세운 것도 사람도 그 칸을 차지하지 않는다)', () => {
+    for (const look of LOOKS) {
+      const map = mapOf(look);
+      for (const spot of map.spots) expect(map.blocked[spot.stand[1] * map.w + spot.stand[0]], `${look.name} ${spot.id}`).toBe(0);
+      for (const [role, [x, y]] of Object.entries(map.start)) expect(map.blocked[y * map.w + x], `${look.name} ${role}`).toBe(0);
+      const taken = new Set(map.dwellers.filter((d) => d.solid).map((d) => `${d.at[0]},${d.at[1]}`));
+      for (const spot of map.spots) expect(taken.has(`${spot.stand[0]},${spot.stand[1]}`), `${look.name} ${spot.id}`).toBe(false);
+      for (const [x, y] of Object.values(map.start)) expect(taken.has(`${x},${y}`), look.name).toBe(false);
+    }
+  });
+
+  it('새 자리 아홉: 농민 집 아이 두 모습이 향교 가는 길을 뺀 모든 자리에 닿고, 향교 가는 길은 남자아이 모습만 닿는다', () => {
+    const ids = spring.spots.map((s) => s.id);
+    for (const id of NEW_SPOTS) expect(ids, id).toContain(id);
+    for (const look of LOOKS) {
+      const map = mapOf(look);
+      for (const who of [WHO.farmerBoy, WHO.farmerGirl]) {
+        const grid = gridFor(map, who);
+        const reach = reachFrom(grid, map.start.farmer[0], map.start.farmer[1]);
+        for (const spot of map.spots) {
+          // 양반 댁 안마당은 농민 집 아이에게 닫혀 있다(봄부터)
+          if (spot.id === 'innerYard') continue;
+          const can = reach[spot.stand[1] * map.w + spot.stand[0]] > 0;
+          const want = spot.id === 'hyanggyoRoad' ? who.look === 'boy' : true;
+          expect(can, `${look.name} ${who.look} → ${spot.id}`).toBe(want);
+          if (want) expect(routeTo(grid, tileCenter(map.start.farmer[0], map.start.farmer[1]), spot.stand), `${look.name} ${spot.id}`).not.toBeNull();
+        }
+      }
+    }
+    // 길목의 자리는 문 앞에, 향교 가는 길은 문 너머에 있다
+    const of = (id: string) => spring.spots.find((s) => s.id === id)!;
+    const gateX = Math.max(...spring.gates.find((g) => g.id === 'hyanggyo')!.tiles.map(([x]) => x));
+    expect(of('westRoad').stand[0]).toBeGreaterThan(gateX);
+    expect(of('hyanggyoRoad').stand[0]).toBeLessThan(gateX);
+    const gateY = Math.max(...spring.gates.find((g) => g.id === 'hanyang')!.tiles.map(([, y]) => y));
+    expect(of('northRoad').stand[1]).toBeGreaterThan(gateY);
+    // 향교 가는 길의 까닭은 그대로다
+    expect(gateReason(spring.gates.find((g) => g.id === 'hyanggyo')!, WHO.farmerGirl)).toBe('여자는 향교에 다닐 수 없었어요');
+    for (const spot of spring.spots) {
+      expect(spot.label.length, spot.label).toBeLessThanOrEqual(10);
+      expect(Object.keys(spot).sort(), spot.id).toEqual(['at', 'id', 'label', 'stand']);
+    }
+  });
+
+  it('계절의 것은 그 계절의 맵에만 놓인다(세운 것과 사람 모두)', () => {
+    const seasonal = ['swing', 'sandring', 'wrestlers', 'basin', 'sheaf', 'sheafpile', 'gaesang', 'grainmat', 'bundle', 'snowpile'];
+    const kindsOf = (map: MapData): Set<string> => new Set(map.objects.map((o) => o.kind));
+    for (const kind of seasonal) expect(kindsOf(spring).has(kind), kind).toBe(false);
+    for (const look of LOOKS) {
+      const map = mapOf(look);
+      for (const o of map.objects) {
+        if (o.seasons) expect(o.seasons, `${look.name} ${o.kind}`).toContain(map.season);
+        if (o.weather) expect(o.weather, `${look.name} ${o.kind}`).toBe(map.weather);
+      }
+      for (const d of map.dwellers) {
+        if (d.seasons) expect(d.seasons, `${look.name} ${d.id}`).toContain(map.season);
+        if (d.weather) expect(d.weather, `${look.name} ${d.id}`).toBe(map.weather);
+      }
+      // 맵에 서는 사람과 짐승의 이름은 서로 다르다(이야기의 표시에 따라 가려 세울 때 이름으로 찾는다)
+      const ids = map.dwellers.map((d) => d.id);
+      expect(new Set(ids).size, look.name).toBe(ids.length);
+    }
+    const summer = kindsOf(neutigol('summer'));
+    for (const kind of ['swing', 'sandring', 'wrestlers', 'basin']) expect(summer.has(kind), kind).toBe(true);
+    for (const kind of ['sheaf', 'gaesang', 'snowpile']) expect(summer.has(kind), kind).toBe(false);
+    const late = kindsOf(neutigol('autumn', 'clear', 'late'));
+    for (const kind of ['sheaf', 'sheafpile', 'gaesang', 'grainmat']) expect(late.has(kind), kind).toBe(true);
+    for (const kind of ['swing', 'wrestlers', 'snowpile']) expect(late.has(kind), kind).toBe(false);
+    const winter = kindsOf(neutigol('winter'));
+    expect(winter.has('snowpile')).toBe(true);
+    for (const kind of ['swing', 'sheaf', 'gaesang']) expect(winter.has(kind), kind).toBe(false);
+  });
+
+  it('논은 계절마다 다르다: 봄에는 갈아엎은 논이 있고, 여름에는 모두 벼가 자랐고, 큰비가 온 해에는 낮은 논이 잠긴다', () => {
+    const count = (map: MapData, t: number, y0: number, y1: number): number => {
+      let n = 0;
+      for (let y = y0; y <= y1; y++) for (let x = 33; x <= 70; x++) if (map.terrain[y * map.w + x] === t) n++;
+      return n;
+    };
+    // 낮은 논(53~57줄)과 높은 논(46~49줄)
+    expect(count(spring, T.soil, 46, 57)).toBeGreaterThan(80);
+    const summer = neutigol('summer');
+    expect(count(summer, T.soil, 46, 57)).toBe(0);
+    expect(count(summer, T.paddy, 46, 57)).toBe(count(spring, T.paddy, 46, 57) + count(spring, T.soil, 46, 57));
+    const rain = neutigol('summer', 'rain');
+    expect(count(rain, T.paddy, 53, 57)).toBe(0); // 낮은 논은 모두 잠겼다
+    expect(count(rain, T.soil, 53, 57)).toBeGreaterThan(120);
+    expect(count(rain, T.soil, 46, 49)).toBe(0); // 높은 논의 벼는 서 있다
+    // 가을: 장정들이 돌아오기 전에는 벤 논이 없고, 돌아온 뒤에는 벤 논과 선 논이 함께 있다
+    expect(count(neutigol('autumn', 'clear', 'early'), T.soil, 46, 57)).toBe(0);
+    const late = neutigol('autumn', 'clear', 'late');
+    expect(count(late, T.soil, 46, 57)).toBeGreaterThan(60);
+    expect(count(late, T.paddy, 46, 57)).toBeGreaterThan(60);
+    // 벤 논에만 볏단이 선다
+    for (const o of late.objects) {
+      if (o.kind !== 'sheaf' || o.ty < 46) continue;
+      expect(late.terrain[o.ty * late.w + o.tx], `${o.tx},${o.ty}`).toBe(T.soil);
+    }
+  });
+
+  it('큰비가 온 해: 냇물이 불어난다(물 칸이 는다). 징검다리와 나무다리는 그대로 건넌다', () => {
+    const water = (map: MapData): number => map.terrain.reduce((n, t) => n + (t === T.shallow || t === T.deep ? 1 : 0), 0);
+    const clear = neutigol('summer');
+    const rain = neutigol('summer', 'rain');
+    expect(water(rain)).toBeGreaterThan(water(clear) * 1.2);
+    const reach = reachFrom(gridFor(rain, WHO.farmerGirl), rain.start.farmer[0], rain.start.farmer[1]);
+    for (const id of ['streamside', 'streamBank', 'passTop']) {
+      const spot = rain.spots.find((s) => s.id === id)!;
+      expect(reach[spot.stand[1] * rain.w + spot.stand[0]], id).toBeGreaterThan(0);
+    }
+    // 무너진 논둑은 냇가 쪽 논둑의 자리 곁이다
+    const bank = rain.spots.find((s) => s.id === 'streamBank')!;
+    let broken = 0;
+    for (let x = bank.at[0] - 2; x <= bank.at[0] + 3; x++) if (rain.terrain[bank.at[1] * rain.w + x] === T.shallow) broken++;
+    expect(broken).toBeGreaterThan(0);
+    expect(clear.terrain[bank.at[1] * clear.w + bank.at[0] + 1]).toBe(T.ridge);
+  });
+
+  it('맵의 때는 판의 표시로 정한다: 가을은 떠나기 전 · 떠난 뒤 · 돌아온 뒤 · 가을걷이 뒤, 큰비가 온 여름은 단오 전 · 뒤', () => {
+    expect(stageOf('autumn', [])).toBe('early');
+    expect(stageOf('autumn', ['leave.tend'])).toBe('gone');
+    expect(stageOf('autumn', ['leave.ours'])).toBe('gone');
+    expect(stageOf('autumn', ['leave.ours', 'leave.back'])).toBe('late');
+    expect(stageOf('autumn', ['leave.ours', 'leave.back', 'harvest.done'])).toBe('done');
+    expect(stageOf('summer', [], 'rain')).toBe('early');
+    expect(stageOf('summer', ['dano.done'], 'rain')).toBe('late');
+    expect(stageOf('summer', [], 'clear')).toBe('late');
+    for (const season of ['spring', 'winter'] as const) expect(stageOf(season, [])).toBe('late');
+    expect(seasonalMap('neutigol', 'autumn', 'clear', { flags: [] })).toBe(neutigol('autumn', 'clear', 'early'));
+    expect(seasonalMap('neutigol', 'autumn', 'clear', { flags: ['leave.tend'] })).toBe(neutigol('autumn', 'clear', 'gone'));
+    expect(seasonalMap('neutigol', 'autumn', 'clear', { flags: ['leave.tend', 'leave.back'] })).toBe(neutigol('autumn', 'clear', 'late'));
+    expect(seasonalMap('neutigol', 'autumn', 'clear', { flags: ['leave.tend', 'leave.back', 'harvest.done'], flood: true })).toBe(neutigol('autumn', 'clear', 'done', true));
+    expect(seasonalMap('neutigol', 'summer', 'rain', { flags: [] })).toBe(neutigol('summer', 'rain', 'early'));
+    expect(seasonalMap('neutigol', 'summer', 'rain', { flags: ['dano.done'] })).toBe(neutigol('summer', 'rain', 'late'));
+    expect(seasonalMap('neutigol', 'spring')).toBe(neutigol());
+    expect(seasonalMap('없는 맵', 'spring')).toBeUndefined();
+    // 맵에 없는 때는 'late'로 친다(같은 맵이다)
+    expect(neutigol('winter', 'clear', 'early')).toBe(neutigol('winter'));
+    expect(neutigol('summer', 'clear', 'early')).toBe(neutigol('summer'));
+    expect(neutigol('spring', 'clear', 'late', true)).toBe(neutigol('spring')); // 큰물은 가을의 논에만
+    // 맵의 모습이 같으면 열쇠가 같다(맵 화면이 판을 새로 짓지 않는다)
+    expect(mapLook('neutigol', 'autumn', 'clear', { flags: ['leave.tend'] })).toBe(mapLook('neutigol', 'autumn', 'clear', { flags: ['leave.ours'] }));
+    expect(mapLook('neutigol', 'autumn', 'clear', { flags: [] })).not.toBe(mapLook('neutigol', 'autumn', 'clear', { flags: ['leave.tend'] }));
+    expect(mapLook('neutigol', 'autumn', 'clear', { flags: ['leave.tend', 'leave.back'] })).not.toBe(mapLook('neutigol', 'autumn', 'clear', { flags: ['leave.tend', 'leave.back'], flood: true }));
+    expect(mapLook('neutigol', 'summer', 'clear', { flags: [] })).toBe(mapLook('neutigol', 'summer', 'clear', { flags: ['leave.back', 'dano.done'] }));
+    expect(mapLook('neutigol', 'summer', 'rain', { flags: [] })).not.toBe(mapLook('neutigol', 'summer', 'rain', { flags: ['dano.done'] }));
+  });
+
+  it('가을걷이를 마치면 논이 거의 다 베이고, 낫질하던 형은 장작을 팬다(1-라 review 26번 ㉣)', () => {
+    const late = neutigol('autumn', 'clear', 'late');
+    const done = neutigol('autumn', 'clear', 'done');
+    const cut = (map: MapData): number => map.terrain.reduce((n, t) => n + (t === T.soil ? 1 : 0), 0);
+    const standingRice = (map: MapData): number => map.terrain.reduce((n, t) => n + (t === T.paddy ? 1 : 0), 0);
+    expect(cut(done)).toBeGreaterThan(cut(late) + 60);
+    expect(standingRice(done)).toBeLessThan(standingRice(late) / 2);
+    // 우리 논은 다 베었다
+    for (let y = 53; y <= 57; y++) for (let x = 34; x <= 43; x++) expect(done.terrain[y * done.w + x], `${x},${y}`).toBe(T.soil);
+    expect(done.objects.filter((o) => o.kind === 'sheaf').length).toBeGreaterThan(late.objects.filter((o) => o.kind === 'sheaf').length);
+    // 낫질하는 사람이 없다(가을걷이를 마친 판의 표시로 서 있는 사람을 본다)
+    const facts = (flags: string[]) => ({ role: 'farmer' as const, look: 'boy' as const, stats: { living: 5, body: 5, trust: 5 }, flags, draw: null, items: [] });
+    const reaping = (map: MapData, flags: string[]): boolean => map.dwellers.some((d) => d.sprite.endsWith('Sickle') && (!d.shows || meets(d.shows, facts(flags))));
+    expect(reaping(done, ['leave.tend', 'leave.back', 'harvest.done'])).toBe(false);
+    expect(reaping(late, ['leave.tend', 'leave.back'])).toBe(true);
+    const brother = done.dwellers.find((d) => d.person === 'brother' && d.shows && meets(d.shows, facts(['leave.tend', 'leave.back', 'harvest.done'])))!;
+    expect(brother.about).toContain('장작');
+  });
+
+  it('큰비가 온 해의 가을: 냇가 쪽 낮은 논의 벼가 성기고 볏단이 드물다(풍년 들판이 아니다 — 1-라 review 26번 ㉤)', () => {
+    for (const stage of ['early', 'late', 'done'] as const) {
+      const dry = neutigol('autumn', 'clear', stage);
+      const wet = neutigol('autumn', 'clear', stage, true);
+      expect(dry.thin, stage).toBeUndefined();
+      expect(wet.thin, stage).toBeDefined();
+      let thinLow = 0;
+      let thinHigh = 0;
+      for (let y = 0; y < wet.h; y++) {
+        for (let x = 0; x < wet.w; x++) {
+          if (!wet.thin![y * wet.w + x]) continue;
+          if (y >= 53) thinLow++;
+          else thinHigh++;
+        }
+      }
+      expect(thinLow, stage).toBeGreaterThan(150);
+      expect(thinHigh, stage).toBe(0);
+      // 땅과 길은 같다(같은 자리에 같은 것이 선다)
+      expect(Array.from(wet.blocked), stage).toEqual(Array.from(dry.blocked));
+      const low = (map: MapData): number => map.objects.filter((o) => o.kind === 'sheaf' && o.ty >= 53).length;
+      if (stage !== 'early') expect(low(wet), stage).toBeLessThan(low(dry) / 2);
+    }
+  });
+
+  it('큰비가 온 해의 단오: 비가 잠깐 멎어 놀이판이 서고, 단오를 보내면 다시 비가 오고 놀이판이 빈다(1-라 review 26번 ㉥)', () => {
+    const clear = neutigol('summer');
+    const before = neutigol('summer', 'rain', 'early');
+    const after = neutigol('summer', 'rain', 'late');
+    expect(clear.raining).toBe(false);
+    expect(before.raining).toBe(false);
+    expect(after.raining).toBe(true);
+    // 잠긴 논과 불어난 냇물은 단오 전에도 그대로다
+    expect(Array.from(before.terrain)).toEqual(Array.from(after.terrain));
+    const kinds = (map: MapData): string[] => map.objects.filter((o) => ['wrestlers', 'basin', 'swing'].includes(o.kind)).map((o) => `${o.kind}:${o.variant}`).sort();
+    expect(kinds(before)).toEqual(kinds(clear));
+    expect(kinds(after)).toEqual(['swing:0']);
+    const play = ['friend-boy', 'friend-girl', 'village-elder'];
+    for (const person of play) {
+      expect(before.dwellers.some((d) => d.person === person), person).toBe(true);
+      expect(after.dwellers.some((d) => d.person === person), person).toBe(false);
+    }
+    expect(before.dwellers.some((d) => d.sprite === 'changpoWoman')).toBe(true);
+    expect(after.dwellers.some((d) => d.sprite === 'changpoWoman')).toBe(false);
+    // 놀이판의 사람과 것은 물이 아닌 땅 위에 있다
+    for (const d of before.dwellers.filter((one) => play.includes(one.person ?? '') || one.sprite === 'changpoWoman')) {
+      expect(terrainWalkable(before.terrain[d.at[1] * before.w + d.at[0]]), d.id).toBe(true);
+    }
+    // 김매는 식구는 잠긴 낮은 논이 아니라 높은 논에 있다(단오 전과 뒤 모두)
+    for (const map of [before, after]) {
+      const weeding = map.dwellers.filter((d) => d.about.includes('김을 매'));
+      expect(weeding.length).toBeGreaterThanOrEqual(4);
+      for (const d of weeding) {
+        expect(map.terrain[d.at[1] * map.w + d.at[0]], d.id).toBe(T.paddy);
+        expect(d.at[1], d.id).toBeLessThan(53);
+      }
+    }
+  });
+
+  it('장정들이 떠난 뒤에는 느티나무 아래의 짐 꾸러미가 없다(1-라 review 26번 ㉧)', () => {
+    const bundles = (stage: Stage): number => neutigol('autumn', 'clear', stage).objects.filter((o) => o.kind === 'bundle').length;
+    expect(bundles('early')).toBeGreaterThan(0);
+    for (const stage of ['gone', 'late', 'done'] as const) expect(bundles(stage), stage).toBe(0);
+  });
+});
+
+describe('계절마다의 사람과 짐승', () => {
+  const idsOf = (map: MapData): string[] => map.dwellers.map((d) => d.id);
+  const onPlot = (map: MapData): string[] =>
+    map.dwellers.filter((d) => !d.animal && [T.paddy, T.soil].includes(map.terrain[d.at[1] * map.w + d.at[0]] as 7 | 8)).map((d) => d.id);
+
+  it('봄의 사람과 짐승은 1-다 그대로다', () => {
+    const spring = neutigol();
+    for (const id of ['granny', 'returned', 'returnedAtPaddy', 'monk', 'wellWoman', 'elder', 'boyKid', 'girlKid', 'templeMonk', 'roadMonk', 'farmerGranny', 'mother', 'father', 'brother', 'plow', 'washWoman', 'lady', 'sister', 'youngLord', 'nobiMother', 'nobiGranny', 'chick1', 'chick2', 'ox']) {
+      expect(idsOf(spring), id).toContain(id);
+    }
+    const of = (id: string) => spring.dwellers.find((d) => d.id === id)!;
+    expect(of('mother').at).toEqual([41, 34]);
+    expect(of('father').at).toEqual([43, 55]);
+    expect(of('granny').at).toEqual([31, 34]);
+    expect(of('plow').route).toEqual([[47, 55], [53, 55]]);
+    expect(of('ox').at).toEqual([31, 31]);
+  });
+
+  it('봄의 논갈이 소와 병아리는 봄에만 있다. 겨울에는 논에 사람이 없다', () => {
+    for (const look of LOOKS.slice(1)) {
+      const map = mapOf(look);
+      expect(idsOf(map), look.name).not.toContain('plow');
+      expect(idsOf(map).some((id) => id.startsWith('chick')), look.name).toBe(false);
+      expect(map.dwellers.some((d) => d.sprite === 'plowTeam'), look.name).toBe(false);
+    }
+    expect(onPlot(neutigol('winter'))).toEqual([]);
+    // 겨울에는 물새와 냇가의 빨래도 없다
+    const winter = neutigol('winter');
+    expect(winter.dwellers.some((d) => d.sprite === 'egret' || d.sprite === 'washWoman')).toBe(false);
+  });
+
+  it('여름에는 논에서 김을 매고, 냇가에 단오 놀이판이 선다. 소는 논이 아니라 풀밭에 있다', () => {
+    const summer = neutigol('summer');
+    const weeding = summer.dwellers.filter((d) => d.act === 'work' && summer.terrain[d.at[1] * summer.w + d.at[0]] === T.paddy);
+    expect(weeding.length).toBeGreaterThanOrEqual(4);
+    for (const d of weeding) expect(d.about, d.id).toContain('김을 매');
+    const ox = summer.dwellers.find((d) => d.id === 'ox')!;
+    expect(summer.terrain[ox.at[1] * summer.w + ox.at[0]]).toBe(T.grass);
+    // 놀이판의 동무들은 냇가 놀이판의 자리 곁에 있다
+    const side = summer.spots.find((s) => s.id === 'streamside')!;
+    for (const person of ['friend-boy', 'friend-girl']) {
+      const d = summer.dwellers.find((one) => one.person === person)!;
+      expect(Math.max(Math.abs(d.at[0] - side.at[0]), Math.abs(d.at[1] - side.at[1])), person).toBeLessThanOrEqual(5);
+    }
+    // 그네와 씨름판도 그 곁이다
+    for (const kind of ['swing', 'sandring', 'wrestlers']) {
+      const o = summer.objects.find((one) => one.kind === kind)!;
+      expect(Math.max(Math.abs(o.tx - side.at[0]), Math.abs(o.ty - side.at[1])), kind).toBeLessThanOrEqual(4);
+    }
+    // 큰비가 온 해: 무너진 논둑에 이웃 어른이 있다(단오 전과 뒤 모두)
+    for (const stage of ['early', 'late'] as const) {
+      const rain = neutigol('summer', 'rain', stage);
+      const bank = rain.spots.find((s) => s.id === 'streamBank')!;
+      const elder = rain.dwellers.find((d) => d.person === 'neighbor-elder')!;
+      expect(Math.max(Math.abs(elder.at[0] - bank.at[0]), Math.abs(elder.at[1] - bank.at[1])), stage).toBeLessThanOrEqual(1);
+    }
+  });
+
+  /** 판의 표시가 이럴 때 맵에 서 있는 사람들(등장인물 → 칸) */
+  function standing(map: MapData, flags: string[], look: 'boy' | 'girl' = 'boy'): Map<string, [number, number][]> {
+    const facts = { role: 'farmer' as const, look, stats: { living: 5, body: 5, trust: 5 }, flags, draw: null, items: [] };
+    const out = new Map<string, [number, number][]>();
+    for (const d of map.dwellers) {
+      if (!d.person || (d.shows && !meets(d.shows, facts))) continue;
+      out.set(d.person, [...(out.get(d.person) ?? []), d.at]);
+    }
+    return out;
+  }
+  const near = (map: MapData, at: [number, number] | undefined, spotId: string, within = 3): boolean => {
+    const spot = map.spots.find((s) => s.id === spotId)!;
+    return Boolean(at && Math.abs(at[0] - spot.at[0]) <= within && Math.abs(at[1] - spot.at[1]) <= within);
+  };
+
+  it('가을: 장정들이 느티나무 아래에 모였다가 떠나고, 돌아온 뒤에 타작 마당에서 볏단을 떤다(대본 13.2의 차례)', () => {
+    const early = neutigol('autumn', 'clear', 'early');
+    const gone0 = neutigol('autumn', 'clear', 'gone');
+    const late = neutigol('autumn', 'clear', 'late');
+    const after = neutigol('autumn', 'clear', 'done');
+    // ① 떠나기 전: 아버지와 이웃 어른이 느티나무 아래에 있다
+    const before = standing(early, []);
+    expect(near(early, before.get('father')?.[0], 'tree')).toBe(true);
+    expect(near(early, before.get('neighbor-elder')?.[0], 'tree')).toBe(true);
+    expect(before.get('father')?.length).toBe(1);
+    // ② 떠난 뒤, 돌아오기 전: 아버지와 이웃 어른은 마을에 없고, 어머니가 한양 가는 길목에 배웅을 나와 있다
+    for (const choice of ['leave.tend', 'leave.ours']) {
+      const gone = standing(gone0, [choice]);
+      expect(gone.has('father'), choice).toBe(false);
+      expect(gone.has('neighbor-elder'), choice).toBe(false);
+      expect(near(gone0, gone.get('mother')?.[0], 'northRoad'), choice).toBe(true);
+      expect(gone.get('mother')?.length, choice).toBe(1);
+    }
+    expect(gone0.dwellers.filter((d) => d.label === '떠나는 장정').length).toBeGreaterThanOrEqual(2);
+    // ③ 돌아온 뒤: 아버지와 어머니는 타작 마당에, 이웃 어른은 느티나무 그늘 곁에 있다
+    const back = standing(late, ['leave.tend', 'leave.back']);
+    expect(near(late, back.get('father')?.[0], 'threshing')).toBe(true);
+    expect(near(late, back.get('mother')?.[0], 'threshing')).toBe(true);
+    expect(near(late, back.get('neighbor-elder')?.[0], 'treeShade')).toBe(true);
+    for (const person of ['father', 'mother', 'neighbor-elder']) expect(back.get(person)?.length, person).toBe(1);
+    // ④ 가을걷이를 마친 뒤: 어머니는 고갯마루에서 윗마을 사람을 만난다
+    const done = standing(after, ['leave.tend', 'leave.back', 'harvest.done']);
+    expect(near(after, done.get('mother')?.[0], 'passTop')).toBe(true);
+    expect(near(after, done.get('pass-villager')?.[0], 'passTop')).toBe(true);
+    expect(done.get('mother')?.length).toBe(1);
+    // 관아 사람은 고을 가는 큰길에 있다
+    expect(near(after, done.get('official')?.[0], 'westRoad')).toBe(true);
+    // 어느 때에도 같은 사람이 두 곳에 서 있지 않다(절의 스님들만 여럿이다)
+    const cases: [MapData, string[]][] = [
+      [early, []],
+      [gone0, ['leave.tend']],
+      [gone0, ['leave.ours']],
+      [late, ['leave.tend', 'leave.back']],
+      [after, ['leave.ours', 'leave.back', 'harvest.done']],
+    ];
+    for (const [map, flags] of cases) {
+      for (const [person, cells] of standing(map, flags)) expect(cells.length, `${person} ${flags.join('+')}`).toBe(1);
+    }
+  });
+
+  it('겨울 향교 가는 길: 선생과 동무가 맵 왼쪽 끝에 붙지 않고, 설 칸에 선 주인공이 선생을 가리지 않는다(1-라 review 26번 ㉠)', () => {
+    const winter = neutigol('winter');
+    const spot = winter.spots.find((s) => s.id === 'hyanggyoRoad')!;
+    const teacher = winter.dwellers.find((d) => d.person === 'teacher')!;
+    const student = winter.dwellers.find((d) => d.person === 'student' && d.shows?.look === 'boy')!;
+    expect(teacher.at[0]).toBeGreaterThanOrEqual(3);
+    expect(student.at[0]).toBeGreaterThanOrEqual(3);
+    // 선생은 자리의 칸에 서고, 주인공은 그 비스듬한 앞(오른쪽 아래)에 선다: 같은 줄에서 옆 칸에 붙어 서지 않는다
+    expect(teacher.at).toEqual(spot.at);
+    expect(spot.stand[1]).toBeGreaterThan(teacher.at[1]);
+    expect(spot.stand[0]).toBeGreaterThan(teacher.at[0]);
+    // 두 사람 모두 문 너머(문의 서쪽)다
+    const gateX = Math.min(...winter.gates.find((g) => g.id === 'hyanggyo')!.tiles.map(([x]) => x));
+    for (const d of [teacher, student]) expect(d.at[0], d.id).toBeLessThan(gateX);
+    expect(spot.stand[0]).toBeLessThan(gateX);
+  });
+
+  it('겨울: 향교의 선생은 문 너머에, 향교에 다니는 동무는 길이 열린 아이에게는 향교 가는 길에, 막힌 아이에게는 마을 어귀에 있다', () => {
+    const winter = neutigol('winter');
+    const boy = standing(winter, [], 'boy');
+    const girl = standing(winter, [], 'girl');
+    expect(near(winter, boy.get('teacher')?.[0], 'hyanggyoRoad')).toBe(true);
+    expect(near(winter, boy.get('student')?.[0], 'hyanggyoRoad')).toBe(true);
+    expect(near(winter, girl.get('student')?.[0], 'tree')).toBe(true);
+    expect(boy.get('student')?.length).toBe(1);
+    expect(girl.get('student')?.length).toBe(1);
+    // 그 밖의 겨울 장면: 절의 스님, 느티나무 그늘의 마을 할머니, 옆집 동무, 타작 마당의 마을 어르신, 집의 할머니와 어머니
+    expect(near(winter, boy.get('monk')?.[0], 'temple')).toBe(true);
+    expect(near(winter, boy.get('village-grandma')?.[0], 'treeShade')).toBe(true);
+    expect(near(winter, boy.get('friend-girl')?.[0], 'neighborHouse')).toBe(true);
+    expect(near(winter, boy.get('village-elder')?.[0], 'threshing')).toBe(true);
+    expect(near(winter, boy.get('grandma')?.[0], 'home')).toBe(true);
+    expect(near(winter, boy.get('mother')?.[0], 'home')).toBe(true);
+  });
+
+  it('여름의 장면: 우리 논의 어머니와 이웃 어른, 이웃집 논의 아주머니, 양반 댁 대문 앞의 관아 사람', () => {
+    const summer = neutigol('summer');
+    const who = standing(summer, []);
+    expect(near(summer, who.get('mother')?.[0], 'ourPaddy')).toBe(true);
+    expect(near(summer, who.get('neighbor-elder')?.[0], 'ourPaddy')).toBe(true);
+    expect(near(summer, who.get('well-neighbor')?.[0], 'neighborPaddy')).toBe(true);
+    expect(near(summer, who.get('official')?.[0], 'manorFront')).toBe(true);
+    for (const [person, cells] of who) if (person !== 'monk') expect(cells.length, person).toBe(1);
+  });
+
+  it('대화 장면에 서는 사람이 맵에도 선다(새로 이은 사람들)', () => {
+    const linked = new Set<string>();
+    for (const look of LOOKS) for (const d of mapOf(look).dwellers) if (d.person) linked.add(d.person);
+    for (const person of ['neighbor-elder', 'monk', 'father', 'mother', 'village-grandma', 'well-neighbor', 'friend-boy', 'grandma', 'brother', 'village-elder', 'friend-girl', 'manor-servant', 'teacher', 'student', 'official', 'pass-villager']) {
+      expect(linked.has(person), person).toBe(true);
+    }
+    // 새 도트 넷이 맵에 선다
+    const sprites = new Set<string>();
+    for (const look of LOOKS) for (const d of mapOf(look).dwellers) sprites.add(d.sprite);
+    for (const sprite of ['teacher', 'student', 'official', 'passMan']) expect(sprites.has(sprite), sprite).toBe(true);
+  });
+
+  it('계절마다 있는 사람이 설 칸: 맵 안이고, 돌아다니는 것은 걸을 수 있는 칸에서 떠나며, 말을 걸 사람 곁에는 설 칸이 있다', () => {
+    for (const look of LOOKS) {
+      const map = mapOf(look);
+      const open = gridFor(map, null);
+      const reach = reachFrom(open, map.start.farmer[0], map.start.farmer[1]);
+      const cells = new Map<string, string>();
+      for (const d of map.dwellers) {
+        const [x, y] = d.at;
+        expect(x >= 0 && y >= 0 && x < map.w && y < map.h, `${look.name} ${d.id}`).toBe(true);
+        if (d.act === 'roam') expect(map.blocked[y * map.w + x], `${look.name} ${d.id}`).toBe(0);
+        if (d.animal) continue;
+        // 길을 막고 선 사람은 걸을 수 있는 땅 위에 선다(집이나 물 위가 아니다)
+        if (d.solid) expect(terrainWalkable(map.terrain[y * map.w + x]), `${look.name} ${d.id}`).toBe(true);
+        // 곁의 여덟 칸 가운데 걸어서 닿는 칸이 있다(논 한가운데에서 일하는 식구는 빼고 — 장면에 서는 사람은 논 가장자리에 둔다)
+        let beside = 0;
+        for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if ((i || j) && reach[(y + j) * map.w + x + i] > 0) beside++;
+        const inPlot = [T.paddy, T.soil].includes(map.terrain[y * map.w + x] as 7 | 8);
+        const cast = look.season === 'summer' && ['mother', 'neighbor-elder', 'well-neighbor'].includes(d.person ?? '');
+        if (!inPlot || cast) expect(beside, `${look.name} ${d.id}`).toBeGreaterThan(0);
+        // 표시와 상관없이 늘 서 있는 사람끼리는 한 칸에 겹쳐 서지 않는다
+        if (!d.shows) {
+          expect(cells.has(`${x},${y}`), `${look.name} ${d.id} = ${cells.get(`${x},${y}`)}`).toBe(false);
+          cells.set(`${x},${y}`, d.id);
+        }
+        expect(d.about.length, `${look.name} ${d.id}`).toBeGreaterThan(0);
+        expect(d.about.length, `${look.name} ${d.id}`).toBeLessThanOrEqual(40);
+        expect(d.label.length, `${look.name} ${d.id}`).toBeLessThanOrEqual(10);
+      }
+    }
+  });
+
+  it('SEASONS의 계절마다 맵이 지어진다', () => {
+    for (const season of SEASONS) expect(neutigol(season).season).toBe(season);
   });
 });

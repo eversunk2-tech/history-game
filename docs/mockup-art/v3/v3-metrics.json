@@ -1,0 +1,145 @@
+{
+  "note": "3차 시안(2배, 타일 32점). 그림 점 단위로 잰다. 장면은 (나) 부드러운 테두리 안. 사람은 (가)·(나) 둘 다.",
+  "warmth": {
+    "greenHue": 97.7,
+    "warmth": 50.2,
+    "darkWarmth": 6.8,
+    "darkShare": 4.7,
+    "lum": 0.54
+  },
+  "warmthA": {
+    "greenHue": 97.7,
+    "warmth": 50.3,
+    "darkWarmth": 6.6,
+    "darkShare": 4.6,
+    "lum": 0.54
+  },
+  "groundOrphans": {
+    "perTileAvg": 15.94,
+    "perTileMax": 42,
+    "per1000": 15.56
+  },
+  "groundHarsh": 0.09,
+  "groundChecker": 3.64,
+  "groundHarshChecker": 0.08,
+  "monotony": {
+    "grass": {
+      "blocks": 588,
+      "lumaStd": 5.72,
+      "warmStd": 4.32,
+      "tones": 7,
+      "flatPct": 11.3
+    },
+    "dirt": {
+      "blocks": 625,
+      "lumaStd": 5.75,
+      "warmStd": 4.55,
+      "tones": 12,
+      "flatPct": 13.5
+    }
+  },
+  "sceneColors": 59,
+  "thingOrphansPer1000": {
+    "blossom": 22,
+    "gate": 6.3,
+    "oak": 44.4,
+    "jars": 4.3,
+    "choga": 16.5,
+    "well": 17
+  },
+  "thingHarshPer1000": {
+    "blossom": 0.76,
+    "gate": 0.57,
+    "oak": 23.48,
+    "jars": 1.62,
+    "choga": 2,
+    "well": 9.19
+  },
+  "thingGrime": {
+    "gate": {
+      "grimePct": 26.6,
+      "rough": 5.02
+    },
+    "choga": {
+      "grimePct": 22.8,
+      "rough": 6.33
+    },
+    "wall": {
+      "grimePct": 33.7,
+      "rough": 6.95
+    }
+  },
+  "washDarkPct": {
+    "gate": 8.8,
+    "choga": 15.3,
+    "wall": 9.5
+  },
+  "blotch": {
+    "grass": 4.08,
+    "dirt": 4.1
+  },
+  "peopleA": {
+    "hero": {
+      "outlineShare": 0.149,
+      "orphansPer1000": 22,
+      "edgeContrast": 0.229,
+      "body": 0.627,
+      "edge": 0.452,
+      "ground": 0.573,
+      "bodyMinusGround": 0.054,
+      "groundMinusEdge": 0.12
+    },
+    "woman": {
+      "outlineShare": 0.089,
+      "orphansPer1000": 10.8,
+      "edgeContrast": 0.202,
+      "body": 0.622,
+      "edge": 0.481,
+      "ground": 0.629,
+      "bodyMinusGround": -0.007,
+      "groundMinusEdge": 0.148
+    },
+    "elder": {
+      "outlineShare": 0.089,
+      "orphansPer1000": 30.1,
+      "edgeContrast": 0.189,
+      "body": 0.771,
+      "edge": 0.541,
+      "ground": 0.598,
+      "bodyMinusGround": 0.173,
+      "groundMinusEdge": 0.058
+    }
+  },
+  "peopleB": {
+    "hero": {
+      "outlineShare": 0.265,
+      "orphansPer1000": 4.5,
+      "edgeContrast": 0.318,
+      "body": 0.609,
+      "edge": 0.262,
+      "ground": 0.574,
+      "bodyMinusGround": 0.035,
+      "groundMinusEdge": 0.311
+    },
+    "woman": {
+      "outlineShare": 0.08,
+      "orphansPer1000": 6,
+      "edgeContrast": 0.366,
+      "body": 0.615,
+      "edge": 0.284,
+      "ground": 0.628,
+      "bodyMinusGround": -0.012,
+      "groundMinusEdge": 0.343
+    },
+    "elder": {
+      "outlineShare": 0.227,
+      "orphansPer1000": 15.2,
+      "edgeContrast": 0.312,
+      "body": 0.734,
+      "edge": 0.285,
+      "ground": 0.6,
+      "bodyMinusGround": 0.134,
+      "groundMinusEdge": 0.315
+    }
+  }
+}

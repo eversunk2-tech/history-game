@@ -57,6 +57,15 @@ export function progressLine(mission: Mission, state: GameState, moreSeasons: bo
   if (state.solved.includes(mission.id)) return null;
   const progress = missionProgress(mission, state);
   if (!progress || progress.have <= 0 || progress.have >= progress.need) return null;
+  // 카드를 모으는 미션은 장수로 말한다("열 가운데 일곱을 했어요"가 아니라)
+  if (mission.done.cardCount !== undefined && !mission.done.flags) return `생활 카드 ${progress.need}장 가운데 ${progress.have}장을 모았어요.`;
   const tail = mission.season === 'year' && moreSeasons ? ' 나머지는 다른 계절에 해요.' : '';
   return `${countWord(progress.need)} 가운데 ${josa(countWord(progress.have), '을', '를')} 했어요.${tail}`;
+}
+
+const TIMES_WORDS = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
+
+/** 횟수를 우리말로: "한 번", "두 번" … "열 번". 그 밖은 "12번". */
+export function timesWord(n: number): string {
+  return Number.isInteger(n) && n >= 1 && n <= 10 ? `${TIMES_WORDS[n]} 번` : `${n}번`;
 }
