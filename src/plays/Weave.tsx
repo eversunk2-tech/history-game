@@ -15,11 +15,11 @@
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { paletteOf } from '../pixel/palette';
-import { COL, DIRS, HEROES, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W, footShadow, personSheet } from '../pixel/people';
-import { Px, hash2, hex, pick, toCanvas, vnoise } from '../pixel/px';
+import { COL, DIRS, HEROES, footShadow, personSheet } from '../pixel/people';
+import { ART, Px, hash2, hex, pick, toCanvas, vnoise } from '../pixel/px';
 import { rim } from '../pixel/shapes';
 import { heroName } from '../state/store';
-import { arrowArt } from './art';
+import { arrowArt, drawBase, drawFoot, drawPerson } from './art';
 import { Gauge, Say, useEndOnce } from './bits';
 import { PlayFrame } from './Frame';
 import type { PlayProps } from './index';
@@ -60,6 +60,8 @@ const ROW = 2;
 const SHOWN = 9;
 
 const HEMP = ['#857247', '#a8945f', '#c7b47c', '#dfcf9c', '#efe3bd'];
+/** 베틀 나무의 가장자리(먹빛이 아니라 짙은 밤빛 — spec 4.7.5의 ㄴ) */
+const EDGE = '#4a3428';
 const THREAD = ['#b8a877', '#d9cc9f', '#f1e8c6'];
 
 /** 북: 배처럼 생긴 나무통. 가운데에 씨실을 감은 꾸리가 들어 있다. */
@@ -76,22 +78,32 @@ function shuttleArt(): Px {
   return px;
 }
 
-/** 방 안: 위쪽은 흙벽과 종이 바른 창, 아래는 멍석을 깐 바닥. 겨울이라 창이 눈빛으로 희다. */
+/**
+ * 방 안: 위쪽은 흙벽, 아래는 짚으로 엮은 자리. w·h·wallH는 놀이 점이고 그림은 그림 점(× ART)으로 칠한다(spec 4.7.5) —
+ * 벽의 얼룩과 자리의 엮은 결은 그림 점으로 곱게, 띠와 결의 간격은 놀이 점 그대로.
+ */
 function paintRoom(w: number, h: number, wallH: number): Px {
   const pal = paletteOf('winter');
-  const px = new Px(w, h);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
+  const A = ART;
+  const px = new Px(w * A, h * A);
+  for (let y = 0; y < h * A; y++) {
+    const uy = (y + 0.5) / A;
+    for (let x = 0; x < w * A; x++) {
+      const ux = (x + 0.5) / A;
       const tex = hash2(x, y, 307);
-      if (y < wallH) {
-        px.set(x, y, pick(pal.clay, 0.36 + (vnoise(x / 18, y / 9, 311) - 0.5) * 0.3 + (tex - 0.5) * 0.12 - (y / wallH) * 0.12, x, y, 0.4));
-      } else if (y < wallH + 2) {
-        px.set(x, y, pal.wood[0]);
+      if (uy < wallH) {
+        px.set(x, y, pick(pal.clay, 0.36 + (vnoise(ux / 18, uy / 9, 311) - 0.5) * 0.3 + (tex - 0.5) * 0.12 - (uy / wallH) * 0.12, x, y, 0.4));
+      } else if (uy < wallH + 2) {
+        // 벽과 자리 사이의 나무 띠: 위는 볕, 아래는 그늘
+        px.set(x, y, uy < wallH + 0.5 ? pal.wood[2] : uy > wallH + 1.5 ? pal.wood[0] : pal.wood[1]);
       } else {
-        // 짚으로 엮은 자리
-        let tone = 0.34 + (hash2(x >> 2, Math.floor(y / 3), 313) - 0.5) * 0.08 + ((y - wallH) / (h - wallH)) * 0.08;
-        if (y % 3 === 0) tone -= 0.09;
-        if ((x + (Math.floor(y / 3) % 2) * 5) % 10 === 0) tone -= 0.05;
+        // 짚으로 엮은 자리: 세 놀이 점마다 엮은 줄(그림 점 하나 두께), 다섯 점마다 엇갈린 매듭
+        const row = Math.floor(uy / 3);
+        let tone = 0.34 + (hash2(Math.floor(ux / 2), row, 313) - 0.5) * 0.08 + ((uy - wallH) / (h - wallH)) * 0.08;
+        if (y % (3 * A) === 0) tone -= 0.11;
+        else if (y % (3 * A) === 1) tone += 0.03;
+        if ((Math.floor(ux) + (row % 2) * 5) % 10 === 0 && x % A === 0) tone -= 0.06;
+        tone += (vnoise(x / 3, y / 1.5, 314) - 0.5) * 0.05;
         px.set(x, y, pick(pal.thatchOld, tone, x, y, 0.3));
       }
     }
@@ -169,32 +181,50 @@ export function Weave({ rules, facts, onDone }: PlayProps): JSX.Element {
       paint(ctx, now) {
         if (!room) return;
         const lm = s.loom;
-        ctx.drawImage(room, 0, 0);
+        drawBase(ctx, room);
         const x0 = left();
         const fy = fell(lm.rows);
 
         // 베틀의 두 기둥과 날실을 감은 위쪽 막대
+        // 베틀은 그림 점(놀이 점의 반)으로 곱게: 가장자리는 먹빛이 아니라 나무의 짙은 밤빛, 볕 받는 쪽에 가는 밝은 줄, 나뭇결
+        const H2 = 1 / ART;
         const rail = (x: number): void => {
-          ctx.fillStyle = '#2a2422';
+          ctx.fillStyle = EDGE;
           ctx.fillRect(x - 3, at.top - 4, 7, h - at.top + 4);
           ctx.fillStyle = '#6f4a33';
           ctx.fillRect(x - 2, at.top - 3, 5, h - at.top + 3);
+          ctx.fillStyle = '#8d6344';
+          ctx.fillRect(x - 1, at.top - 3, 2, h - at.top + 3);
           ctx.fillStyle = '#ab8159';
-          ctx.fillRect(x - 2, at.top - 3, 2, h - at.top + 3);
+          ctx.fillRect(x - 2, at.top - 3, 1 + H2, h - at.top + 3);
+          ctx.fillStyle = '#c8a174';
+          ctx.fillRect(x - 2, at.top - 3, H2, h - at.top + 3);
+          ctx.fillStyle = '#523727';
+          ctx.fillRect(x + 3 - H2, at.top - 3, H2, h - at.top + 3);
+          // 나뭇결
+          for (let y = at.top + 2; y < h - 2; y += 7) {
+            ctx.fillRect(x + 1, y + ((x * 3) % 4), H2, 2 + H2);
+            ctx.fillRect(x - 1 + H2, y + 4, H2, 1 + H2);
+          }
         };
         rail(x0 - RAIL);
         rail(x0 + WARP + RAIL);
-        ctx.fillStyle = '#2a2422';
+        ctx.fillStyle = EDGE;
         ctx.fillRect(x0 - RAIL - 4, at.top - 1, WARP + RAIL * 2 + 9, 9);
         ctx.fillStyle = '#8d6344';
         ctx.fillRect(x0 - RAIL - 3, at.top, WARP + RAIL * 2 + 7, 7);
-        // 날실(세로로 걸린 실). 위쪽 막대에 감겨 있다가 풀려 내려온다.
-        for (let x = 0; x < WARP; x++) {
-          ctx.fillStyle = THREAD[x % 3 === 0 ? 2 : x % 3 === 1 ? 1 : 0];
-          ctx.fillRect(x0 + x, at.top + 1, 1, 5);
-          if (x % 2 === 0) {
-            ctx.fillStyle = x % 4 === 0 ? THREAD[2] : THREAD[1];
-            ctx.fillRect(x0 + x, at.top + 7, 1, fy - at.top - 7);
+        ctx.fillStyle = '#ab8159';
+        ctx.fillRect(x0 - RAIL - 3, at.top, WARP + RAIL * 2 + 7, 1 + H2);
+        ctx.fillStyle = '#6f4a33';
+        ctx.fillRect(x0 - RAIL - 3, at.top + 7 - 1 - H2, WARP + RAIL * 2 + 7, 1 + H2);
+        // 날실(세로로 걸린 실). 위쪽 막대에 감겨 있다가 풀려 내려온다 — 실은 그림 점 하나의 굵기
+        for (let x = 0; x < WARP; x += H2) {
+          const k = Math.round(x * ART);
+          ctx.fillStyle = THREAD[k % 3 === 0 ? 2 : k % 3 === 1 ? 1 : 0];
+          ctx.fillRect(x0 + x, at.top + 1, H2, 5);
+          if (k % 3 === 0) {
+            ctx.fillStyle = k % 6 === 0 ? THREAD[2] : THREAD[1];
+            ctx.fillRect(x0 + x, at.top + 7, H2, fy - at.top - 7);
           }
         }
         // 짜인 베: 줄마다 씨실이 가로로 놓였다. 네 줄마다 조금 짙은 줄이 있어 베가 감겨 내려가는 것이 보인다.
@@ -203,10 +233,14 @@ export function Weave({ rules, facts, onDone }: PlayProps): JSX.Element {
           const r = lm.rows - 1 - k;
           ctx.fillStyle = HEMP[r % WEAVE_PART === WEAVE_PART - 1 ? 1 : r % 2 === 0 ? 3 : 2];
           ctx.fillRect(x0, fy + k * ROW, WARP, ROW);
+          // 씨실 한 줄의 위쪽은 볕을 받아 조금 밝다(그림 점 하나)
+          ctx.fillStyle = HEMP[r % WEAVE_PART === WEAVE_PART - 1 ? 2 : r % 2 === 0 ? 4 : 3];
+          ctx.fillRect(x0, fy + k * ROW, WARP, H2);
         }
         if (shown > 0) {
-          ctx.fillStyle = 'rgba(133, 114, 71, 0.35)';
-          for (let x = 0; x < WARP; x += 4) ctx.fillRect(x0 + x, fy, 1, shown * ROW);
+          // 날실이 씨실 위로 지나가는 자리(삼베의 올)
+          ctx.fillStyle = HEMP[1];
+          for (let x = 0; x < WARP; x += 2) ctx.fillRect(x0 + x + ((x / 2) % 2) * H2, fy, H2, shown * ROW);
           // 막 다져진 맨 윗줄은 잠깐 밝다
           if (!calm && now - grewAt < 260) {
             ctx.fillStyle = HEMP[4];
@@ -217,7 +251,7 @@ export function Weave({ rules, facts, onDone }: PlayProps): JSX.Element {
         ctx.fillRect(x0, fy + shown * ROW, WARP, at.beam - (fy + shown * ROW));
         // 베를 감는 아래쪽 막대: 짤수록 감긴 베가 두툼해진다
         const thick = 3 + Math.round((lm.rows / WEAVE_ROWS) * 5);
-        ctx.fillStyle = '#2a2422';
+        ctx.fillStyle = EDGE;
         ctx.fillRect(x0 - RAIL - 4, at.beam - 1, WARP + RAIL * 2 + 9, thick + 4);
         ctx.fillStyle = '#6f4a33';
         ctx.fillRect(x0 - RAIL - 3, at.beam, WARP + RAIL * 2 + 7, thick + 2);
@@ -245,15 +279,18 @@ export function Weave({ rules, facts, onDone }: PlayProps): JSX.Element {
           const u = (now - beatAt) / BEAT_MS;
           ry = Math.round(at.reed + (fy - 7 - at.reed) * Math.sin(u * Math.PI));
         }
-        ctx.fillStyle = '#2a2422';
+        ctx.fillStyle = EDGE;
         ctx.fillRect(x0 - RAIL - 2, ry - 1, WARP + RAIL * 2 + 5, 8);
         ctx.fillStyle = '#ab8159';
         ctx.fillRect(x0 - RAIL - 1, ry, WARP + RAIL * 2 + 3, 2);
+        ctx.fillStyle = '#c8a174';
+        ctx.fillRect(x0 - RAIL - 1, ry, WARP + RAIL * 2 + 3, H2);
         ctx.fillStyle = '#6f4a33';
         ctx.fillRect(x0 - RAIL - 1, ry + 4, WARP + RAIL * 2 + 3, 2);
-        for (let x = -2; x < WARP + 2; x++) {
-          ctx.fillStyle = x % 2 === 0 ? '#c8a174' : '#523727';
-          ctx.fillRect(x0 + x, ry + 2, 1, 2);
+        // 바디의 살: 그림 점 하나씩 엇갈린다
+        for (let x = -2; x < WARP + 2; x += H2) {
+          ctx.fillStyle = Math.round(x * ART) % 2 === 0 ? '#c8a174' : '#523727';
+          ctx.fillRect(x0 + x, ry + 2, H2, 2);
         }
 
         // 북: 쉬는 자리는 날실 바깥 양쪽이다. 건너갈 때 씨실을 끌고 간다.
@@ -286,7 +323,7 @@ export function Weave({ rules, facts, onDone }: PlayProps): JSX.Element {
         // 곁에 개어 놓은 베: 네 줄이 한 겹, 열 겹이면 한 필이다. 아직 짜지 않은 겹은 점선 자리로 보인다.
         const LAYER_W = 38;
         const px = at.pileX - LAYER_W / 2;
-        ctx.fillStyle = '#2a2422';
+        ctx.fillStyle = EDGE;
         ctx.fillRect(px - 4, at.pileY, LAYER_W + 8, 4);
         ctx.fillStyle = '#8d6344';
         ctx.fillRect(px - 3, at.pileY, LAYER_W + 6, 3);
@@ -295,7 +332,7 @@ export function Weave({ rules, facts, onDone }: PlayProps): JSX.Element {
           const y = at.pileY - 5 - k * 5;
           const done = lm.rows - k * WEAVE_PART;
           if (done >= WEAVE_PART) {
-            ctx.fillStyle = '#2a2422';
+            ctx.fillStyle = EDGE;
             ctx.fillRect(px - 1, y - 1, LAYER_W + 2, 6);
             ctx.fillStyle = HEMP[k % 2 === 0 ? 3 : 2];
             ctx.fillRect(px, y, LAYER_W, 4);
@@ -322,8 +359,8 @@ export function Weave({ rules, facts, onDone }: PlayProps): JSX.Element {
         // 베틀 곁에 앉은 나(얼굴이 보이게 앞을 보고 앉았다 — 뒷모습은 머리만 검게 보여 알아보기 어렵다)
         const sitCol = COL.sit + (Math.floor(now / 800) % 2);
         const meX = Math.round(x0 - RAIL - 19);
-        ctx.drawImage(shadowImg, meX - 8, h - 6);
-        ctx.drawImage(sheet, sitCol * PERSON_W, DIRS.indexOf('down') * PERSON_H, PERSON_W, PERSON_H, meX - PERSON_AX, h - 3 - PERSON_AY, PERSON_W, PERSON_H);
+        drawFoot(ctx, shadowImg, meX, h - 3);
+        drawPerson(ctx, sheet, sitCol, DIRS.indexOf('down'), meX, h - 3);
       },
     });
     if (!stage) return;

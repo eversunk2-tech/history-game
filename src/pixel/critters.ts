@@ -4,7 +4,7 @@
 
 import { CLOTH, type Palette } from './palette';
 import { VILLAGERS, personFrame } from './people';
-import { Px, hash2, hex, type Color } from './px';
+import { ART, Px, hash2, hex, upscale, type Color } from './px';
 
 const INK = hex('#2a2422');
 
@@ -32,6 +32,8 @@ export interface Critter {
   frames: Px[];
   ax: number;
   ay: number;
+  /** 이미 그림 점(ART)으로 그렸는가(논 가는 소의 사람). 아니면 1배 그림이라 그림 벌이 ART배로 키운다. */
+  art?: boolean;
 }
 
 // ── 닭 ───────────────────────────────────────────────────────
@@ -283,13 +285,14 @@ export function plowTeam(): Critter {
     px.set(51, 31, hex('#797a80'));
     px.set(50, 31, hex('#bfbbb0'));
     px.set(50, 32, hex('#585b65'));
-    const man = personFrame(VILLAGERS.plowman, 'left', 'walk', f * 2 + 1);
-    // 사람의 테두리는 personFrame이 이미 둘렀다
     px.outline(INK);
-    px.blit(man, 50, 2);
-    return px;
+    // 소와 쟁기는 1배 그림이라(그림 올리기 ②에서 다시 그린다) 그림 점으로 키우고, 쟁기를 잡은 사람은 그림 점으로 그린 것을 얹는다
+    const big = upscale(px, ART);
+    // 사람의 테두리는 personFrame이 이미 둘렀다
+    big.blit(personFrame(VILLAGERS.plowman, 'left', 'walk', f * 2 + 1), 50 * ART, 2 * ART);
+    return big;
   });
-  return { frames, ax: 38, ay: 32 };
+  return { frames, ax: 38 * ART, ay: 32 * ART, art: true };
 }
 
 // ── 물새(백로) ────────────────────────────────────────────────

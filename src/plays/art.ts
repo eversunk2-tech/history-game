@@ -3,8 +3,33 @@
 // 생김새(되, 자루, 베틀)는 확인하지 못한 것이 많아 단순하게 그렸다(spec 12.3의 21번).
 
 import { paletteOf, type Palette, type Ramp } from '../pixel/palette';
-import { Px, clamp, hash2, hex, mix, pick, vnoise, fbm, type Color } from '../pixel/px';
+import { FOOT_SHIFT, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W } from '../pixel/people';
+import { ART, Px, clamp, hash2, hex, mix, pick, vnoise, fbm, type Color } from '../pixel/px';
 import { rim } from '../pixel/shapes';
+
+// ── 놀이판에 사람을 세우는 도구(놀이 점 → 그림 점) ───────────────────
+
+/**
+ * 사람 시트의 한 칸(그림 점 48×64)을 놀이 점 (x, y)에 발끝을 맞춰 세운다. 놀이판은 ART배로 늘여 두었으므로
+ * 그림 점 하나가 캔버스 점 하나에 1:1로 놓인다(키워 붙이지 않는다).
+ */
+export function drawPerson(ctx: CanvasRenderingContext2D, sheet: CanvasImageSource, col: number, row: number, x: number, y: number, rows = PERSON_H): void {
+  ctx.drawImage(sheet, col * PERSON_W, row * PERSON_H, PERSON_W, rows, x - PERSON_AX / ART, y - PERSON_AY / ART, PERSON_W / ART, rows / ART);
+}
+
+/** 발밑의 따뜻한 그림자(footShadow — 그림 점 32×12)를 놀이 점 (x, y)의 발밑에 곱해 얹는다(가운데가 FOOT_SHIFT만큼 오른쪽 아래 — 맵과 같다) */
+export function drawFoot(ctx: CanvasRenderingContext2D, shadow: HTMLCanvasElement, x: number, y: number): void {
+  ctx.globalCompositeOperation = 'multiply';
+  const cx = x + FOOT_SHIFT.x / ART;
+  const cy = y + FOOT_SHIFT.y / ART;
+  ctx.drawImage(shadow, cx - (shadow.width >> 1) / ART, cy - (shadow.height >> 1) / ART, shadow.width / ART, shadow.height / ART);
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/** 바탕 한 장(그림 점, 놀이 점 × ART)을 놀이판 가득 1:1로 */
+export function drawBase(ctx: CanvasRenderingContext2D, base: HTMLCanvasElement): void {
+  ctx.drawImage(base, 0, 0, base.width / ART, base.height / ART);
+}
 
 const R = (...list: string[]): Ramp => list.map((s) => hex(s));
 
@@ -491,10 +516,15 @@ export interface PaddyOpts {
   pools?: readonly { x: number; y: number; rx: number; ry: number }[];
 }
 
-/** 위에서 본 논 한 배미: 풀이 난 둑으로 둘러싸여 있다. 볍씨 뿌리기의 봄 논과 같은 짜임이다. */
+/**
+ * 위에서 본 논 한 배미: 풀이 난 둑으로 둘러싸여 있다. 볍씨 뿌리기의 봄 논과 같은 짜임이다.
+ * w·h·bund는 놀이 점이고, 그림은 그림 점(놀이 점 × ART)으로 칠한다: 꼴(둑의 너비, 물이 고인 자리)은 놀이 점으로 셈하고
+ * 결(흙의 알갱이, 풀의 섞임)은 그림 점으로 곱게 칠한다(1배 바탕을 키워 붙이지 않는다 — spec 4.7.5).
+ */
 export function paintPaddy(w: number, h: number, o: PaddyOpts): Px {
   const pal = paletteOf(o.season);
-  const px = new Px(w, h);
+  const A = ART;
+  const px = new Px(w * A, h * A);
   const B = o.bund;
   const deep = o.muddy ? hex('#5d6a55') : hex('#3f6a62');
   const calm = o.muddy ? hex('#74795c') : hex('#4d7a6c');
@@ -502,13 +532,15 @@ export function paintPaddy(w: number, h: number, o: PaddyOpts): Px {
   const pool = R('#4f5f66', '#6a7b7c', '#8c9a92', '#b3bcab');
   const fw = Math.max(1, w - B * 2);
   const fh = Math.max(1, h - B * 2);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const edge = Math.min(x, y, w - 1 - x, h - 1 - y) + (vnoise(x / 7, y / 7, 3) - 0.5) * 3;
+  for (let y = 0; y < h * A; y++) {
+    const uy = (y + 0.5) / A;
+    for (let x = 0; x < w * A; x++) {
+      const ux = (x + 0.5) / A;
+      const edge = Math.min(ux, uy, w - ux, h - uy) - 0.5 + (vnoise(ux / 7, uy / 7, 3) - 0.5) * 3;
       const tex = hash2(x, y, 5);
       let c: Color;
       if (edge < B - 6) {
-        c = pick(pal.grass, 0.45 + (fbm(x / 9, y / 9, 7) - 0.5) * 0.6 + (tex - 0.5) * 0.2, x, y, 0.6);
+        c = pick(pal.grass, 0.45 + (fbm(ux / 9, uy / 9, 7) - 0.5) * 0.6 + (tex - 0.5) * 0.2, x, y, 0.6);
       } else if (edge < B - 1) {
         c = tex > 0.8 ? pal.grassTip[1] : pick(pal.soil, 0.7 + (tex - 0.5) * 0.5, x, y, 0.5);
       } else if (edge < B) {
@@ -517,32 +549,32 @@ export function paintPaddy(w: number, h: number, o: PaddyOpts): Px {
         if (edge < B + 2.2) {
           c = mix(deep, hex('#20302c'), 0.25);
         } else {
-          const swell = fbm(x / 46, y / 30, 11);
+          const swell = fbm(ux / 46, uy / 30, 11);
           c = swell > 0.56 ? calm : swell > 0.5 && ((x + y) & 1) === 0 ? calm : deep;
-          if (y % 4 === 1 && hash2(Math.floor(x / 6), y, 13) > 0.94) c = glint;
+          if (y % (4 * A) === A && hash2(Math.floor(ux / 6), Math.floor(uy), 13) > 0.94) c = glint;
         }
       } else {
         // 물을 뺀 가을 논바닥: 마른 흙과 군데군데 남은 짚 부스러기
-        const lump = fbm(x / 22, y / 16, 17);
+        const lump = fbm(ux / 22, uy / 16, 17);
         c = pick(pal.mud, 0.42 + (lump - 0.5) * 0.9 + (tex - 0.5) * 0.25, x, y, 0.5);
-        if (tex > 0.965) c = pal.thatchOld[4];
+        if (hash2(x >> 1, y >> 1, 6) > 0.965) c = pal.thatchOld[4];
         if (edge < B + 1.5) c = pal.mud[0];
         // 큰비에 물이 고인 자리: 흙탕물과 쓰러진 벼
         if (o.pools && o.pools.length > 0) {
-          const nx = (x - B) / fw;
-          const ny = (y - B) / fh;
+          const nx = (ux - B) / fw;
+          const ny = (uy - B) / fh;
           for (const p of o.pools) {
             const dx = (nx - p.x) / p.rx;
             const dy = (ny - p.y) / p.ry;
-            const d = dx * dx + dy * dy + (vnoise(x / 9, y / 9, 19) - 0.5) * 0.35;
+            const d = dx * dx + dy * dy + (vnoise(ux / 9, uy / 9, 19) - 0.5) * 0.35;
             if (d < 1) {
               const depth = 1 - d;
-              c = pick(pool, 0.2 + depth * 0.6 + (vnoise(x / 14, y / 5, 23) - 0.5) * 0.5, x, y, 0.6);
+              c = pick(pool, 0.2 + depth * 0.6 + (vnoise(ux / 14, uy / 5, 23) - 0.5) * 0.5, x, y, 0.6);
               if (d > 0.82) c = pal.mud[0]; // 물가의 젖은 흙
               // 물에 쓰러져 썩어 가는 벼(어두운 누런 가닥)
-              const lay = hash2(Math.floor(x / 5), Math.floor(y / 3), 29);
-              if (lay > 0.72 && d < 0.8 && (x + Math.floor(y / 3)) % 5 < 4 && y % 3 === 0) c = lay > 0.86 ? STALK[1] : STALK[0];
-              if (y % 5 === 2 && hash2(Math.floor(x / 7), y, 37) > 0.9 && d < 0.6) c = pool[3]; // 잔물결
+              const lay = hash2(Math.floor(ux / 5), Math.floor(uy / 3), 29);
+              if (lay > 0.72 && d < 0.8 && (Math.floor(ux) + Math.floor(uy / 3)) % 5 < 4 && y % (3 * A) < A) c = lay > 0.86 ? STALK[1] : STALK[0];
+              if (y % (5 * A) === 2 * A && hash2(Math.floor(ux / 7), Math.floor(uy), 37) > 0.9 && d < 0.6) c = pool[3]; // 잔물결
             }
           }
         }
@@ -553,25 +585,29 @@ export function paintPaddy(w: number, h: number, o: PaddyOpts): Px {
   return px;
 }
 
-/** 마당이나 길가의 흙바닥(위쪽에 가을 풀밭이 띠처럼 있다) */
+/** 마당이나 길가의 흙바닥(위쪽에 가을 풀밭이 띠처럼 있다). w·h·grassH는 놀이 점이고 그림은 그림 점이다(paintPaddy와 같다). */
 export function paintYard(w: number, h: number, season: 'autumn' | 'winter', grassH: number): Px {
   const pal = paletteOf(season);
-  const px = new Px(w, h);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
+  const A = ART;
+  const px = new Px(w * A, h * A);
+  for (let y = 0; y < h * A; y++) {
+    const uy = (y + 0.5) / A;
+    for (let x = 0; x < w * A; x++) {
+      const ux = (x + 0.5) / A;
       const tex = hash2(x, y, 41);
-      const wave = (vnoise(x / 11, 0, 43) - 0.5) * 5;
+      const wave = (vnoise(ux / 11, 0, 43) - 0.5) * 5;
       let c: Color;
-      if (y < grassH + wave - 2) {
-        c = pick(pal.grass, 0.42 + (fbm(x / 10, y / 8, 47) - 0.5) * 0.7 + (tex - 0.5) * 0.2, x, y, 0.6);
-        if (tex > 0.95) c = pal.grassTip[2];
-      } else if (y < grassH + wave) {
+      if (uy < grassH + wave - 2) {
+        c = pick(pal.grass, 0.42 + (fbm(ux / 10, uy / 8, 47) - 0.5) * 0.7 + (tex - 0.5) * 0.2, x, y, 0.6);
+        if (hash2(x >> 1, y, 46) > 0.95) c = pal.grassTip[2];
+      } else if (uy < grassH + wave) {
         c = tex > 0.5 ? pal.grass[1] : pal.yard[0];
       } else {
-        const lump = fbm(x / 26, y / 14, 53);
+        const lump = fbm(ux / 26, uy / 14, 53);
         c = pick(pal.yard, 0.5 + (lump - 0.5) * 0.7 + (tex - 0.5) * 0.18, x, y, 0.5);
-        if (tex > 0.985) c = pal.stone[3];
-        else if (tex < 0.012) c = pal.yard[0];
+        const speck = hash2(x >> 1, y >> 1, 44);
+        if (speck > 0.985) c = pal.stone[3];
+        else if (speck < 0.012) c = pal.yard[0];
       }
       px.set(x, y, c);
     }

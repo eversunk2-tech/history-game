@@ -17,10 +17,10 @@ import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Dir } from '../map/types';
 import { paletteOf } from '../pixel/palette';
-import { COL, DIRS, HEROES, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W, footShadow, personOf, personSheet } from '../pixel/people';
-import { toCanvas } from '../pixel/px';
+import { COL, DIRS, HEROES, footShadow, personOf, personSheet } from '../pixel/people';
+import { ART, toCanvas } from '../pixel/px';
 import { heroName } from '../state/store';
-import { goldClump, matArt, paintPaddy, paintYard, sackArt, shadowArt, sheafArt, stubbleArt, swathArt, type Art } from './art';
+import { drawBase, drawFoot, drawPerson, goldClump, matArt, paintPaddy, paintYard, sackArt, shadowArt, sheafArt, stubbleArt, swathArt, type Art } from './art';
 import { Gauge, Say, useEndOnce } from './bits';
 import { PlayFrame } from './Frame';
 import { clumpsNear, harvestField, harvestLeave, harvestVerdict, harvestYield, isRainYear, type HarvestEnd } from './harvestRules';
@@ -206,6 +206,9 @@ export function Harvest({ facts, onDone }: PlayProps): JSX.Element {
       const base = toCanvas(paintYard(w, h, 'autumn', Math.round(h * 0.2)));
       const yctx = base.getContext('2d');
       if (!yctx) return base;
+      // 바탕은 그림 점(놀이 점 × ART)이다. 자리 셈은 놀이 점 그대로 한다
+      yctx.setTransform(ART, 0, 0, ART, 0, 0);
+      yctx.imageSmoothingEnabled = false;
       // 자루가 놓이는 열 자리: 짚 부스러기가 깔린 둥근 자리. 큰비가 온 해에 비는 자리에는 물이 고여 있다.
       for (let i = 0; i < yields.spots; i++) {
         const [x, y] = spotAt(i);
@@ -260,8 +263,12 @@ export function Harvest({ facts, onDone }: PlayProps): JSX.Element {
         h = nh;
         paddy = toCanvas(paintPaddy(w, h, { season: 'autumn', bund: BUND, wet: false, pools: field.pools }));
         yard = paintYardScene();
-        marks.width = w;
-        marks.height = h;
+        marks.width = w * ART;
+        marks.height = h * ART;
+        if (mctx) {
+          mctx.setTransform(ART, 0, 0, ART, 0, 0);
+          mctx.imageSmoothingEnabled = false;
+        }
         for (let i = 0; i < total; i++) if (s.cut[i]) stamp(i);
         placeLabels();
       },
@@ -276,8 +283,8 @@ export function Harvest({ facts, onDone }: PlayProps): JSX.Element {
       const walking = now - me.moving < 160;
       const working = now - me.working < 240;
       const col = working ? COL.work + (Math.floor((now - me.working) / 60) % 4) : walking ? COL.walk + (Math.floor(me.step / 5) % 4) : COL.idle + (Math.floor(now / 700) % 2);
-      ctx.drawImage(shadow, hx - 8, hy - 3);
-      ctx.drawImage(sheet, col * PERSON_W, DIRS.indexOf(me.dir) * PERSON_H, PERSON_W, PERSON_H, hx - PERSON_AX, hy - PERSON_AY, PERSON_W, PERSON_H);
+      drawFoot(ctx, shadow, hx, hy);
+      drawPerson(ctx, sheet, col, DIRS.indexOf(me.dir), hx, hy);
     };
 
     function paintReap(ctx: CanvasRenderingContext2D, now: number): void {
@@ -304,8 +311,8 @@ export function Harvest({ facts, onDone }: PlayProps): JSX.Element {
           return;
         }
       }
-      ctx.drawImage(paddy, 0, 0);
-      ctx.drawImage(marks, 0, 0);
+      drawBase(ctx, paddy);
+      drawBase(ctx, marks);
       const hx = sx(me.x);
       const hy = sy(me.y);
       let heroDrawn = false;
@@ -334,14 +341,14 @@ export function Harvest({ facts, onDone }: PlayProps): JSX.Element {
         const ex = sx(Math.min(1, t * 1.05));
         const ey = sy(0.55);
         const col = COL.work + (Math.floor(now / 90) % 4);
-        ctx.drawImage(shadow, ex - 8, ey - 3);
-        ctx.drawImage(elder, col * PERSON_W, DIRS.indexOf('right') * PERSON_H, PERSON_W, PERSON_H, ex - PERSON_AX, ey - PERSON_AY, PERSON_W, PERSON_H);
+        drawFoot(ctx, shadow, ex, ey);
+        drawPerson(ctx, elder, col, DIRS.indexOf('right'), ex, ey);
       }
     }
 
     function paintShare(ctx: CanvasRenderingContext2D, now: number): void {
       if (!yard) return;
-      ctx.drawImage(yard, 0, 0);
+      drawBase(ctx, yard);
       const [mx, my] = matAt();
       const order: { x: number; y: number; hop: number }[] = [];
       for (let i = 0; i < yields.sacks; i++) {
@@ -381,8 +388,8 @@ export function Harvest({ facts, onDone }: PlayProps): JSX.Element {
         const ax = walking ? Math.round(fx - 15 + (mx - 22 - (fx - 15)) * e) : mx - MAT_W / 2 - 10;
         const ay = walking ? Math.round(fy + 3 + (my + 12 - (fy + 3)) * e) : my + 10;
         const col = walking ? COL.walk + (Math.floor(now / 110) % 4) : COL.idle + (Math.floor(now / 700) % 2);
-        ctx.drawImage(shadow, ax - 8, ay - 3);
-        ctx.drawImage(elder, col * PERSON_W, DIRS.indexOf(walking ? 'right' : 'down') * PERSON_H, PERSON_W, PERSON_H, ax - PERSON_AX, ay - PERSON_AY, PERSON_W, PERSON_H);
+        drawFoot(ctx, shadow, ax, ay);
+        drawPerson(ctx, elder, col, DIRS.indexOf(walking ? 'right' : 'down'), ax, ay);
       }
     }
 

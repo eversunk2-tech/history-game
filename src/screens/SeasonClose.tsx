@@ -10,10 +10,11 @@
 //   겨울 — 다음 계절이 없다. 단추는 "한 해 돌아보기"다.
 
 import type { JSX } from 'preact';
+import { useEffect } from 'preact/hooks';
 import { Scenery } from '../art/Scenery';
 import { cardById } from '../content/cards';
 import { seasonLabels, statLabels } from '../content/labels';
-import { deedsOfSeason, lastClosing, roleOf } from '../engine/game';
+import { deedsOfSeason, lastClosing, nextSeason, roleOf } from '../engine/game';
 import { SEASONS, STATS, TIRED_AT, type Season } from '../engine/types';
 import { game, goNextSeason, nextSeasonReady, pack, saveFailed } from '../state/store';
 import { StatIcon } from '../ui/icons';
@@ -21,10 +22,23 @@ import { MoreBox } from '../ui/More';
 import { yearAndPlace } from '../ui/where';
 import { josa, ro } from '../ui/words';
 import { deedRows, laterRows, weatherOf, weatherShownIn } from '../ui/year';
+import { prewarmGame } from './prewarm';
 
 export function SeasonClose(): JSX.Element | null {
   const p = pack.value;
   const g = game.value;
+  // 다음 계절의 맵을 이 화면이 떠 있는 동안 미리 짓는다(다음 계절로 가면 바로 뜨게 — spec 4.7.5의 ㅋ).
+  // 다음 판은 엔진이 정한 대로 셈만 해 본다(판을 바꾸지 않는다)
+  useEffect(() => {
+    const p0 = pack.peek();
+    const g0 = game.peek();
+    if (!p0 || !g0 || g0.phase !== 'seasonClose') return undefined;
+    try {
+      return prewarmGame(p0, nextSeason(p0, g0));
+    } catch {
+      return undefined;
+    }
+  }, [g?.seasonIndex, g?.phase]);
   if (!p || !g) return null;
   const closing = lastClosing(g);
   const season = closing?.season ?? SEASONS[Math.min(g.seasonIndex, SEASONS.length - 1)];

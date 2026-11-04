@@ -25,6 +25,7 @@ import {
   isRainYear,
 } from '../src/plays/harvestRules';
 import { PLAY_KINDS } from '../src/plays/kinds';
+import { playScale } from '../src/plays/stage';
 import {
   PAY_CHOICES,
   PAY_RULES,
@@ -1142,6 +1143,29 @@ describe('화면 글 — 풀리지 않은 미션을 어디까지 했는지', () 
         const line = progressLine(mission, state, true);
         expect(line, mission.id).toBe(`${countWord(flags.length)} 가운데 하나를 했어요.${mission.season === 'year' ? ' 나머지는 다른 계절에 해요.' : ''}`);
         expect(line, mission.id).not.toBe(mission.doneLine);
+      }
+    }
+  });
+});
+
+describe('놀이판의 배율 — 1-라에 가까운 짝수(그림 점이 기기 화소의 정수배)', () => {
+  it('1-라의 배율이 짝수면 그대로, 홀수면 한 칸 큰 짝수(같은 거리 — 큰 쪽). 너비가 cols의 80% 아래로 좁아지면 작은 쪽', () => {
+    // 아이패드 에어(1180×820·2)의 볍씨 뿌리기: 1-라 8 → 8
+    expect(playScale(2288, 1240, 150)).toBe(8);
+    // 아이패드 에어의 김매기: 1-라 7(너비에 걸림) → 8(놀이판 286점 — cols 300의 95%)
+    expect(playScale(2290, 1246, 150, 300)).toBe(8);
+    // 아이패드 에어의 값 치르기: 1-라 9 → 10
+    expect(playScale(2286, 1108, 112, 244)).toBe(10);
+    // 1024×768·1의 김매기: 1-라 3 → 4(247점 — 82%). 2로 내리면 사람과 풀이 1-라의 3분의 2가 된다
+    expect(playScale(990, 558, 150, 300)).toBe(4);
+    // 너무 좁아지면(cols의 80% 아래) 작은 쪽
+    expect(playScale(900, 600, 150, 300)).toBe(2);
+    // 언제나 짝수이고 2 이상
+    for (let dh = 200; dh <= 2400; dh += 37) {
+      for (const dw of [800, 1300, 2300, 3800]) {
+        const s = playScale(dw, dh, 150, 300);
+        expect(s % 2, `${dw}×${dh}`).toBe(0);
+        expect(s, `${dw}×${dh}`).toBeGreaterThanOrEqual(2);
       }
     }
   });

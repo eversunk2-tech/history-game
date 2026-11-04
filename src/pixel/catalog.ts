@@ -94,18 +94,22 @@ const SNOW_DEPTH: Record<string, number> = {
   cairn: 2,
 };
 
+/** 갈래 하나 × 생김새 하나의 그림(버퍼, 1배 — 그림 올리기 ②에서 2배로 다시 그린다) */
+export function thingDef(pal: Palette, kind: string, variant: number): SpriteDef {
+  const make = MAKERS[kind];
+  if (!make) throw new Error(`그림이 없는 갈래: ${kind}`);
+  const sprite = make(pal, variant);
+  const depth = pal.season === 'winter' ? SNOW_DEPTH[kind] : undefined;
+  if (depth) sprite.frames.forEach((f) => snowCap(f, pal.snow, depth, 700 + kind.length * 13 + variant));
+  return sprite;
+}
+
 /** 모든 갈래 × 생김새의 그림(버퍼) */
 export function thingDefs(pal: Palette): Map<string, SpriteDef> {
   const out = new Map<string, SpriteDef>();
   for (const [kind, def] of Object.entries(THINGS)) {
-    const make = MAKERS[kind];
-    if (!make) throw new Error(`그림이 없는 갈래: ${kind}`);
-    for (let v = 0; v < def.variants; v++) {
-      const sprite = make(pal, v);
-      const depth = pal.season === 'winter' ? SNOW_DEPTH[kind] : undefined;
-      if (depth) sprite.frames.forEach((f) => snowCap(f, pal.snow, depth, 700 + kind.length * 13 + v));
-      out.set(thingKey(kind, v), sprite);
-    }
+    if (!MAKERS[kind]) throw new Error(`그림이 없는 갈래: ${kind}`);
+    for (let v = 0; v < def.variants; v++) out.set(thingKey(kind, v), thingDef(pal, kind, v));
   }
   return out;
 }

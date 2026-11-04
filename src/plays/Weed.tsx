@@ -13,10 +13,10 @@ import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Dir } from '../map/types';
 import { paletteOf } from '../pixel/palette';
-import { COL, DIRS, HEROES, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W, footShadow, personSheet } from '../pixel/people';
-import { hash2, toCanvas } from '../pixel/px';
+import { COL, DIRS, HEROES, footShadow, personSheet } from '../pixel/people';
+import { ART, hash2, toCanvas } from '../pixel/px';
 import { heroName } from '../state/store';
-import { paintPaddy, riceTuft, weedArt, type Art } from './art';
+import { drawBase, drawFoot, drawPerson, paintPaddy, riceTuft, weedArt, type Art } from './art';
 import { Gauge, PxIcon, Say, useEndOnce } from './bits';
 import { PlayFrame } from './Frame';
 import type { PlayProps } from './index';
@@ -167,8 +167,12 @@ export function Weed({ rules, facts, onDone }: PlayProps): JSX.Element {
         w = nw;
         h = nh;
         field = toCanvas(paintPaddy(w, h, { season: 'summer', bund: BUND, wet: true, muddy }));
-        marks.width = w;
-        marks.height = h;
+        marks.width = w * ART;
+        marks.height = h * ART;
+        if (mctx) {
+          mctx.setTransform(ART, 0, 0, ART, 0, 0);
+          mctx.imageSmoothingEnabled = false;
+        }
         for (let i = 0; i < plants.length; i++) {
           if (s.gone[i]) stir(i);
           else shade(i);
@@ -176,8 +180,8 @@ export function Weed({ rules, facts, onDone }: PlayProps): JSX.Element {
       },
       paint(ctx, now) {
         if (!field) return;
-        ctx.drawImage(field, 0, 0);
-        ctx.drawImage(marks, 0, 0);
+        drawBase(ctx, field);
+        drawBase(ctx, marks);
         const hx = sx(me.x);
         const hy = sy(me.y);
         let heroDrawn = false;
@@ -186,8 +190,8 @@ export function Weed({ rules, facts, onDone }: PlayProps): JSX.Element {
           const walking = now - me.moving < 160;
           const working = now - me.working < 260;
           const col = working ? COL.work + (Math.floor((now - me.working) / 65) % 4) : walking ? COL.walk + (Math.floor(me.step / 5) % 4) : COL.idle + (Math.floor(now / 700) % 2);
-          ctx.drawImage(shadow, hx - 8, hy - 3);
-          ctx.drawImage(sheet, col * PERSON_W, DIRS.indexOf(me.dir) * PERSON_H, PERSON_W, PERSON_H, hx - PERSON_AX, hy - PERSON_AY, PERSON_W, PERSON_H);
+          drawFoot(ctx, shadow, hx, hy);
+          drawPerson(ctx, sheet, col, DIRS.indexOf(me.dir), hx, hy);
         };
         for (let i = 0; i < plants.length; i++) {
           if (s.gone[i]) continue;

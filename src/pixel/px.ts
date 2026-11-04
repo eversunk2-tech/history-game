@@ -8,6 +8,27 @@ export type Color = number;
 
 export const CLEAR: Color = 0;
 
+/**
+ * 그림 점 / 맵 점(spec 4.7.5의 ㄱ). 그림은 맵 점의 반 크기 점으로 촘촘하게 찍는다: 땅 한 칸은 32×32 그림 점,
+ * 사람 한 장은 48×64 그림 점이고, 화면에서는 맵 점 16×16·24×32를 차지한다(사람의 화면 크기는 그대로다).
+ * 맵의 좌표·부딪힘·길 찾기·문·누르는 자리·발 위치는 맵 점(TILE = 16) 그대로다. 그릴 때만
+ * 화면의 자리 = 맵 점 × s, 그림의 크기 = 그림 점 × (s ÷ ART)로 셈한다.
+ */
+export const ART = 2;
+
+/** 점 하나를 k×k로(이웃 점 그대로) 키운다. 그림 올리기 ② 전까지 1배 그림(집·나무·소품·짐승·표시)을 그림 점으로 옮길 때만 쓴다. */
+export function upscale(src: Px, k: number = ART): Px {
+  if (k === 1) return src;
+  const out = new Px(src.w * k, src.h * k);
+  const d = out.d;
+  for (let y = 0; y < out.h; y++) {
+    const row = Math.floor(y / k) * src.w;
+    const o = y * out.w;
+    for (let x = 0; x < out.w; x++) d[o + x] = src.d[row + Math.floor(x / k)];
+  }
+  return out;
+}
+
 export function rgb(r: number, g: number, b: number, a = 255): Color {
   return ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
 }
@@ -218,6 +239,18 @@ export class Px {
         const c = src.d[y * src.w + (flipX ? src.w - 1 - x : x)];
         if (c !== 0) this.set(dx + x, dy + y, c);
       }
+    }
+  }
+
+  /** 다른 그림을 빈 점까지 그대로 옮겨 붙인다(비쳐 보이는 점도 덮는다) */
+  blitRaw(src: Px, dx: number, dy: number): void {
+    for (let y = 0; y < src.h; y++) {
+      const yy = dy + y;
+      if (yy < 0 || yy >= this.h) continue;
+      const x0 = Math.max(0, -dx);
+      const x1 = Math.min(src.w, this.w - dx);
+      if (x1 <= x0) continue;
+      this.d.set(src.d.subarray(y * src.w + x0, y * src.w + x1), yy * this.w + dx + x0);
     }
   }
 

@@ -12,6 +12,7 @@ import { inTabOnTablet, standalone } from '../state/device';
 import { Ask } from '../ui/Ask';
 import { DeviceInfo } from '../ui/DeviceInfo';
 import { InstallGuide } from '../ui/InstallGuide';
+import { prewarmGame } from './prewarm';
 import { savedLineOf } from '../ui/year';
 
 /** 저장을 읽은 결과를 알리는 말(없으면 알리지 않는다) */
@@ -49,6 +50,11 @@ export function Title(): JSX.Element {
   useEffect(() => {
     if (inTabOnTablet() && !guideClosed) setGuide('auto');
   }, []);
+  // "이어 하기"를 누르기 전에 그 판의 맵을 미리 짓는다(누르면 바로 뜨게 — spec 4.7.5의 ㅋ)
+  useEffect(() => {
+    const cur = save.value.current;
+    return prewarmGame(cur ? getPack(cur.situationId) : undefined, cur);
+  }, [save.value.current]);
   const closeGuide = (): void => {
     guideClosed = true;
     setGuide(null);

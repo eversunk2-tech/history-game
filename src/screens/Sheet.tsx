@@ -1,5 +1,6 @@
 // 그림 견본(개발용) — 땅, 세운 것, 인물, 짐승과 표시를 한 장에 늘어놓고 배율과 계절을 바꿔 본다.
 // 그림을 고칠 때 이 화면을 실제 크기로 찍어 보며 가장 어설픈 것부터 고친다(spec 11절).
+// 캔버스의 점 하나가 그림 점(ART — 맵 점의 반) 하나다. 배율 1이면 그림 점 하나가 CSS 화소 하나다.
 
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -7,11 +8,12 @@ import { seasonLabels } from '../content/labels';
 import { SEASONS, type Season } from '../engine/types';
 import { MapBuilder } from '../map/build';
 import { THINGS } from '../map/things';
-import { T, TILE } from '../map/types';
-import { buildAtlas, paintedGround, type Atlas, type Img } from '../pixel/atlas';
+import { T } from '../map/types';
+import { WATER_TILE, buildAtlas, paintedGround, type Atlas, type Img } from '../pixel/atlas';
 import { shadesAt, thingKey } from '../pixel/catalog';
-import type { Shade } from '../pixel/ground';
+import { GROUND_TILE, type Shade } from '../pixel/ground';
 import { COL, GUISES, HEROES, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W, SHEET_COLS, VILLAGERS } from '../pixel/people';
+import { ART } from '../pixel/px';
 import { artSeason, backToTitle } from '../state/store';
 
 /** 땅의 갈래를 모두 이웃하게 놓은 작은 견본 맵 */
@@ -76,12 +78,12 @@ interface Laid {
   y: number;
 }
 
-/** 세운 것을 줄줄이 늘어놓는다 */
+/** 세운 것을 줄줄이 늘어놓는다(그림 점). 그림자는 맵 점으로 돌려준다. */
 function layThings(atlas: Atlas, width: number): { items: Laid[]; height: number; shades: Shade[] } {
   const items: Laid[] = [];
   const shades: Shade[] = [];
-  let x = 10;
-  let y = 14;
+  let x = 20;
+  let y = 28;
   let rowH = 0;
   const order = Object.keys(THINGS).sort((a, b) => {
     const ia = atlas.things.get(thingKey(a, 0));
@@ -92,17 +94,17 @@ function layThings(atlas: Atlas, width: number): { items: Laid[]; height: number
     for (let v = 0; v < THINGS[kind].variants; v++) {
       const img = atlas.things.get(thingKey(kind, v));
       if (!img) continue;
-      if (x + img.w + 10 > width) {
-        x = 10;
-        y += rowH + 12;
+      if (x + img.w + 20 > width) {
+        x = 20;
+        y += rowH + 24;
         rowH = 0;
       }
       items.push({ img, x, y });
       rowH = Math.max(rowH, img.h);
-      x += img.w + 10;
+      x += img.w + 20;
     }
   }
-  const height = y + rowH + 16;
+  const height = y + rowH + 32;
   // 같은 줄의 것은 발치를 맞춘다
   const rows = new Map<number, Laid[]>();
   for (const it of items) rows.set(it.y, [...(rows.get(it.y) ?? []), it]);
@@ -110,7 +112,7 @@ function layThings(atlas: Atlas, width: number): { items: Laid[]; height: number
     const base = Math.max(...list.map((it) => it.img.ay));
     for (const it of list) {
       it.y += base - it.img.ay;
-      shades.push(...shadesAt(it.img.shades, it.x + it.img.ax, it.y + it.img.ay));
+      shades.push(...shadesAt(it.img.shades, (it.x + it.img.ax) / ART, (it.y + it.img.ay) / ART));
     }
   }
   return { items, height, shades };
@@ -168,6 +170,9 @@ function Section({ title, width, height, zoom, moving, light, paint }: SectionPr
   );
 }
 
+/** 세운 것 견본의 너비(그림 점) */
+const THINGS_W = 1320;
+
 const frameOf = (img: Img, t: number, rate = 1.7): number => (img.n > 1 ? img.seq[Math.floor(t * rate) % img.seq.length] : 0);
 
 export function Sheet(): JSX.Element {
@@ -195,15 +200,15 @@ export function Sheet(): JSX.Element {
     }
     const demo = demoMap();
     const g = paintedGround(atlas, demo, []);
-    const laid = layThings(atlas, 660);
-    const plain = new MapBuilder(Math.ceil(660 / TILE), Math.ceil(laid.height / TILE), 3);
+    const laid = layThings(atlas, THINGS_W);
+    const plain = new MapBuilder(Math.ceil(THINGS_W / GROUND_TILE), Math.ceil(laid.height / GROUND_TILE), 3);
     const base = paintedGround(atlas, plain, laid.shades);
     setParts({
       ground: g.canvas,
       wet: g.ground.wet,
       gw: demo.w,
       gh: demo.h,
-      things: { items: laid.items, height: plain.h * TILE, base: base.canvas },
+      things: { items: laid.items, height: plain.h * GROUND_TILE, base: base.canvas },
     });
   }, [atlas]);
 
@@ -211,8 +216,8 @@ export function Sheet(): JSX.Element {
   const whoOnly = new URLSearchParams(window.location.search).get('who')?.split(',');
   const people = Object.keys({ ...HEROES, ...VILLAGERS, ...GUISES }).filter((name) => !whoOnly || whoOnly.includes(name));
   const perRow = 2;
-  const cellW = PERSON_W * SHEET_COLS + 12;
-  const peopleH = Math.ceil(people.length / perRow) * (PERSON_H * 4 + 10) + 64;
+  const cellW = PERSON_W * SHEET_COLS + 24;
+  const peopleH = Math.ceil(people.length / perRow) * (PERSON_H * 4 + 20) + 128;
 
   return (
     <main class={`screen sheet season-${season}`}>
@@ -258,8 +263,8 @@ export function Sheet(): JSX.Element {
             {show('ground') && (
               <Section
                 title="땅 — 풀, 들꽃, 숲 바닥, 흙길, 마당, 논둑, 갈아엎은 논, 물 댄 논, 밭이랑, 냇물(얕은 곳·깊은 곳), 징검다리, 나무다리, 돌밭, 둔덕과 돌층계"
-                width={parts.gw * TILE}
-                height={parts.gh * TILE}
+                width={parts.gw * GROUND_TILE}
+                height={parts.gh * GROUND_TILE}
                 zoom={zoom}
                 moving={moving}
                 light={light}
@@ -268,7 +273,7 @@ export function Sheet(): JSX.Element {
                   for (let ty = 0; ty < parts.gh; ty++) {
                     for (let tx = 0; tx < parts.gw; tx++) {
                       if (parts.wet[ty * parts.gw + tx] === 0) continue;
-                      ctx.drawImage(atlas.water, wf * 64 + ((tx * TILE) & 63), (ty * TILE) & 63, TILE, TILE, tx * TILE, ty * TILE, TILE, TILE);
+                      ctx.drawImage(atlas.water, wf * WATER_TILE + ((tx * GROUND_TILE) % WATER_TILE), (ty * GROUND_TILE) % WATER_TILE, GROUND_TILE, GROUND_TILE, tx * GROUND_TILE, ty * GROUND_TILE, GROUND_TILE, GROUND_TILE);
                     }
                   }
                   ctx.drawImage(parts.ground, 0, 0);
@@ -278,7 +283,7 @@ export function Sheet(): JSX.Element {
             {show('things') && (
               <Section
                 title="세운 것 — 집과 담, 마당의 것, 돌, 나무와 덤불과 풀"
-                width={660}
+                width={THINGS_W}
                 height={parts.things.height}
                 zoom={zoom}
                 moving={moving}
@@ -306,12 +311,12 @@ export function Sheet(): JSX.Element {
                   people.forEach((name, i) => {
                     const sheet = atlas.people.get(name);
                     if (!sheet) return;
-                    ctx.drawImage(sheet, 6 + (i % perRow) * cellW, 6 + Math.floor(i / perRow) * (PERSON_H * 4 + 10));
+                    ctx.drawImage(sheet, 12 + (i % perRow) * cellW, 12 + Math.floor(i / perRow) * (PERSON_H * 4 + 20));
                   });
                   // 움직이는 줄
-                  const y = peopleH - 44;
+                  const y = peopleH - 88;
                   ctx.fillStyle = '#85b853';
-                  ctx.fillRect(0, y - 14, cellW * perRow + 8, 58);
+                  ctx.fillRect(0, y - 28, cellW * perRow + 8, 116);
                   people.forEach((name, i) => {
                     const sheet = atlas.people.get(name);
                     if (!sheet) return;
@@ -325,8 +330,10 @@ export function Sheet(): JSX.Element {
                           : mode === 2
                             ? COL.work + (Math.floor(t * 3.6) % 4)
                             : COL.sit + ((t + i) % 3.4 > 2.3 ? 1 : 0);
-                    const x = 14 + i * 22;
-                    ctx.drawImage(atlas.foot.canvas, x - 8, y + PERSON_AY - 4);
+                    const x = 28 + i * 44;
+                    ctx.globalCompositeOperation = 'multiply';
+                    ctx.drawImage(atlas.foot.canvas, x - atlas.foot.ax, y + PERSON_AY - atlas.foot.ay);
+                    ctx.globalCompositeOperation = 'source-over';
                     ctx.drawImage(sheet, col * PERSON_W, (mode === 3 ? 0 : dir) * PERSON_H, PERSON_W, PERSON_H, x - PERSON_AX, y, PERSON_W, PERSON_H);
                   });
                 }}
@@ -335,79 +342,89 @@ export function Sheet(): JSX.Element {
             {show('etc') && (
               <Section
                 title="짐승과 표시와 날리는 것 — 닭, 병아리, 개, 소, 논 가는 소, 까치, 물새, 참새 / 깃발, 말풍선, 막힌 길, 화살표 / 꽃잎·가랑잎·눈, 연기, 물빛 반짝임, 나비, 잠자리, 비, 벼의 물결, 구름 그림자"
-                width={560}
-                height={200}
+                width={560 * ART}
+                height={200 * ART}
                 zoom={zoom}
                 moving={moving}
                 light={light}
                 paint={(ctx, t) => {
                   ctx.fillStyle = '#85b853';
-                  ctx.fillRect(0, 0, 560, 200);
+                  ctx.fillRect(0, 0, 560 * ART, 200 * ART);
+                  // 자리는 맵 점으로 셈하고(× ART) 그림은 그림 점 크기 그대로 둔다
+                  const A = ART;
+                  /** 한 장(sx번째 칸)을 맵 점 (x, y)에 */
+                  const put = (img: Img, f: number, x: number, y: number, flip = false): void => {
+                    const c = flip && img.flipped ? img.flipped : img.canvas;
+                    ctx.drawImage(c, f * img.w, 0, img.w, img.h, Math.round(x * A), Math.round(y * A), img.w, img.h);
+                  };
+                  const wOf = (img: Img): number => img.w / A;
+                  const hOf = (img: Img): number => img.h / A;
                   let x = 8;
-                  for (const name of ['hen', 'rooster', 'chick', 'dog', 'ox', 'plowTeam', 'magpie', 'egret', 'sparrow']) {
+                  const names = ['hen', 'rooster', 'chick', 'dog', 'ox', 'plowTeam', 'magpie', 'egret', 'sparrow'];
+                  for (const name of names) {
                     const img = atlas.critters.get(name);
                     if (!img) continue;
                     for (let f = 0; f < img.n; f++) {
-                      ctx.drawImage(img.canvas, f * img.w, 0, img.w, img.h, x, 44 - img.h, img.w, img.h);
-                      x += img.w + 3;
+                      put(img, f, x, 44 - hOf(img));
+                      x += wOf(img) + 3;
                     }
                     x += 6;
                   }
                   x = 8;
-                  for (const name of ['hen', 'rooster', 'chick', 'dog', 'ox', 'plowTeam', 'magpie', 'egret', 'sparrow']) {
+                  for (const name of names) {
                     const img = atlas.critters.get(name);
                     if (!img) continue;
                     const f = Math.floor(t * 5) % img.n;
-                    ctx.drawImage(img.flipped, (img.n - 1 - f) * img.w, 0, img.w, img.h, x, 96 - img.h, img.w, img.h);
-                    x += img.w + 10;
+                    put(img, img.n - 1 - f, x, 96 - hOf(img), true);
+                    x += wOf(img) + 10;
                   }
                   x = 8;
                   const bob = Math.round(Math.sin(t * 3) * 1.5);
                   for (const img of [atlas.flag, atlas.bubble, atlas.lock]) {
-                    ctx.drawImage(img.canvas, x, 110 + bob);
-                    x += img.w + 8;
+                    put(img, 0, x, 110 + bob);
+                    x += wOf(img) + 8;
                   }
-                  ctx.drawImage(atlas.rings.canvas, (Math.floor(t * 5) % 2) * atlas.rings.w, 0, atlas.rings.w, atlas.rings.h, x, 116, atlas.rings.w, atlas.rings.h);
+                  put(atlas.rings, Math.floor(t * 5) % 2, x, 116);
                   x += 28;
                   for (const a of atlas.arrows) {
-                    ctx.drawImage(a.canvas, x, 108);
-                    x += a.w + 4;
+                    put(a, 0, x, 108);
+                    x += wOf(a) + 4;
                   }
                   x = 8;
                   for (const d of atlas.drift) {
-                    ctx.drawImage(d.canvas, x, 142);
+                    put(d, 0, x, 142);
                     x += 8;
                   }
                   x += 6;
                   for (const sm of atlas.smoke) {
-                    ctx.drawImage(sm.canvas, x, 138);
-                    x += sm.w + 4;
+                    put(sm, 0, x, 138);
+                    x += wOf(sm) + 4;
                   }
                   x += 6;
                   for (let f = 0; f < 3; f++) {
                     ctx.fillStyle = '#97b8c4';
-                    ctx.fillRect(x - 1, 139, 7, 7);
-                    ctx.drawImage(atlas.glint.canvas, f * 5, 0, 5, 5, x, 140, 5, 5);
+                    ctx.fillRect((x - 1) * A, 139 * A, 7 * A, 7 * A);
+                    put(atlas.glint, f, x, 140);
                     x += 10;
                   }
                   for (const bf of atlas.butterflies) {
-                    ctx.drawImage(bf.canvas, (Math.floor(t * 9) % 2) * bf.w, 0, bf.w, bf.h, x + 4, 140, bf.w, bf.h);
+                    put(bf, Math.floor(t * 9) % 2, x + 4, 140);
                     x += 12;
                   }
                   // 계절의 날림: 잠자리(여름), 빗줄기와 물방울(큰비가 온 여름), 벼의 물결
                   x += 6;
                   for (const fly of atlas.dragonflies) {
-                    ctx.drawImage(fly.canvas, (Math.floor(t * 16) % 2) * fly.w, 0, fly.w, fly.h, x, 140, fly.w, fly.h);
+                    put(fly, Math.floor(t * 16) % 2, x, 140);
                     x += 12;
                   }
                   for (const drop of atlas.rain) {
-                    ctx.drawImage(drop.canvas, x, 136);
+                    put(drop, 0, x, 136);
                     x += 8;
                   }
-                  ctx.drawImage(atlas.splash.canvas, (Math.floor(t * 8) % atlas.splash.n) * atlas.splash.w, 0, atlas.splash.w, atlas.splash.h, x, 142, atlas.splash.w, atlas.splash.h);
+                  put(atlas.splash, Math.floor(t * 8) % atlas.splash.n, x, 142);
                   x += 12;
-                  ctx.drawImage(atlas.cropGust.canvas, (Math.floor(t * 3) % atlas.cropGust.n) * atlas.cropGust.w, 0, atlas.cropGust.w, atlas.cropGust.h, x, 141, atlas.cropGust.w, atlas.cropGust.h);
-                  ctx.drawImage(atlas.cloud.canvas, 330, 100);
+                  put(atlas.cropGust, Math.floor(t * 3) % atlas.cropGust.n, x, 141);
+                  put(atlas.cloud, 0, 330, 100);
                 }}
               />
             )}

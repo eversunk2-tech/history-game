@@ -24,10 +24,10 @@ import {
 } from '../engine/game';
 import { meets } from '../engine/conditions';
 import type { GameState, SituationPack } from '../engine/types';
-import { scaleFor } from '../map/camera';
+import { artScale, scaleFor } from '../map/camera';
 import { render, stepScene, type View } from '../map/draw';
 import { tileOf } from '../map/path';
-import { openSession, type MapSession } from '../map/session';
+import { openSession, paintIdle, prepReady, prepareMap, stepPrepare, type MapSession } from '../map/session';
 import { TILE, zoneAt, type MapData, type Weather } from '../map/types';
 import {
   dayLight,
@@ -42,7 +42,7 @@ import {
   type World,
   type WorldEvent,
 } from '../map/world';
-import { hex } from '../pixel/px';
+import { ART, hex } from '../pixel/px';
 import { seasonLabels } from '../content/labels';
 import { artSeason, game, gameNo, heroName, mapBusy, markPlace, missionQueue, openTalk, pack, panel, talk, walkedText } from '../state/store';
 import { packBits, unpackBits } from '../state/storage';
@@ -111,6 +111,34 @@ function parseAt(at: string | undefined): [number, number] | undefined {
   if (!at) return undefined;
   const [x, y] = at.split(',').map(Number);
   return Number.isInteger(x) && Number.isInteger(y) ? [x, y] : undefined;
+}
+
+/**
+ * 걷는 쪽으로 앞선 자리(맵 점) — 남은 땅을 칠할 차례를 고를 때 쓴다. 가는 길이 있으면 그 길을 따라 200점쯤 앞,
+ * 화살표 자판으로 걸으면 그쪽으로 200점, 서 있으면 제자리.
+ */
+function aheadOf(world: World): { x: number; y: number } {
+  const p = world.player;
+  const AHEAD = 200;
+  if (p.route.length > 0) {
+    let left = AHEAD;
+    let x = p.x;
+    let y = p.y;
+    for (const q of p.route) {
+      const d = Math.hypot(q.x - x, q.y - y);
+      if (d >= left) return { x: x + ((q.x - x) * left) / d, y: y + ((q.y - y) * left) / d };
+      left -= d;
+      x = q.x;
+      y = q.y;
+    }
+    return { x, y };
+  }
+  const { x: kx, y: ky } = world.keys;
+  if (kx !== 0 || ky !== 0) {
+    const len = Math.hypot(kx, ky);
+    return { x: p.x + (kx / len) * AHEAD, y: p.y + (ky / len) * AHEAD };
+  }
+  return { x: p.x, y: p.y };
 }
 
 export function MapScreen(): JSX.Element | null {
@@ -219,7 +247,8 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       canvas.style.top = `${-offY / dpr}px`;
       view.w = w;
       view.h = h;
-      view.scale = scaleFor(w, h, dpr);
+      // 그림 점(ART)이 기기 화소의 정수배가 되게 짝수 배율로(spec 13.1의 53번)
+      view.scale = artScale(scaleFor(w, h, dpr), dpr, ART);
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
       setMiniScale(Math.max(2, Math.round(rem / 8)));
       if (session) {
@@ -458,6 +487,14 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
         if (tick % 15 === 0) moveToast();
       }
       if (tick % 45 === 0 && !world.paused) tellPlace(world);
+      // 땅의 남은 조각(spec 4.7.5의 ㅋ): 이 장에서 쓰고 남은 시간만큼만 잘게 나눠 칠한다(한 장 16.7ms 가운데 셈과 그리기를 빼고
+      // 많아야 6ms, 적어도 1.5ms). 걷는 쪽으로 앞선 자리에서 가까운 조각부터 칠해 화면이 닿기 전에 칠해 둔다.
+      // 그래도 칠하지 않은 조각이 화면에 들면 그리기가 그 조각만 그 자리에서 칠한다.
+      if (scene.ground.left > 0) {
+        const spent = performance.now() - began;
+        const budget = talk.peek() !== null ? 8 : Math.max(1.5, Math.min(6, 11 - spent));
+        paintIdle(session, budget, aheadOf(world));
+      }
       tick++;
       // 한 장을 셈하고 그리는 데 든 시간(밀리초)의 흐름 평균
       workMs = workMs * 0.9 + (performance.now() - began) * 0.1;
@@ -494,11 +531,36 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       }
     };
 
-    // 그림을 처음 찍을 때는 잠깐 걸린다. "그리는 중"을 먼저 보여 주고 시작한다(한 번 지은 것은 들고 있어 다음부터는 바로 뜬다).
+    // 그림을 처음 찍을 때는 잠깐 걸린다. "그리는 중"(처음)이나 앞 장(계절이 바뀔 때)을 띄워 둔 채,
+    // 그림 벌과 처음 보이는 화면의 땅을 나눠 짓고(한 번에 30ms쯤 — 50ms 넘는 긴 일을 만들지 않으면서 쉬는 틈을 줄인다) 다 되면 판을 연다.
+    // 제목 화면·계절 닫기·소개 화면에서 미리 지어 두었으면 바로 연다.
+    let pump = 0;
+    const openWhenReady = (): void => {
+      if (stopped) return;
+      const now = game.peek();
+      if (!now) return;
+      if (!prepReady(map)) {
+        stepPrepare(30);
+        pump = window.setTimeout(openWhenReady, 0);
+        return;
+      }
+      openNow(now);
+    };
     const start = window.setTimeout(() => {
       if (stopped) return;
       const now = game.peek();
       if (!now) return;
+      // 처음 보이는 화면: 무대의 크기와 배율로 셈한다(resize와 같은 셈)
+      const rect = stage.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const s0 = artScale(scaleFor(Math.max(64, Math.round(rect.width * dpr)), Math.max(64, Math.round(rect.height * dpr)), dpr), dpr, ART);
+      const devAt = query.get('at')?.split(',').map(Number);
+      const startAt: [number, number] | undefined =
+        devAt && devAt.length === 2 && devAt.every(Number.isFinite) ? [devAt[0], devAt[1]] : (parseAt(now.at) ?? map.start[now.role]);
+      prepareMap(map, [heroName(now.role, now.look)], startAt, { w: (rect.width * dpr) / s0 + 2, h: (rect.height * dpr) / s0 + 2 });
+      openWhenReady();
+    }, 30);
+    const openNow = (now: GameState): void => {
       session = openSession({
         key,
         map,
@@ -529,16 +591,16 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       if (import.meta.env.DEV) {
         dev.__world = world;
         dev.__scene = scene;
-        // 맵 전체를 한 장으로 떠 본다(배율 1)
+        // 맵 전체를 한 장으로 떠 본다(그림 점 하나 = 화소 하나)
         dev.__overview = () => {
           const whole = document.createElement('canvas');
-          whole.width = map.w * TILE;
-          whole.height = map.h * TILE;
+          whole.width = map.w * TILE * ART;
+          whole.height = map.h * TILE * ART;
           const wctx = whole.getContext('2d');
           if (!wctx) return '';
           const keep = world.cam;
           world.cam = { x: 0, y: 0 };
-          render({ ctx: wctx, w: whole.width, h: whole.height, scale: 1 }, world, scene);
+          render({ ctx: wctx, w: whole.width, h: whole.height, scale: ART }, world, scene);
           world.cam = keep;
           return whole.toDataURL('image/png');
         };
@@ -564,7 +626,7 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
         }
       }
       raf = requestAnimationFrame(loop);
-    }, 30);
+    };
 
     const observer = new ResizeObserver(resize);
     observer.observe(stage);
@@ -648,6 +710,7 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       stopped = true;
       cancelAnimationFrame(raf);
       window.clearTimeout(start);
+      window.clearTimeout(pump);
       observer.disconnect();
       canvas.removeEventListener('pointerdown', onPointer);
       window.removeEventListener('keydown', onKeyDown);

@@ -13,11 +13,13 @@ import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Dir } from '../map/types';
 import { paletteOf } from '../pixel/palette';
-import { COL, DIRS, HEROES, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W, footShadow, personSheet } from '../pixel/people';
-import { Px, fbm, hash2, hex, mix, pick, toCanvas, vnoise } from '../pixel/px';
+import { COL, DIRS, HEROES, footShadow, personSheet } from '../pixel/people';
+import { ART, Px, fbm, hash2, hex, mix, pick, toCanvas, vnoise } from '../pixel/px';
 import { game, heroName } from '../state/store';
 import { useEndOnce } from './bits';
+import { drawBase, drawFoot, drawPerson } from './art';
 import { PlayFrame } from './Frame';
+import { playScale } from './stage';
 import type { PlayProps } from './index';
 import { SOW_ROWS, SOW_SEEDS, emptySowCells, sowCellOf, sowLeave, sowVerdict } from './sowRules';
 
@@ -75,31 +77,37 @@ interface Ripple {
   born: number;
 }
 
-/** 위에서 본 논: 풀이 난 둑으로 둘러싸인, 갈아엎어 물을 댄 논. 물은 잔잔하다(볍씨가 묻히지 않게 얼룩을 두지 않는다). */
+/**
+ * 위에서 본 논: 풀이 난 둑으로 둘러싸인, 갈아엎어 물을 댄 논. 물은 잔잔하다(볍씨가 묻히지 않게 얼룩을 두지 않는다).
+ * w·h는 놀이 점이고 그림은 그림 점(× ART)으로 칠한다: 둑의 꼴은 놀이 점으로, 흙과 풀의 결은 그림 점으로(spec 4.7.5).
+ */
 function paintField(w: number, h: number): Px {
   const pal = paletteOf('spring');
-  const px = new Px(w, h);
+  const A = ART;
+  const px = new Px(w * A, h * A);
   const calmLight = mix(WATER_CALM, pal.paddy[1], 0.45);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const edge = Math.min(x, y, w - 1 - x, h - 1 - y) + (vnoise(x / 7, y / 7, 3) - 0.5) * 3;
+  for (let y = 0; y < h * A; y++) {
+    const uy = (y + 0.5) / A;
+    for (let x = 0; x < w * A; x++) {
+      const ux = (x + 0.5) / A;
+      const edge = Math.min(ux, uy, w - ux, h - uy) - 0.5 + (vnoise(ux / 7, uy / 7, 3) - 0.5) * 3;
       const tex = hash2(x, y, 5);
       let c;
       if (edge < BUND - 6) {
         // 둑 바깥의 풀
-        c = pick(pal.grass, 0.45 + (fbm(x / 9, y / 9, 7) - 0.5) * 0.6 + (tex - 0.5) * 0.2, x, y, 0.6);
+        c = pick(pal.grass, 0.45 + (fbm(ux / 9, uy / 9, 7) - 0.5) * 0.6 + (tex - 0.5) * 0.2, x, y, 0.6);
       } else if (edge < BUND - 1) {
         // 논둑(다져진 흙, 군데군데 풀)
-        c = tex > 0.82 ? pal.grassTip[1] : pick(pal.soil, 0.7 + (tex - 0.5) * 0.5, x, y, 0.5);
+        c = tex > 0.8 ? pal.grassTip[1] : pick(pal.soil, 0.7 + (tex - 0.5) * 0.5, x, y, 0.5);
       } else if (edge < BUND) {
         c = pal.soil[0]; // 둑 아래 그늘
       } else if (edge < BUND + 2.2) {
         c = WATER_DEEP; // 둑이 비친 물가
       } else {
         // 물 댄 논: 두 가지 어두운 물빛이 크게, 엷게 번갈아 든다. 가로로 누운 짧은 잔물결이 드문드문 있다.
-        const swell = fbm(x / 46, y / 30, 11);
+        const swell = fbm(ux / 46, uy / 30, 11);
         c = swell > 0.56 ? WATER_CALM : swell > 0.5 && ((x + y) & 1) === 0 ? WATER_CALM : WATER_DEEP;
-        if (y % 4 === 1 && hash2(Math.floor(x / 6), y, 13) > 0.93) c = calmLight;
+        if (y % (4 * A) === A && hash2(Math.floor(ux / 6), Math.floor(uy), 13) > 0.93) c = calmLight;
       }
       px.set(x, y, c);
     }
@@ -205,8 +213,8 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
       if (bw < 8 || bh < 8) return;
       const dw = Math.floor(bw * dpr);
       const dh = Math.floor(bh * dpr);
-      // 점 하나가 기기 화소의 정수배가 되게. 논의 높이가 150점쯤 되게 잡는다.
-      const scale = Math.max(2, Math.round(dh / 150));
+      // 그림 점 하나가 기기 화소의 정수배가 되게(놀이 점 하나는 그 ART배). 논의 높이가 150 놀이 점쯤 되게 잡는다(1-라에 가까운 짝수).
+      const scale = playScale(dw, dh, 150);
       const nw = Math.max(64, Math.floor(dw / scale));
       const nh = Math.max(48, Math.floor(dh / scale));
       canvas.style.width = `${(nw * scale) / dpr}px`;
@@ -214,13 +222,21 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
       if (nw === w && nh === h) return;
       w = nw;
       h = nh;
-      canvas.width = w;
-      canvas.height = h;
+      canvas.width = w * ART;
+      canvas.height = h * ART;
       field = toCanvas(paintField(w, h));
-      stirred.width = w;
-      stirred.height = h;
-      sown.width = w;
-      sown.height = h;
+      stirred.width = w * ART;
+      stirred.height = h * ART;
+      if (mctx) {
+        mctx.setTransform(ART, 0, 0, ART, 0, 0);
+        mctx.imageSmoothingEnabled = false;
+      }
+      sown.width = w * ART;
+      sown.height = h * ART;
+      if (sctx) {
+        sctx.setTransform(ART, 0, 0, ART, 0, 0);
+        sctx.imageSmoothingEnabled = false;
+      }
       for (let i = 0; i < landed.length; i += 3) stamp(landed[i], landed[i + 1], landed[i + 2]);
       // 크기를 바꾸면 캔버스가 비워진다. 다음 장을 기다리지 않고 바로 다시 그린다(빈 논이 잠깐 보이지 않게).
       paintNow();
@@ -329,8 +345,10 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
     /** 한 장을 그린다 */
     const paint = (now: number): void => {
       if (!field) return;
+      // 캔버스는 그림 점(놀이 점 × ART)이다. 놀이의 셈은 놀이 점으로 한다
+      ctx.setTransform(ART, 0, 0, ART, 0, 0);
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(field, 0, 0);
+      drawBase(ctx, field);
       // 날아가던 볍씨가 논에 떨어진다
       for (let i = flying.length - 1; i >= 0; i--) {
         const f = flying[i];
@@ -342,7 +360,7 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
           flying.splice(i, 1);
         }
       }
-      ctx.drawImage(stirred, 0, 0);
+      drawBase(ctx, stirred);
       // 잔물결: 떨어진 자리에서 둥글넓적한 고리가 한 번 퍼진다
       for (let i = ripples.length - 1; i >= 0; i--) {
         const r = ripples[i];
@@ -363,14 +381,14 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
         }
       }
       ctx.globalAlpha = 1;
-      ctx.drawImage(sown, 0, 0);
+      drawBase(ctx, sown);
       // 나
       const px = Math.round(BUND + me.x * fw());
       const py = Math.round(BUND + me.y * fh());
       const walking = now - me.moving < 160;
       const col = walking ? COL.walk + (Math.floor(me.step / 5) % 4) : COL.idle + (Math.floor(now / 700) % 2);
-      ctx.drawImage(shadow, px - 8, py - 3);
-      ctx.drawImage(sheet, col * PERSON_W, DIRS.indexOf(me.dir) * PERSON_H, PERSON_W, PERSON_H, px - PERSON_AX, py - PERSON_AY, PERSON_W, PERSON_H);
+      drawFoot(ctx, shadow, px, py);
+      drawPerson(ctx, sheet, col, DIRS.indexOf(me.dir), px, py);
       // 날아가는 볍씨
       for (const f of flying) {
         const t = Math.min(1, (now - f.born) / FLY_MS);

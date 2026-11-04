@@ -16,10 +16,10 @@
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { CLOTH, HAIR, SKIN, paletteOf } from '../pixel/palette';
-import { COL, DIRS, HEROES, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W, footShadow, personOf, personSheet, type Person } from '../pixel/people';
+import { COL, DIRS, HEROES, footShadow, personOf, personSheet, type Person } from '../pixel/people';
 import { toCanvas } from '../pixel/px';
 import { heroName } from '../state/store';
-import { clothPiece, matArt, measureArt, paintYard, riceHeapArt, sackArt, shadowArt } from './art';
+import { clothPiece, drawBase, drawFoot, drawPerson, matArt, measureArt, paintYard, riceHeapArt, sackArt, shadowArt } from './art';
 import { Say, useEndOnce } from './bits';
 import { PlayFrame } from './Frame';
 import type { PlayProps } from './index';
@@ -242,7 +242,7 @@ export function Pay({ rules, facts, choice, onDone }: PlayProps): JSX.Element {
       paint(ctx, now) {
         if (!ground || !mat) return;
         const t = s.table;
-        ctx.drawImage(ground, 0, 0);
+        drawBase(ctx, ground);
         // 멍석(가운데)
         ctx.fillStyle = 'rgba(26, 32, 48, 0.28)';
         ctx.fillRect(at.matX + 2, at.matY + 3, at.matW, at.matH);
@@ -255,8 +255,8 @@ export function Pay({ rules, facts, choice, onDone }: PlayProps): JSX.Element {
         // 내 쪽: 나, 쌀 자루와 되, 베
         const scooping = now - s.scoopAt < FLY_MS + 120;
         const heroCol = scooping ? COL.work + (Math.floor((now - s.scoopAt) / 70) % 4) : COL.idle + (Math.floor(now / 760) % 2);
-        ctx.drawImage(shadow, at.heroX - 8, at.heroY - 3);
-        ctx.drawImage(heroSheet, heroCol * PERSON_W, DIRS.indexOf('right') * PERSON_H, PERSON_W, PERSON_H, at.heroX - PERSON_AX, at.heroY - PERSON_AY, PERSON_W, PERSON_H);
+        drawFoot(ctx, shadow, at.heroX, at.heroY);
+        drawPerson(ctx, heroSheet, heroCol, DIRS.indexOf('right'), at.heroX, at.heroY);
         ctx.drawImage(sackShade, at.sackX - 13, at.sackY - 5);
         ctx.drawImage(riceSacks[t.rice], at.sackX - 13, at.sackY - 27);
         if (!scooping) ctx.drawImage(measure[0], at.sackX + 9, at.sackY - 8);
@@ -316,8 +316,8 @@ export function Pay({ rules, facts, choice, onDone }: PlayProps): JSX.Element {
         if (!calm && now - s.shakeAt < NOD_MS) kx += Math.round(Math.sin(((now - s.shakeAt) / NOD_MS) * Math.PI * 6) * 1.6);
         if (!calm && now - s.nodAt < NOD_MS) ky += Math.round(Math.abs(Math.sin(((now - s.nodAt) / NOD_MS) * Math.PI * 3)) * 2);
         const keeperCol = COL.idle + (Math.floor(now / 820) % 2);
-        ctx.drawImage(shadow, at.keeperX - 8, at.keeperY - 3);
-        ctx.drawImage(keeperSheet, keeperCol * PERSON_W, DIRS.indexOf('left') * PERSON_H, PERSON_W, PERSON_H, kx - PERSON_AX, ky - PERSON_AY, PERSON_W, PERSON_H);
+        drawFoot(ctx, shadow, at.keeperX, at.keeperY);
+        drawPerson(ctx, keeperSheet, keeperCol, DIRS.indexOf('left'), kx, ky);
         for (let k = rule.sacks - 1; k >= 0; k--) {
           const fromX = at.saltX + k * 9;
           const fromY = at.saltY - k * 5;

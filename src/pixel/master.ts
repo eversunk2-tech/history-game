@@ -1,6 +1,11 @@
-// 계절마다의 빛깔 한 벌(64색). 그림을 다 찍은 뒤 모든 점을 이 가운데 가장 가까운 빛깔로 맞춘다(quant.ts).
-// 이 목록은 느티골 맵에 쓰인 빛깔 사백 가지쯤을 가깝고 덜 쓰인 것부터 합쳐서 얻었다(quant.ts의 reduce).
-// 그림을 크게 고친 뒤에는 tests/pixel.test.ts의 '한 벌을 다시 짠다'를 돌려 새로 얻을 수 있다. 어두움 → 밝음 순서.
+// 계절마다의 빛깔 한 벌(96색 이하 — spec 4.7.5의 ㅇ, 13.1의 55번). 그림을 다 찍은 뒤 모든 점을 이 가운데 가장 가까운 빛깔로 맞춘다(quant.ts).
+//
+// 출발점은 1-라의 64색 벌(BASE — 느티골 맵의 빛깔을 quant.ts의 reduce로 줄여 얻었다)이고, 그림 올리기 ①에서 손으로 다듬었다.
+// 기계로 새로 줄이지 않는다. 다듬은 것은 둘이다.
+//   ① 따뜻한 쪽으로 옮김(WARMER): 잿빛으로 가라앉은 흙과 그늘의 빛 몇을 따뜻한 밤빛 쪽으로.
+//   ② 손으로 더한 빛(PEOPLE·HAND): 2배로 다시 그린 사람(살빛의 가운데 단계, 제 빛깔을 짙게 한 테두리의 밤빛, 옷감의 단계)과
+//      땅의 따뜻한 큰 얼룩이 한 벌에 맞출 때 뭉개지지 않게 — 풀은 노란 연두, 볕은 금빛, 그늘은 갈색·붉은 보라 쪽으로만 더했다.
+// 어두움 → 밝음 순서는 지키지 않는다(BASE 다음에 더한 빛이 온다). 한 벌 안에 같은 빛은 없다.
 
 import type { Season } from '../engine/types';
 import type { Weather } from '../map/types';
@@ -17,7 +22,8 @@ export function toneOf(season: Season, weather: Weather = 'clear'): Tone {
   return season === 'summer' && weather === 'rain' ? 'rain' : season;
 }
 
-export const MASTER: Record<Tone, readonly Color[]> = {
+/** 1-라의 64색 벌(출발점 — 시험이 이것에서 출발했는지 본다) */
+export const MASTER_BASE: Record<Tone, readonly Color[]> = {
   spring: list(`
     #171313 #292321 #172e29 #352b27 #223f2f #40352f #383b40 #2f4b2e
     #513b2d #4a423b #304b73 #315a38 #564b44 #286383 #863775 #54565c
@@ -70,5 +76,53 @@ export const MASTER: Record<Tone, readonly Color[]> = {
   `),
 };
 
-/** 한 벌의 빛깔 수 */
-export const MASTER_SIZE = 64;
+/** 잿빛으로 가라앉은 흙·그늘의 빛 → 따뜻한 밤빛 쪽(①) */
+export const MASTER_WARMER: Record<Tone, Record<string, string>> = {
+  spring: { '#40352f': '#45342a', '#4a423b': '#523f31', '#564b44': '#5e4a3a', '#54565c': '#5a524f' },
+  summer: { '#413730': '#46352a', '#4a423c': '#523f31', '#564b44': '#5e4a3a', '#54565c': '#5a524f' },
+  rain: { '#4c4038': '#523e30', '#534b46': '#5a4a3e', '#61564a': '#665342' },
+  autumn: { '#42372f': '#47362a', '#4b413a': '#523f31', '#534b46': '#5c4a3c', '#53565d': '#5a524f' },
+  winter: { '#433730': '#47352a', '#4a423b': '#523f32', '#574c45': '#5e4b3c' },
+};
+
+/** 2배로 다시 그린 사람의 빛(계절과 상관없이 같다): 살빛의 가운데 단계, (나) 테두리의 밤빛, 옷감·머리의 단계 */
+const PEOPLE = `
+  #3c281c #4a3224 #5a3c29 #cf9670 #f8d7b3 #ecc29c #84533b
+  #4f7f7a #a6cbbd #1f3049 #7597b9 #8a4a52 #d59a97 #dedad2 #7c5c2f #ead48c
+`;
+
+/** 계절마다 땅의 큰 얼룩과 논·밭이 뭉개지지 않게 더한 빛(②) */
+const HAND: Record<Tone, string> = {
+  // 노란 연두의 가운데 단계(볕의 얼룩), 올리브 그늘, 물 댄 논의 밝은 물빛
+  spring: '#5e9446 #72a64c #7bab4e #8fb352 #a3c25c #4f7a3a #97b8c4 #c9a77c #b78a5c',
+  // 볕 받은 풀의 노란 연두(푸른 벼의 푸르스름한 단계는 더하지 않는다 — 1-라처럼 따뜻한 풀빛으로 맞춰진다)
+  summer: '#5f9d49 #76b24f #8db857 #a6c461 #c9a77c #b78a5c',
+  // 젖은 풀과 잠긴 논(푸르스름한 짙은 풀빛은 더하지 않는다)
+  rain: '#468242 #5f9849 #7bb95e #7d8a76 #99a48e #a5ac72 #b39a74',
+  // 누런 벼와 이삭의 금빛, 마른 풀의 올리브 금빛
+  autumn: '#b0892a #d8b53d #f2dc74 #8e863b #a29945 #a79d47 #c4b452 #ddc566 #6e5a2c #c9a77c',
+  // 눈밭의 볕(크림빛)과 그늘(붉은 보랏빛 잿빛), 언 흙
+  winter: '#c9cdd0 #c4c4c9 #d6d4d2 #e8e3dc #f6f0e4 #b8b0b8 #a59aa6 #8a7d6e #c9a77c',
+};
+
+const warmed = (tone: Tone): Color[] => MASTER_BASE[tone].map((c) => {
+  const h = `#${[c & 255, (c >> 8) & 255, (c >> 16) & 255].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+  return MASTER_WARMER[tone][h] ? hex(MASTER_WARMER[tone][h]) : c;
+});
+
+function build(tone: Tone): readonly Color[] {
+  const out: Color[] = [];
+  for (const c of [...warmed(tone), ...list(PEOPLE), ...list(HAND[tone])]) if (!out.includes(c)) out.push(c);
+  return out;
+}
+
+export const MASTER: Record<Tone, readonly Color[]> = {
+  spring: build('spring'),
+  summer: build('summer'),
+  rain: build('rain'),
+  autumn: build('autumn'),
+  winter: build('winter'),
+};
+
+/** 한 벌의 빛깔 수의 위 한도(spec 13.1의 55번) */
+export const MASTER_MAX = 96;

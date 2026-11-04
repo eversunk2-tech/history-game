@@ -25,6 +25,20 @@ export function scaleFor(deviceW: number, deviceH: number, dpr = 1): number {
   return Math.max(2, Math.round(css * dpr - 0.01));
 }
 
+/**
+ * 그림 점(ART)에 맞춘 배율: scaleFor의 배율이 ART의 배수가 아니면(2배 그림에서 홀수 배율) 가장 가까운 짝수로 바꾼다
+ * (spec 13.1의 53번). 사람의 CSS 키(맵 점 32 × 배율 ÷ 화소 비율)가 아이패드의 96에 가까운 쪽, 같으면 큰 쪽.
+ * 크롬북·작은 PC(1)는 3 → 4, 화소 비율 1.75는 5 → 6, 2.25는 7 → 6. 학생 기기와 TV는 바뀌지 않는다.
+ */
+export function artScale(scale: number, dpr = 1, art = 2): number {
+  if (scale % art === 0) return scale;
+  const lo = Math.max(art, scale - (scale % art));
+  const hi = lo + art;
+  if (lo === hi || scale < art) return art;
+  const tall = (s: number): number => Math.abs((32 * s) / dpr - 96);
+  return tall(lo) < tall(hi) ? lo : hi;
+}
+
 /** 주인공(focus)을 화면 가운데에 두려면 화면 왼쪽 위가 어디여야 하는가. 맵 끝에서 멈춘다. */
 export function cameraGoal(
   focusX: number,

@@ -29,8 +29,8 @@ function framesOf(person: Person, act: Act): HTMLCanvasElement[] {
 }
 
 /**
- * 도트 인물을 크게 세운다. fill은 칸 높이에서 인물 한 장(32점)이 차지할 몫이다.
- * 점 하나가 기기 화소의 정수배가 되게 맞춘다.
+ * 도트 인물을 크게 세운다. fill은 칸 높이에서 인물 한 장(64 그림 점 — 맵 점 32)이 차지할 몫이다.
+ * 그림 점 하나가 기기 화소의 정수배가 되게 맞춘다(그림이 2배로 촘촘해져 가장 작은 배율은 1이다 — spec 4.7.5).
  */
 export function SpriteStand({
   person,
@@ -62,7 +62,7 @@ export function SpriteStand({
       // 칸의 높이에 맞추되 너비를 넘지 않게
       const byHeight = Math.floor((rect.height * dpr * fill) / PERSON_H);
       const byWidth = Math.floor((rect.width * dpr) / PERSON_W);
-      const k = Math.max(2, Math.min(byHeight, byWidth > 0 ? byWidth : byHeight));
+      const k = Math.max(1, Math.min(byHeight, byWidth > 0 ? byWidth : byHeight));
       canvas.style.width = `${(PERSON_W * k) / dpr}px`;
       canvas.style.height = `${(PERSON_H * k) / dpr}px`;
     };
