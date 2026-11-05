@@ -306,16 +306,45 @@ export function trunk(px: Px, ramp: Ramp, o: TrunkOpts): void {
   }
 }
 
-/** 가지 하나(줄기에서 나무갓 속으로 뻗는다) */
+/**
+ * 가지 하나(줄기에서 나무갓 속으로 뻗는다). 둥근 붓: 굵기를 가지 방향에 수직으로 쌓는다(그림 올리기 ②의 고침 — 가로로만 쌓으면
+ * 거의 가로인 가지가 한 점 높이의 실오라기가 된다). 빛은 왼쪽 위에서 오므로 굵기는 중심선에서 오른쪽 아래 쪽으로 쌓고,
+ * 위·왼쪽 가장자리가 볕, 오른쪽 아래로 갈수록 그늘이다(굵은 가지는 줄기와 같은 넷 단). 끝으로 갈수록 0.4배까지 가늘어진다.
+ */
 export function branch(px: Px, ramp: Ramp, x0: number, y0: number, x1: number, y1: number, thick: number): void {
   const n = ramp.length - 1;
-  const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
-  for (let i = 0; i <= steps; i++) {
-    const t = i / Math.max(1, steps);
-    const x = Math.round(x0 + (x1 - x0) * t);
-    const y = Math.round(y0 + (y1 - y0) * t);
-    const wd = Math.max(1, Math.round(thick * (1 - t * 0.6)));
-    for (let k = 0; k < wd; k++) px.set(x + k, y, ramp[clamp(k === 0 ? n - 2 : n - 3 - (k > 1 ? 1 : 0), 0, n)]);
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return;
+  const len = Math.sqrt(len2);
+  // 가지 방향에 수직인 쪽 가운데 오른쪽 아래를 향한 것
+  let nx = -dy / len;
+  let ny = dx / len;
+  if (nx + ny < 0 || (nx + ny === 0 && nx < 0)) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const X0 = Math.floor(Math.min(x0, x1) - 1);
+  const X1 = Math.ceil(Math.max(x0, x1) + thick + 1);
+  const Y0 = Math.floor(Math.min(y0, y1) - 1);
+  const Y1 = Math.ceil(Math.max(y0, y1) + thick + 1);
+  for (let y = Y0; y <= Y1; y++) {
+    for (let x = X0; x <= X1; x++) {
+      const rx = x - x0;
+      const ry = y - y0;
+      const t = (rx * dx + ry * dy) / len2;
+      if (t < 0 || t > 1) continue;
+      // 중심선(위·왼쪽 가장자리)에서 굵기 쪽으로 몇 점 들어왔는가
+      const k = rx * nx + ry * ny;
+      const wd = Math.max(1, Math.round(thick * (1 - t * 0.6)));
+      if (k < -0.5 || k >= wd - 0.5) continue;
+      const kk = Math.round(k);
+      // 굵은 가지는 줄기처럼 볕 쪽 네 몫 하나가 밝고 그늘 쪽으로 차츰 짙다(가는 가지는 볕 한 줄·가운데 한 줄·그늘)
+      const u = (kk + 0.5) / wd;
+      const v = wd >= 4 ? (u < 0.25 ? n - 1 : u < 0.5 ? n - 2 : u < 0.8 ? n - 3 : n - 4) : kk <= 0 ? n - 2 : n - 3 - (kk > 1 ? 1 : 0);
+      px.set(x, y, ramp[clamp(v, 0, n)]);
+    }
   }
 }
 

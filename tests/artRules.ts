@@ -10,7 +10,7 @@ import { GROUND_TILE, groundJob, snapperOf, type GroundMap, type Shade } from '.
 import { paletteOf, type Palette } from '../src/pixel/palette';
 import { PERSON_AX, PERSON_AY, footShadow, personFrame, personOf } from '../src/pixel/people';
 import { ART, Px, type Color } from '../src/pixel/px';
-import { buildAtlas, footBox, needsOf } from '../src/pixel/atlas';
+import { buildAtlas, footBox, needsOf, type Atlas } from '../src/pixel/atlas';
 import { buildScene, render } from '../src/map/draw';
 import { createWorld } from '../src/map/world';
 import type { Season } from '../src/engine/types';
@@ -455,6 +455,9 @@ interface SoftCanvas {
   getContext(): SoftCtx;
 }
 
+/** 흉내 낸 캔버스의 점(시험이 그림 벌의 캔버스를 견줄 때) */
+export const softPixels = (c: unknown): Px => buf(c as SoftCanvas);
+
 function buf(c: SoftCanvas): Px {
   if (!c.px || c.px.w !== c.width || c.px.h !== c.height) c.px = new Px(c.width, c.height);
   return c.px;
@@ -566,11 +569,23 @@ export function gameGateScene(season: Season = 'spring', weather: Weather = 'cle
   return gameView(season, weather, REGION.cam, REGION.view, hero ? { x: hero.x, y: hero.y } : undefined);
 }
 
-/** 맵의 한 자리(맵 점의 네모)를 게임의 그리기 그대로 그린 화면(gameGateScene과 같은 셈). time만큼 흐른 뒤의 장(흔들림·물결)을 그린다. */
-export function gameView(season: Season, weather: Weather, cam: { x: number; y: number }, view: { w: number; h: number }, hero?: { x: number; y: number }, time = 0): Px {
+/**
+ * 맵의 한 자리(맵 점의 네모)를 게임의 그리기 그대로 그린 화면(gameGateScene과 같은 셈). time만큼 흐른 뒤의 장(흔들림·물결)을 그린다.
+ * atlasOf를 주면 그 그림 벌로 그린다(미리 짓기가 처음 화면만 지은 벌 — 그리기가 그 자리에서 지은 수를 late로 돌려준다).
+ */
+export function gameView(
+  season: Season,
+  weather: Weather,
+  cam: { x: number; y: number },
+  view: { w: number; h: number },
+  hero?: { x: number; y: number },
+  time = 0,
+  atlasOf?: (map: MapData) => Atlas,
+  late?: { n: number; people?: number; critters?: number },
+): Px {
   return withSoftCanvas(() => {
     const map = neutigol(season, weather);
-    const atlas = buildAtlas(season, weather, needsOf(map, ['farmer-boy']));
+    const atlas = atlasOf ? atlasOf(map) : buildAtlas(season, weather, needsOf(map, ['farmer-boy']));
     const at = hero ?? { x: cam.x + view.w / 2, y: cam.y + view.h / 2 };
     const world = createWorld(map, { role: 'farmer', look: 'boy' }, 'farmer-boy', [Math.floor(at.x / 16), Math.floor(at.y / 16)]);
     world.player.x = at.x;
@@ -584,7 +599,13 @@ export function gameView(season: Season, weather: Weather, cam: { x: number; y: 
     const canvas = document.createElement('canvas') as unknown as SoftCanvas;
     canvas.width = view.w * ART;
     canvas.height = view.h * ART;
+    const before = [atlas.people.size, atlas.critters.size];
     render({ ctx: canvas.getContext() as unknown as CanvasRenderingContext2D, w: canvas.width, h: canvas.height, scale: ART }, world, scene);
+    if (late) {
+      late.n = scene.late;
+      late.people = atlas.people.size - before[0];
+      late.critters = atlas.critters.size - before[1];
+    }
     return buf(canvas);
   });
 }

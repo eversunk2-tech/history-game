@@ -72,21 +72,34 @@ type Part = readonly [Ramp, WashOpts, number?];
  * 재질마다 결을 입히고(ㅌ) 제 빛깔 그늘·외톨이 점 고르기로 마무리한다(wash.ts의 finish — 결은 재질마다 따로 입히므로 여기서 부른다).
  * 돌려주는 값은 결이 어둡게 만든 점의 몫(%, 찍힌 점 가운데 — ㅎ).
  */
-function wash(s: Sheet, pal: Palette, seed: number, parts: readonly Part[], extra: readonly Ramp[] = []): { px: Px; dark: number } {
+function* washJob(s: Sheet, pal: Palette, seed: number, parts: readonly Part[], extra: readonly Ramp[] = []): Generator<undefined, { px: Px; dark: number }, undefined> {
   const ramps = rampsOf(pal, extra);
   const { w, d, still } = s;
   let dark = 0;
-  parts.forEach(([ramp, o, lo = 0], i) => {
+  for (let i = 0; i < parts.length; i++) {
+    const [ramp, o, lo = 0] = parts[i];
     const keep = (x: number, y: number): boolean => {
       if (still[y * w + x] !== 0) return false;
       const info = ramps.get(d[y * w + x]);
       return info !== undefined && info[0] === ramp && info[1] > lo;
     };
     dark += watercolor(s, ramps, seed + i * 31, { ...o, keep });
-  });
+    // 재질 하나마다 쉬어 간다(큰 집 한 채가 낮은 사양에서 한 장의 시간을 넘지 않게 — 그림은 같다)
+    yield;
+  }
   finish(s, ramps, seed, null);
   return { px: s.done(), dark };
 }
+
+/** 쉬어 가며 짓는 그림을 한 번에 다 짓는다 */
+function drainJob<T>(job: Generator<undefined, T, undefined>): T {
+  let r = job.next();
+  while (!r.done) r = job.next();
+  return r.value;
+}
+
+/** 쉬어 가며 짓는 집 그림(그림 벌이 한 장의 시간 안에 나눠 짓는다 — spec 4.7.5의 ㅋ) */
+export type Job = Generator<undefined, SpriteDef, undefined>;
 
 /**
  * 칸마다 이어 놓는 담의 결: watercolor와 같은 셈(큰 결 ×0.6, 고운 결 ×0.55, 밝게 옮기는 문턱 0.32 — 어둡게 옮기는 문턱은 0.5로 높였다)이되 무늬가 칸의 너비(가로 담)나
@@ -535,7 +548,7 @@ const THATCH_PARTS = (pal: Palette, old: boolean): Part[] => [
 ];
 
 // ── 초가 ─────────────────────────────────────────────────────
-export const choga: Maker = (pal, variant) => {
+export function* chogaJob(pal: Palette, variant = 0): Job {
   const W = 108 * K;
   const H = 94 * K;
   const s = new Sheet(W, H);
@@ -548,6 +561,7 @@ export const choga: Maker = (pal, variant) => {
   const chimneyX = variant % 3 === 1 ? 3 : 108 - 9;
   const smoke = chimney(s, chimneyX, 84, pal);
   clayWall(s, 10, 50, 88, 40, pal, bays, 40 + variant * 5);
+  yield;
   // 툇마루: 방문 앞의 좁은 마루. 윗면은 볕, 앞 끝은 그늘, 짧은 다리
   const doorBay = layouts[variant % 3].indexOf('door');
   const mx = (10 + Math.round((88 / 3) * doorBay) + 2) * K;
@@ -562,8 +576,9 @@ export const choga: Maker = (pal, variant) => {
     }
   }
   const eaves = thatchRoof(s, 0, 3, 108, 56, pal, 60 + variant * 9, variant >= 3);
+  yield;
   eaveShade(s, eaves, [pal.clay, pal.wood], 70 + variant);
-  const { px, dark } = wash(s, pal, 300 + variant * 7, THATCH_PARTS(pal, variant >= 3));
+  const { px, dark } = yield* washJob(s, pal, 300 + variant * 7, THATCH_PARTS(pal, variant >= 3));
   return {
     frames: [px],
     smoke,
@@ -572,19 +587,22 @@ export const choga: Maker = (pal, variant) => {
     shades: [{ dx: 0, dy: -2, rx: 0, ry: 0, strength: 0.34, cast: { x0: -46, x1: 46, h: 40, side: 13, depth: 5, ragged: true } }],
     wash: dark,
   };
-};
+}
+export const choga: Maker = (pal, variant) => drainJob(chogaJob(pal, variant));
 
 // ── 작은 초가(노비 집, 절의 살림채) ─────────────────────────────
-function hutOf(pal: Palette, variant: number, seed: number, old = false): SpriteDef {
+function* hutOf(pal: Palette, variant: number, seed: number, old = false): Job {
   const W = 76 * K;
   const H = 76 * K;
   const s = new Sheet(W, H);
   const bays: Bay[] = variant % 2 === 0 ? [{ kind: 'door' }, { kind: 'window' }] : [{ kind: 'window' }, { kind: 'door' }];
   const smoke = chimney(s, variant % 2 === 0 ? 76 - 8 : 2, 67, pal);
   clayWall(s, 9, 36, 58, 37, pal, bays, seed);
+  yield;
   const eaves = thatchRoof(s, 0, 3, 76, 42, pal, seed + 3, old);
+  yield;
   eaveShade(s, eaves, [pal.clay, pal.wood], seed + 4);
-  const { px, dark } = wash(s, pal, seed + 200, THATCH_PARTS(pal, old));
+  const { px, dark } = yield* washJob(s, pal, seed + 200, THATCH_PARTS(pal, old));
   return {
     frames: [px],
     smoke,
@@ -595,18 +613,21 @@ function hutOf(pal: Palette, variant: number, seed: number, old = false): Sprite
   };
 }
 
-export const hut: Maker = (pal, variant) => hutOf(pal, variant, 80 + variant * 7, variant >= 2);
-export const hall: Maker = (pal) => hutOf(pal, 1, 95, true);
+export const hutJob = (pal: Palette, variant = 0): Job => hutOf(pal, variant, 80 + variant * 7, variant >= 2);
+export const hallJob = (pal: Palette, _variant = 0): Job => hutOf(pal, 1, 95, true);
+export const hut: Maker = (pal, variant) => drainJob(hutJob(pal, variant));
+export const hall: Maker = (pal, variant) => drainJob(hallJob(pal, variant));
 
 // ── 헛간 ─────────────────────────────────────────────────────
-export const shed: Maker = (pal) => {
+export function* shedJob(pal: Palette, _variant = 0): Job {
   const W = 58 * K;
   const H = 52 * K;
   const s = new Sheet(W, H);
   clayWall(s, 7, 28, 44, 21, pal, [{ kind: 'open' }, { kind: 'open' }], 120);
+  yield;
   const eaves = thatchRoof(s, 0, 3, 58, 32, pal, 123, true);
   eaveShade(s, eaves, [pal.clay, pal.wood], 124);
-  const { px, dark } = wash(s, pal, 420, THATCH_PARTS(pal, true));
+  const { px, dark } = yield* washJob(s, pal, 420, THATCH_PARTS(pal, true));
   return {
     frames: [px],
     ax: 29 * K,
@@ -614,7 +635,8 @@ export const shed: Maker = (pal) => {
     shades: [{ dx: 0, dy: -2, rx: 0, ry: 0, strength: 0.34, cast: { x0: -23, x1: 23, h: 22, side: 9, depth: 4, ragged: true } }],
     wash: dark,
   };
-};
+}
+export const shed: Maker = (pal, variant) => drainJob(shedJob(pal, variant));
 
 // ── 기와지붕 ──────────────────────────────────────────────────
 // 골이 진 기와(수키와의 줄 — 골마다 너비 대여섯 점, 왼쪽 끝이 볕), 수키와의 이음매(골마다 자리가 어긋난다), 용마루와 추녀마루,
@@ -920,7 +942,7 @@ const TILE_PARTS = (pal: Palette): Part[] => [
 ];
 
 // ── 양반 댁 안채 ──────────────────────────────────────────────
-export const manor: Maker = (pal) => {
+export function* manorJob(pal: Palette, _variant = 0): Job {
   const s = new Sheet(160 * K, 106 * K);
   timberFront(s, pal, {
     x0: 14,
@@ -932,8 +954,10 @@ export const manor: Maker = (pal) => {
     base: 7,
     seed: 150,
   });
+  yield;
   tileRoof(s, 0, 4, 160, 62, pal, 160);
-  const { px, dark } = wash(s, pal, 510, TILE_PARTS(pal));
+  yield;
+  const { px, dark } = yield* washJob(s, pal, 510, TILE_PARTS(pal));
   return {
     frames: [px],
     ax: 80 * K,
@@ -941,10 +965,11 @@ export const manor: Maker = (pal) => {
     shades: [{ dx: 0, dy: -2, rx: 0, ry: 0, strength: 0.34, cast: { x0: -70, x1: 70, h: 46, side: 16, depth: 5 } }],
     wash: dark,
   };
-};
+}
+export const manor: Maker = (pal, variant) => drainJob(manorJob(pal, variant));
 
 // ── 사랑채 ───────────────────────────────────────────────────
-export const wing: Maker = (pal) => {
+export function* wingJob(pal: Palette, _variant = 0): Job {
   const s = new Sheet(94 * K, 86 * K);
   timberFront(s, pal, {
     x0: 10,
@@ -956,8 +981,10 @@ export const wing: Maker = (pal) => {
     base: 6,
     seed: 170,
   });
+  yield;
   tileRoof(s, 0, 4, 94, 48, pal, 175);
-  const { px, dark } = wash(s, pal, 530, TILE_PARTS(pal));
+  yield;
+  const { px, dark } = yield* washJob(s, pal, 530, TILE_PARTS(pal));
   return {
     frames: [px],
     ax: 47 * K,
@@ -965,11 +992,12 @@ export const wing: Maker = (pal) => {
     shades: [{ dx: 0, dy: -2, rx: 0, ry: 0, strength: 0.34, cast: { x0: -41, x1: 41, h: 40, side: 13, depth: 5 } }],
     wash: dark,
   };
-};
+}
+export const wing: Maker = (pal, variant) => drainJob(wingJob(pal, variant));
 
 // ── 작은 절의 법당 ─────────────────────────────────────────────
 // 높은 돌 기단 위의 기와집. 기둥은 붉은 기가 도는 나무 빛, 처마 밑에 수수한 푸른 띠 하나.
-export const temple: Maker = (pal) => {
+export function* templeJob(pal: Palette, _variant = 0): Job {
   const s = new Sheet(146 * K, 112 * K);
   const post: Ramp = [CLOTH.madder[0], shadeOf(CLOTH.madder[1], 0.9), CLOTH.madder[1], CLOTH.madder[2]];
   timberFront(s, pal, {
@@ -983,8 +1011,10 @@ export const temple: Maker = (pal) => {
     seed: 190,
     band: CLOTH.jade,
   });
+  yield;
   tileRoof(s, 0, 4, 146, 64, pal, 195);
-  const { px, dark } = wash(s, pal, 550, [...TILE_PARTS(pal), [CLOTH.madder, WOOD_WASH, 0], [post, WOOD_WASH, 0]], [post]);
+  yield;
+  const { px, dark } = yield* washJob(s, pal, 550, [...TILE_PARTS(pal), [CLOTH.madder, WOOD_WASH, 0], [post, WOOD_WASH, 0]], [post]);
   return {
     frames: [px],
     ax: 73 * K,
@@ -992,14 +1022,17 @@ export const temple: Maker = (pal) => {
     shades: [{ dx: 0, dy: -2, rx: 0, ry: 0, strength: 0.34, cast: { x0: -61, x1: 61, h: 50, side: 16, depth: 5 } }],
     wash: dark,
   };
-};
+}
+export const temple: Maker = (pal, variant) => drainJob(templeJob(pal, variant));
 
 // ── 담 ───────────────────────────────────────────────────────
-// 회벽에 돌을 박고 기와를 얹은 담(3.1차 시안의 기와 담 — 높이와 지붕마루·몸·아래 끝의 자리는 1-라 그대로).
+// 흙빛 토석담에 기와를 얹은 담(사용자 결정 — spec 13.1의 59번: 몸은 황토·흙빛 토담에 들쭉날쭉한 막돌을 박은 꼴. 3.1차 시안의 흰 회벽은
+// 조선 후기·궁궐·오늘날 정비한 담에 가깝다는 고증에 따라 바꿨다). 높이와 지붕마루·몸·아래 끝의 자리는 1-라 그대로다.
 // 담은 한 칸씩 따로 그리고 맵에는 여러 칸이 이어 놓인다(칸마다 생김새를 제비뽑기로 — 이웃 칸을 모른다). 그래서 칸의 이음매가
 // 곧은 금으로 보이지 않게 ① 기왓골의 자리는 칸마다 같고 골의 사이에서 칸이 바뀐다 ② 돌의 켜마다 칸 경계에 걸친 돌을 두되
 // 그 돌은 생김새와 상관없이 같은 꼴·같은 빛이다(왼쪽 칸은 오른쪽 끝에, 오른쪽 칸은 왼쪽 끝에 반쪽씩) ③ 결의 무늬는 칸마다
 // 되풀이된다(tileWash) ④ 칸의 옆 끝은 제 빛깔 그늘을 두지 않는다. 세로 담도 위아래로 같은 셈이다.
+// 돌은 켜마다 높이가 다르고(5~7점), 켜 안에서도 한 점씩 오르내리며(켜의 경계가 흔들린다) 둥근 돌이 섞인다(ㅌ — 자로 잰 듯 고르지 않게).
 
 /** 담 지붕의 기왓골 너비(칸마다 같다 — 합이 칸의 너비 16K) */
 const WALL_RIBS = [5, 6, 5, 5, 6, 5];
@@ -1014,13 +1047,14 @@ function wallRib(a: number): readonly [number, number, number] {
   return [0, 0, WALL_RIBS[0]];
 }
 
-/** 담 돌 하나: 위·왼쪽이 볕, 아래·오른쪽이 그늘, 모서리는 둥글고, 회벽에 그늘 한 점을 드리운다 */
+/** 담 돌 하나: 위·왼쪽이 볕, 아래·오른쪽이 그늘, 모서리는 둥글고(round면 둥근 돌), 흙벽에 그늘 한 점을 드리운다 */
 interface WallStone {
   sx: number; // 왼쪽 끝(칸 밖으로 나갈 수 있다 — 칸 경계에 걸친 돌)
   w: number;
   y: number;
   h: number;
   R: Ramp; // [그늘, 몸, 볕]
+  round?: boolean;
 }
 
 function drawStone(s: Sheet, st: WallStone, shadow: Color, xa = 0, xb = s.w - 1): void {
@@ -1028,15 +1062,34 @@ function drawStone(s: Sheet, st: WallStone, shadow: Color, xa = 0, xb = s.w - 1)
   const put = (x: number, y: number, c: Color): void => {
     if (x >= xa && x <= xb) s.set(x, y, c);
   };
-  // 회벽에 드리운 그늘(아래·오른쪽 한 점)
-  for (let i = st.sx + 1; i <= ex + 1; i++) put(i, st.y + st.h, shadow);
-  for (let j = st.y + 1; j <= st.y + st.h; j++) put(ex + 1, j, shadow);
+  // 막돌의 꼴: 네모와 타원 사이(초타원 — 지수 p가 클수록 네모에 가깝다)에 테두리를 조금 울퉁불퉁하게 흔든다. 둥근 돌은 p = 2
+  const rx = st.w / 2;
+  const ry = st.h / 2;
+  const p = st.round ? 2 : 2.3 + hash2(st.sx & 1023, st.y, 611) * 1.5;
+  // 돌마다 한쪽으로 조금 기운다(윗선·아랫선이 수평으로 곧지 않게)
+  const tilt = st.round ? 0 : (hash2(st.sx & 1023, st.y, 613) - 0.5) * 0.5;
+  const seed = 612 + ((st.sx * 7 + st.y * 13 + st.w * 3) & 1023);
+  const inside = (i: number, j: number): boolean => {
+    if (i < st.sx || i > ex || j < 0 || j >= st.h) return false;
+    const u = (i + 0.5 - st.sx - rx) / rx;
+    const v = (j + 0.5 - ry) / ry + u * tilt;
+    const wob = (vnoise(Math.atan2(v, u) * 1.6 + 3, 0.5, seed) - 0.5) * 0.55;
+    return Math.abs(u) ** p + Math.abs(v) ** p <= 1.08 + wob;
+  };
+  // 흙벽에 드리운 그늘(아래·오른쪽 한 점)
   for (let j = 0; j < st.h; j++) {
     for (let i = st.sx; i <= ex; i++) {
-      if ((i === st.sx || i === ex) && (j === 0 || j === st.h - 1)) continue;
+      if (!inside(i, j)) continue;
+      if (!inside(i, j + 1)) put(i + 1, st.y + j + 1, shadow);
+      if (!inside(i + 1, j)) put(i + 1, st.y + j + 1, shadow);
+    }
+  }
+  for (let j = 0; j < st.h; j++) {
+    for (let i = st.sx; i <= ex; i++) {
+      if (!inside(i, j)) continue;
       let c = st.R[1];
-      if (j === 0 || i === st.sx) c = st.R[2];
-      if (j === st.h - 1 || i === ex) c = st.R[0];
+      if (!inside(i, j - 1) || !inside(i - 1, j)) c = st.R[2];
+      if (!inside(i, j + 1) || !inside(i + 1, j)) c = st.R[0];
       put(i, st.y + j, c);
     }
   }
@@ -1052,29 +1105,49 @@ function wallStoneRamps(pal: Palette): { gray: Ramp; dim: Ramp; warm: Ramp } {
   };
 }
 
+/** 흙벽(토담)의 빛: [처마 밑 짙은 줄, 처마 그늘, 몸, 볕, 돌이 드리운 그늘] */
+function earthOf(pal: Palette): { line: Color; shade: Color; body: Color; lit: Color; drop: Color } {
+  const { clay } = pal;
+  return { line: clay[1], shade: clay[2], body: clay[3], lit: clay[4], drop: clay[2] };
+}
+
+/** 담 몸의 돌 켜 하나(가로 담): y는 켜의 위 끝, h는 켜의 높이(5~7), 칸 경계에 걸친 돌은 왼쪽에 a점·오른쪽에 b점 */
+interface Course {
+  y: number;
+  h: number;
+  a: number;
+  b: number;
+  R: 'gray' | 'dim';
+  /** 아래 틈이 두 점 넘게 남아 한 점 높은 돌을 놓을 수 있는가 */
+  room?: boolean;
+}
+
 /**
- * 담 몸의 돌 켜들(가로 담). 켜마다 칸 경계에 걸친 돌(왼쪽에 a점, 오른쪽에 b점 — 생김새와 상관없이 같다)과,
- * 그 사이의 생김새마다 다른 돌(너비 6~16, 높이 5~7 — 들쭉날쭉).
+ * 담 몸의 돌 켜들(가로 담). 켜마다 칸 경계에 걸친 돌(생김새와 상관없이 같다)과, 그 사이의 생김새마다 다른 돌:
+ * 너비 6~16, 높이는 켜의 높이이거나 한 점 낮고(위나 아래로 붙어 켜의 경계가 한 점씩 흔들린다), 넷에 하나쯤은 둥근 돌.
  */
-function wallStones(pal: Palette, variant: number, W: number, courses: readonly { y: number; max: number; a: number; b: number; h: number; dy: number; R: 'gray' | 'dim' }[]): WallStone[] {
+function wallStones(pal: Palette, variant: number, W: number, courses: readonly Course[]): WallStone[] {
   const R = wallStoneRamps(pal);
   const out: WallStone[] = [];
   courses.forEach((c, row) => {
     // 칸 경계에 걸친 돌: 왼쪽 칸 오른쪽 끝(가운데 W)과 오른쪽 칸 왼쪽 끝(가운데 0)이 한 돌이다
-    for (const at of [0, W]) out.push({ sx: at - c.a, w: c.a + c.b, y: c.y + c.dy, h: c.h, R: R[c.R] });
-    let x = c.b + 2;
+    for (const at of [0, W]) out.push({ sx: at - c.a, w: c.a + c.b, y: c.y, h: c.h, R: R[c.R] });
+    let x = c.b + 2 + (hash2(variant, row, 607) < 0.4 ? 1 : 0);
     const xb = W - c.a - 3;
+    const seed = 600 + variant * 41 + row * 7;
     for (let k = 0; x <= xb; k++) {
-      const seed = 600 + variant * 41 + row * 7;
       const rem = xb - x + 1;
       if (rem < 5) break;
-      let w = 6 + Math.floor(hash2(k, 1, seed) * 11);
-      if (rem - w < 8) w = Math.min(rem, 16);
-      const h = Math.min(c.max, 5 + Math.floor(hash2(k, 2, seed) * 3));
-      const dy = h < c.max && hash2(k, 3, seed) > 0.66 ? 1 : 0;
+      const round = hash2(k, 6, seed) < 0.27;
+      let w = round ? 6 + Math.floor(hash2(k, 1, seed) * 4) : 6 + Math.floor(hash2(k, 1, seed) * 11);
+      if (rem - w < 8) w = Math.min(rem, round ? 9 : 16);
+      // 높이: 켜의 높이에서 한 점 낮거나(위나 아래로 붙는다) 같거나, 아래 틈이 넉넉하면 한 점 높다(5~7)
+      const r2 = hash2(k, 2, seed);
+      const h = clamp(c.h + (r2 < 0.4 ? -1 : r2 > 0.86 && c.room ? 1 : 0) - (round && c.h > 5 ? 1 : 0), 5, 7);
+      const dy = h < c.h ? (hash2(k, 3, seed) < 0.5 ? 0 : c.h - h) : 0;
       const pick = hash2(k, 4, seed);
-      out.push({ sx: x, w, y: c.y + dy, h, R: pick > 0.84 ? R.warm : pick > 0.5 ? R.dim : R.gray });
-      x += w + 2 + (hash2(k, 5, seed) < 0.35 ? 1 : 0);
+      out.push({ sx: x, w, y: c.y + dy, h, R: pick > 0.84 ? R.warm : pick > 0.5 ? R.dim : R.gray, round });
+      x += w + 2 + (hash2(k, 5, seed) < 0.4 ? 1 : 0);
     }
   });
   return out;
@@ -1084,7 +1157,8 @@ export const wallH: Maker = (pal, variant) => {
   const W = 16 * K;
   const H = 30 * K;
   const s = new Sheet(W, H);
-  const { tile: t, plaster, stone } = pal;
+  const { tile: t, stone } = pal;
+  const earth = earthOf(pal);
   const winter = pal.season === 'winter';
   // 지붕마루와 기와(줄 0~15): 마루는 위가 볕, 기왓골은 골마다 왼쪽 끝이 볕, 처마 끝은 둥근 막새
   for (let x = 0; x < W; x++) {
@@ -1105,7 +1179,7 @@ export const wallH: Maker = (pal, variant) => {
       s.set(x, 11 + d, t[i]);
     }
     s.set(x, 14, t[1]);
-    s.set(x, 15, plaster[0]);
+    s.calm(x, 15, earth.line);
     if (winter) {
       // 담 위에 눈이 얹혔다(기왓골의 끝은 보인다). 눈의 아랫단은 골마다 조금씩 다르다
       const snow = pal.snow;
@@ -1114,15 +1188,16 @@ export const wallH: Maker = (pal, variant) => {
       for (let y = 8; y < 8 + more; y++) s.set(x, y, snow[p === 1 || p === 2 ? 3 : 2]);
     }
   }
-  // 담 몸(줄 16~47): 회벽. 위는 처마 그늘
-  for (let y = 16; y < 48; y++) for (let x = 0; x < W; x++) s.set(x, y, plaster[y < 18 ? 1 : 2]);
+  // 담 몸(줄 16~47): 황토빛 흙벽. 위는 처마 그늘(결을 입히지 않는다 — 그늘 속에 밝은 점이 흩어지지 않게)
+  for (let y = 16; y < 48; y++) for (let x = 0; x < W; x++) (y < 18 ? s.calm : s.set).call(s, x, y, y < 18 ? earth.shade : earth.body);
+  // 돌 켜: 높이가 켜마다 다르다(6·7·5·6) — 칸 경계에 걸친 돌의 자리는 생김새와 상관없이 같다
   const stones = wallStones(pal, variant, W, [
-    { y: 18, max: 7, a: 5, b: 6, h: 6, dy: 0, R: 'gray' },
-    { y: 26, max: 7, a: 11, b: 2, h: 6, dy: 1, R: 'dim' },
-    { y: 34, max: 6, a: 3, b: 7, h: 5, dy: 0, R: 'gray' },
-    { y: 41, max: 5, a: 8, b: 4, h: 5, dy: 0, R: 'dim' },
+    { y: 18, h: 6, a: 5, b: 6, R: 'gray' },
+    { y: 25, h: 7, a: 11, b: 2, R: 'dim' },
+    { y: 34, h: 5, a: 3, b: 7, R: 'gray', room: true },
+    { y: 41, h: 6, a: 8, b: 4, R: 'dim' },
   ]);
-  for (const st of stones) drawStone(s, st, plaster[1]);
+  for (const st of stones) drawStone(s, st, earth.drop);
   // 장대석 기단(줄 48~59): 칸 경계에 걸친 긴 돌 하나와 생김새마다 다른 이음매. 위가 볕, 아래는 그늘
   // 칸 경계에 걸친 돌은 왼쪽으로 8점, 오른쪽으로 6점(한가운데가 아니어서 이음매의 사이가 18·14점으로 엇갈린다)
   const slabs: [number, number][] = [[-8, 5]];
@@ -1143,7 +1218,7 @@ export const wallH: Maker = (pal, variant) => {
     }
   }
   const ramps = rampsOf(pal, Object.values(wallStoneRamps(pal)));
-  const dark = tileWash(s, ramps, pal, 640, variant, { big: 10, bigY: 5, amp: 1.5 }, { x: W });
+  const dark = tileWash(s, ramps, pal, 640, variant, { big: 10, bigY: 5, amp: 1.25 }, { x: W });
   calmSprite(s);
   return { frames: [s.done()], ax: 8 * K, ay: 26 * K, shades: [{ dx: 3, dy: 2, rx: 10, ry: 4, strength: 0.3 }], wash: dark };
 };
@@ -1152,7 +1227,8 @@ export const wallV: Maker = (pal, variant) => {
   const W = 14 * K;
   const H = 38 * K;
   const s = new Sheet(W, H);
-  const { tile: t, plaster, stone } = pal;
+  const { tile: t, stone } = pal;
+  const earth = earthOf(pal);
   const roofEnd = (38 - 15) * K; // 위에서 본 지붕의 아랫줄 다음(1-라 줄 23 — 남쪽 처마 끝)
   // 위에서 본 기와 지붕(세로로 뻗는다): 가운데 마루, 왼쪽 비탈은 볕, 오른쪽 비탈은 그늘. 기왓골은 가로로, 칸마다 같은 자리
   // 열의 큰 명암: 왼쪽 처마 끝 · 왼쪽 비탈 · 마루 · 오른쪽 비탈 · 오른쪽 처마 끝
@@ -1183,20 +1259,27 @@ export const wallV: Maker = (pal, variant) => {
     s.set(x, roofEnd, t[2]);
     s.set(x, roofEnd + 1, t[1]);
   }
-  // 남쪽 끝의 마구리면(줄 48~75, 가로 4~23): 회벽에 돌, 아래는 장대석
+  // 남쪽 끝의 마구리면(줄 48~75, 가로 4~23): 흙벽에 막돌, 아래는 장대석
   const fx0 = 2 * K;
   const fx1 = W - 2 * K - 1;
   const fy = roofEnd + 2;
-  for (let y = fy; y < fy + 16; y++) for (let x = fx0; x <= fx1; x++) s.set(x, y, plaster[y === fy ? 0 : y < fy + 4 ? 1 : 2]);
+  for (let y = fy; y < fy + 16; y++) for (let x = fx0; x <= fx1; x++) (y < fy + 3 ? s.calm : s.set).call(s, x, y, y === fy ? earth.line : y < fy + 3 ? earth.shade : earth.body);
   const R = wallStoneRamps(pal);
-  [fy + 4, fy + 10].forEach((cy, row) => {
+  // 두 켜(높이 6·5) — 켜 안에서 돌이 한 점씩 오르내리고 둥근 돌이 섞인다
+  [
+    [fy + 3, 6],
+    [fy + 10, 5],
+  ].forEach(([cy, ch], row) => {
     let x = fx0 + (row === 0 ? 1 : 0) + Math.floor(hash2(row, variant, 63) * 3);
     for (let k = 0; x <= fx1 - 3; k++) {
       const seed = 650 + variant * 13 + row;
-      const w = Math.min(fx1 - 1 - x, 6 + Math.floor(hash2(k, 1, seed) * 8));
+      const round = hash2(k, 6, seed) < 0.3;
+      const w = Math.min(fx1 - 1 - x, round ? 6 + Math.floor(hash2(k, 1, seed) * 3) : 6 + Math.floor(hash2(k, 1, seed) * 8));
       if (w < 4) break;
+      const h = Math.max(5, ch - (hash2(k, 2, seed) < 0.45 ? 1 : 0));
+      const dy = ch - h > 0 && hash2(k, 3, seed) < 0.5 ? ch - h : 0;
       const pick = hash2(k, 4, seed);
-      drawStone(s, { sx: x, w, y: cy, h: 5, R: pick > 0.84 ? R.warm : pick > 0.5 ? R.dim : R.gray }, plaster[1], fx0, fx1);
+      drawStone(s, { sx: x, w, y: cy + dy, h, R: pick > 0.84 ? R.warm : pick > 0.5 ? R.dim : R.gray, round }, earth.drop, fx0, fx1);
       x += w + 2 + (hash2(k, 5, seed) < 0.35 ? 1 : 0);
     }
   });
@@ -1221,7 +1304,7 @@ export const wallV: Maker = (pal, variant) => {
 
 // ── 대문 ─────────────────────────────────────────────────────
 // 기둥 둘에 작은 기와지붕을 얹은 문. 0은 열린 문, 1은 닫힌 문.
-export const gate: Maker = (pal, variant) => {
+export function* gateJob(pal: Palette, variant = 0): Job {
   const W = 64 * K;
   const H = 62 * K;
   const s = new Sheet(W, H);
@@ -1294,12 +1377,14 @@ export const gate: Maker = (pal, variant) => {
   // 인방: 위가 볕, 아래로 그늘(가장 어두운 빛은 쓰지 않는다)
   const beam = [4, 4, 3, 3, 3, 2, 2, 1];
   for (let X = 10 * K; X < 54 * K; X++) beam.forEach((v, k) => s.set(X, 26 * K + k, wood[v]));
+  yield;
   tileRoof(s, 2, 4, 60, 22, pal, 230);
-  const { px, dark } = wash(s, pal, 700 + variant, [
+  const { px, dark } = yield* washJob(s, pal, 700 + variant, [
     [pal.tile, TILE_WASH, 1],
     [pal.wood, WOOD_WASH, 1],
     [pal.stone, STONE_WASH],
     [pal.snow, SNOW_WASH],
   ]);
   return { frames: [px], ax: 8 * K, ay: (62 - 6) * K, sort: 3, shades: [{ dx: 30, dy: 2, rx: 30, ry: 4, strength: 0.28 }], wash: dark };
-};
+}
+export const gate: Maker = (pal, variant) => drainJob(gateJob(pal, variant));

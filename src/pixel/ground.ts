@@ -334,6 +334,8 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
     const Y1 = Math.min(H, ry0 + rh + MARGIN);
     const BW = X1 - X0;
     const BH = Y1 - Y0;
+    // 몇 줄마다 쉬는가: 점 오천 개쯤마다(조각 하나는 열여섯 줄 — 처음 보이는 화면을 네모 하나로 칠할 때는 더 자주. 쉬는 자리만 다르고 그림은 같다)
+    const ROWS = Math.max(1, Math.min(16, Math.floor(4800 / Math.max(1, BW))));
     const kind = new Uint8Array(BW * BH);
     const amt = new Uint8Array(BW * BH);
     /** 점마다 무늬를 정한 칸의 땅(휘어 잰 자리의 칸) */
@@ -362,7 +364,7 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
 
     // ── 1. 점마다 땅을 가른다 ──
     for (let y = Y0; y < Y1; y++) {
-      if (((y - Y0) & 15) === 15) yield;
+      if ((y - Y0) % ROWS === ROWS - 1) yield;
       const ty = y >> SH;
       for (let x = X0; x < X1; x++) {
         const tx = x >> SH;
@@ -490,7 +492,7 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
     }
     // 논둑 칸은 한결같아도 가운데 줄을 그린다(위에서 uniform으로 지나간 칸)
     for (let y = Y0; y < Y1; y++) {
-      if (((y - Y0) & 15) === 15) yield;
+      if ((y - Y0) % ROWS === ROWS - 1) yield;
       const ty = y >> SH;
       for (let x = X0; x < X1; x++) {
         const tx = x >> SH;
@@ -551,7 +553,7 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
       return a + (b - a) * fy;
     };
     for (let y = Y0; y < Y1; y++) {
-      if (((y - Y0) & 15) === 15) yield;
+      if ((y - Y0) % ROWS === ROWS - 1) yield;
       for (let x = X0; x < X1; x++) {
         const i = bi(x, y);
         const k = kind[i];
@@ -960,7 +962,7 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
     if (pal.season !== 'winter') {
       const season = pal.season;
       for (let y = Y0; y < Y1; y++) {
-        if (((y - Y0) & 15) === 15) yield;
+        if ((y - Y0) % ROWS === ROWS - 1) yield;
         for (let x = X0; x < X1; x++) {
           if (kind[bi(x, y)] !== K.field) continue;
           const mx = x / A;
@@ -1163,7 +1165,13 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
 
     // 세운 것의 그림자(겹친 곳이 두 번 어두워지지 않게 표시해 둔다 — 목록에서 먼저 덮은 그림자가 정한다)
     const shadeMark = new Uint8Array(BW * BH);
+    // 큰 네모(처음 보이는 화면 하나)를 칠할 때도 한 번에 오래 막지 않게, 훑은 점이 이만큼 쌓이면 쉰다(그림은 같다)
+    let swept = 0;
     for (const s of shades) {
+      if (swept > 24000) {
+        swept = 0;
+        yield;
+      }
       const k = 1 - (s.strength ?? 0.3);
       if (s.cast) {
         const c = s.cast;
@@ -1172,6 +1180,7 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
         const yB = Math.min(Y1 - 1, c.y + c.depth + A);
         const xA = Math.max(X0, c.x0);
         const xB = Math.min(X1 - 1, c.x1 + c.side + A);
+        if (yB >= yA && xB >= xA) swept += (yB - yA + 1) * (xB - xA + 1);
         for (let y = yA; y <= yB; y++) {
           for (let x = xA; x <= xB; x++) {
             const jag = c.ragged ? Math.round((vnoise(x / (3.1 * A), y / (3.1 * A), 821) - 0.5) * 2.4 * A) : 0;
@@ -1193,6 +1202,7 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
       const x1 = Math.min(X1 - 1, Math.ceil(s.cx + s.rx + 2 * A));
       const y0 = Math.max(Y0, Math.floor(s.cy - s.ry - 2 * A));
       const y1 = Math.min(Y1 - 1, Math.ceil(s.cy + s.ry + 2 * A));
+      if (y1 >= y0 && x1 >= x0) swept += (y1 - y0 + 1) * (x1 - x0 + 1);
       for (let y = y0; y <= y1; y++) {
         for (let x = x0; x <= x1; x++) {
           const dx = (x + 0.5 - s.cx) / s.rx;
@@ -1245,7 +1255,7 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
     const bigAt = (x: number, y: number): number => lerpGrid(bigGrid, x, y);
     const hueAt = (x: number, y: number): number => lerpGrid(hueGrid, x, y);
     for (let y = Y0; y < Y1; y++) {
-      if (((y - Y0) & 15) === 15) yield;
+      if ((y - Y0) % ROWS === ROWS - 1) yield;
       for (let x = X0; x < X1; x++) {
         const i = bi(x, y);
         let c = out[i];
@@ -1288,9 +1298,12 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
     // 셈은 칠한 그림을 그대로 읽어서 한다(어느 차례로 칠해도 같은 결과)
     const src = out.slice();
     const lum = new Float32Array(BW * BH);
-    for (let i = 0; i < src.length; i++) lum[i] = alpha(src[i]) === 255 ? lumaOf(src[i]) : -1;
+    for (let i = 0; i < src.length; i++) {
+      lum[i] = alpha(src[i]) === 255 ? lumaOf(src[i]) : -1;
+      if (i % (BW * ROWS) === BW * ROWS - 1) yield;
+    }
     for (let y = Y0 + 1; y < Y1 - 1; y++) {
-      if (((y - Y0) & 15) === 15) yield;
+      if ((y - Y0) % ROWS === ROWS - 1) yield;
       for (let x = X0 + 1; x < X1 - 1; x++) {
         const i = bi(x, y);
         const c = src[i];
@@ -1340,7 +1353,7 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
     const hit = new Uint8Array(BW * BH);
     let any = false;
     for (let y = Y0; y < Y1 - 1; y++) {
-      if (((y - Y0) & 15) === 15) yield;
+      if ((y - Y0) % ROWS === ROWS - 1) yield;
       for (let x = X0; x < X1 - 1; x++) {
         if (harsh(x, y)) {
           hit[bi(x, y)] = 1;
@@ -1350,7 +1363,7 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
     }
     if (any) {
       for (let y = Y0; y < Y1; y++) {
-        if (((y - Y0) & 15) === 15) yield;
+        if ((y - Y0) % ROWS === ROWS - 1) yield;
         for (let x = X0; x < X1; x++) {
           // 이 점이 든 2×2 가운데 대비 큰 체크무늬가 있으면 그 2×2의 왼쪽 위 빛으로
           const i = bi(x, y);

@@ -581,9 +581,10 @@ function oxBody(frame: number): Px {
   f.path([[20.2, 8.0], [23, 7.0]], 1.3, 1.0, 9);
   f.path([[11.4, 6.6], [10, 3.6], [9.2, 1.4]], 1.1, 0.6, 6);
   f.path([[16.6, 6.6], [18, 3.6], [18.8, 1.4]], 1.1, 0.6, 6);
-  paint(px, f, coats, { D: 8, seed: 41 + frame, vg: 0.34 });
+  // 몸의 큰 결은 잔잔하게(얼룩져 보이지 않게 — Review 권고 11): 단계의 경계를 구불리는 무늬를 반으로, 털의 결은 밝게·어둡게 옮기는 문턱을 한 걸음씩 멀리
+  paint(px, f, coats, { D: 8, seed: 41 + frame, vg: 0.34, wob: 0.06 });
   // 털의 결(가로로 가늘게) — 다리·주둥이·뿔은 빼고
-  grain(px, 43, 2.6, 0.9, (x, y) => y < 28 && x > 7, 0.74, 0.2);
+  grain(px, 43, 2.6, 0.9, (x, y) => y < 28 && x > 7, 0.8, 0.13);
   calmSprite(px, 0.1);
   // 엉덩이뼈와 어깨(혹)의 빛, 눈, 콧구멍과 입
   dots(px, [[60, 9, OX[5]], [61, 9, OX[5]], [62, 9, OX[4]], [61, 10, OX[4]], [27, 7, OX[5]], [28, 7, OX[4]], [27, 8, OX[4]]]);
@@ -873,9 +874,16 @@ const withAlphaOf = (c: Color, a: number): Color => ((c & 0x00ffffff) | (a << 24
 export function rainSprites(pal: Palette): { streaks: Px[]; splash: Px[] } {
   const a = withAlphaOf(pal.water[6], 190);
   const b = withAlphaOf(pal.water[5], 130);
+  // 빗줄기는 그림 점 둘 굵기(그림 올리기 ②의 고침 — 한 점이면 1-라의 반 넓이라 큰비가 잘 보이지 않는다). 둘째 점은 줄의 뒤(왼쪽)에 붙여
+  // 찍힌 네모는 1-라 그대로다(줄의 아래 끝 한 점만 한 점 굵기)
   const streak = (len: number): Px => {
     const px = new Px((Math.ceil(len / 6) + 1) * 2, len);
-    for (let k = 0; k < len; k++) px.set(Math.floor((len - 1 - k) / 3), k, k < len / 2 ? b : a);
+    for (let k = 0; k < len; k++) {
+      const x = Math.floor((len - 1 - k) / 3);
+      const c = k < len / 2 ? b : a;
+      px.set(x, k, c);
+      if (x > 0) px.set(x - 1, k, c);
+    }
     return px;
   };
   const w = withAlphaOf(pal.water[6], 220);

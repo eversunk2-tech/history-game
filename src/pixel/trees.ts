@@ -535,7 +535,10 @@ export const pineS: Maker = (pal, variant) => pineOf(pal, variant, true);
 export const blossom: Maker = (pal, variant) => {
   const W = 46;
   const H = 52;
-  const petals: Ramp = variant === 1 ? pal.blossomWhite : pal.blossom;
+  // 흰 꽃은 단계가 넷뿐이라(분홍은 다섯) 위 둘이 넓게 덮여 흰 솜처럼 밋밋했다 — 꽃이 핀 철에는 그늘 단계를 한 칸 더 써서(분홍 꽃과 같은
+  // 다섯 칸으로 펴서) 오른쪽 아래의 그늘 띠와 뭉치 사이의 골이 서게 한다(Review 권고 10). 빛깔은 흰 꽃의 네 빛 그대로다
+  const white = pal.blossomWhite;
+  const petals: Ramp = variant === 1 ? (pal.flowers ? [white[0], white[0], white[1], white[2], white[3]] : white) : pal.blossom;
   let blobs: Blob[] = [
     { x: 23, y: 20, r: 12.5, lift: 4 },
     { x: 12, y: 24, r: 8.5, lift: 2 },
@@ -745,10 +748,11 @@ export function* zelkovaJob(pal: Palette, _variant = 0): Job {
           px.over((cx + 4) * K + i, 136 * K + j, bark[d > 4 ? 0 : d > 1.5 ? 1 : 2]);
         }
       }
-      // 세 갈래 큰 가지
-      branch(px, bark, (cx - 9) * K, 98 * K, (cx - 50) * K, 60 * K, 10 * K);
+      // 세 갈래 큰 가지. 가지는 굵기를 가지 방향에 수직으로 쌓으므로(둥근 붓) 비스듬한 두 가지는 가로로 쌓던 1-라의 보이는 굵기
+      // (10 × 가지의 기울기 0.68)에 맞춰 7로 둔다 — 줄기가 세 갈래로 갈라지는 꼴이 1-라·②와 같게
+      branch(px, bark, (cx - 9) * K, 98 * K, (cx - 50) * K, 60 * K, 7 * K);
       branch(px, bark, (cx - 2) * K, 96 * K, (cx + 2) * K, 46 * K, 11 * K);
-      branch(px, bark, (cx + 10) * K, 98 * K, (cx + 52) * K, 62 * K, 10 * K);
+      branch(px, bark, (cx + 10) * K, 98 * K, (cx + 52) * K, 62 * K, 7 * K);
     },
     (px) =>
       pal.season === 'winter'

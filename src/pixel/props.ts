@@ -686,8 +686,10 @@ export const pagoda: Maker = (pal) => {
   const px = new Px(W, H);
   const { stone } = pal;
   const cx = 13.5;
-  // 1-라의 점 좌표: y줄부터 hgt줄, 반너비 half. 지붕돌은 위가 좁고(비탈은 볕) 처마 밑은 그늘
-  const slab = (y: number, half: number, hgt: number, roof: boolean): void => {
+  // 1-라의 점 좌표: y줄부터 hgt줄, 반너비 half. 지붕돌은 위가 좁고(비탈은 볕) 처마 밑은 그늘.
+  // 먹빛 테두리 없이도 층이 서게(그림 올리기 ②의 고침 — Review 권고 3): 오른쪽 그늘 면을 한두 단계 더 내리고,
+  // 지붕돌의 아랫면과 그 밑 몸돌의 윗줄(처마 그늘)을 짙게 한다
+  const slab = (y: number, half: number, hgt: number, roof: boolean, eave = false): void => {
     const Y1 = (y + hgt) * A - 1;
     for (let Y = y * A; Y <= Y1; Y++) {
       const j = P(Y) - 0.5 - y;
@@ -695,12 +697,15 @@ export const pagoda: Maker = (pal) => {
       for (let X = 0; X < W; X++) {
         const u = (P(X) - cx) / hw;
         if (Math.abs(u) > 1) continue;
-        let v = 3.6 - u * 1.5;
+        let v = 3.6 - u * 1.5 - Math.max(0, u - 0.2) * 2;
         if (roof) v += clamp(1 - j / (hgt - 1), 0, 1);
+        else if (eave && Y < y * A + A) v -= 1.8;
+        else if (eave && Y < y * A + 2 * A) v -= 0.9;
         else if (Y === y * A) v -= 0.4;
-        if (Y === Y1) v -= 1.2;
-        else if (Y === Y1 - 1) v -= 0.4;
-        px.set(X, Y, stone[clamp(Math.round(v), 1, 5)]);
+        if (Y === Y1) v -= roof ? 1.8 : 1.2;
+        else if (Y === Y1 - 1) v -= roof ? 1 : 0.4;
+        // 그늘 면은 가운데 잿빛까지만(거뭇해지지 않게 — 가장 짙은 둘은 아랫선과 처마 밑에만)
+        px.set(X, Y, stone[clamp(Math.round(v), Y >= Y1 - 1 || (eave && Y < y * A + A) ? 1 : 2, 5)]);
       }
     }
   };
@@ -714,18 +719,18 @@ export const pagoda: Maker = (pal) => {
     [4, 6],
   ] as const) {
     y -= 7;
-    slab(y, body - 1, 7, false);
+    slab(y, body - 1, 7, false, true);
     y -= 4;
     slab(y, roof, 4, true);
   }
-  slab(y - 3, 1, 3, false);
-  // 보주(꼭대기의 작은 구슬)
-  for (let Y = 3; Y <= 7; Y++) {
-    for (let X = 24; X <= 29; X++) {
-      const dx = (X + 0.5 - 27) / 1.8;
-      const dy = (Y + 0.5 - 5.6) / 2.4;
+  slab(y - 3, 1, 3, false, true);
+  // 보주(꼭대기의 작은 구슬): 한 점 남짓 크게, 한 단계 짙게 — 흰 하늘·흙 앞에서도 보이게
+  for (let Y = 1; Y <= 8; Y++) {
+    for (let X = 23; X <= 31; X++) {
+      const dx = (X + 0.5 - 27) / 2.5;
+      const dy = (Y + 0.5 - 5) / 3.1;
       if (dx * dx + dy * dy > 1) continue;
-      px.set(X, Y, stone[clamp(Math.round(4.6 - dx * 1.2 - dy * 0.6), 2, 5)]);
+      px.set(X, Y, stone[clamp(Math.round(3.7 - dx * 1.3 - dy * 0.7), 1, 5)]);
     }
   }
   const wash = finish(px, rampsOf(pal), 320, { big: 6, bigY: 5 });
@@ -739,18 +744,20 @@ export const lantern: Maker = (pal) => {
   const px = new Px(W, H);
   const { stone, wood } = pal;
   const cx = 8.5;
-  const block = (y: number, half: number, hgt: number): void => {
+  // 오른쪽 그늘 면을 한두 단계 더 내린다(먹빛 테두리 없이도 꼴이 서게 — Review 권고 3)
+  const block = (y: number, half: number, hgt: number, eave = false): void => {
     const Y1 = (y + hgt) * A - 1;
     for (let Y = y * A; Y <= Y1; Y++) {
       for (let X = 0; X < W; X++) {
         const u = (P(X) - cx) / (half + 1.35);
         if (Math.abs(u) > 1) continue;
-        px.set(X, Y, stone[clamp(Math.round(3.8 - u * 1.5 - (Y === Y1 ? 1 : Y === Y1 - 1 ? 0.4 : 0)), 1, 5)]);
+        const under = eave && Y < y * A + A ? 1.3 : 0;
+        px.set(X, Y, stone[clamp(Math.round(3.8 - u * 1.5 - Math.max(0, u - 0.2) * 1.5 - under - (Y === Y1 ? 1 : Y === Y1 - 1 ? 0.4 : 0)), 1, 5)]);
       }
     }
   };
   block(23, 5, 3);
-  block(15, 1, 8);
+  block(15, 1, 8, true);
   block(12, 4, 3);
   block(7, 3, 5);
   // 불을 넣는 창(비어 있다 — 안은 따뜻한 어둠)
@@ -761,7 +768,7 @@ export const lantern: Maker = (pal) => {
     for (let X = 0; X < W; X++) {
       const u = (P(X) - cx) / hw;
       if (Math.abs(u) > 1) continue;
-      px.set(X, Y, stone[clamp(Math.round(4.2 - u * 1.6 - (Y === 13 ? 1 : Y === 12 ? 0.4 : 0) + (Y <= 9 ? 0.4 : 0)), 1, 5)]);
+      px.set(X, Y, stone[clamp(Math.round(4.2 - u * 1.6 - Math.max(0, u - 0.2) * 1.4 - (Y === 13 ? 1.6 : Y === 12 ? 0.8 : 0) + (Y <= 9 ? 0.4 : 0)), 1, 5)]);
     }
   }
   for (const [X, Y, i] of [

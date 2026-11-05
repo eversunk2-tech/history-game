@@ -27,7 +27,7 @@ import type { GameState, SituationPack } from '../engine/types';
 import { artScale, scaleFor } from '../map/camera';
 import { render, stepScene, type View } from '../map/draw';
 import { tileOf } from '../map/path';
-import { openSession, paintIdle, prepReady, prepareMap, stepPrepare, type MapSession } from '../map/session';
+import { idleLeft, idleLoop, openSession, paintIdle, prepReady, prepareMap, stepPrepare, type MapSession } from '../map/session';
 import { TILE, zoneAt, type MapData, type Weather } from '../map/types';
 import {
   dayLight,
@@ -490,7 +490,7 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       // 땅의 남은 조각(spec 4.7.5의 ㅋ): 이 장에서 쓰고 남은 시간만큼만 잘게 나눠 칠한다(한 장 16.7ms 가운데 셈과 그리기를 빼고
       // 많아야 6ms, 적어도 1.5ms). 걷는 쪽으로 앞선 자리에서 가까운 조각부터 칠해 화면이 닿기 전에 칠해 둔다.
       // 그래도 칠하지 않은 조각이 화면에 들면 그리기가 그 조각만 그 자리에서 칠한다.
-      if (scene.ground.left > 0) {
+      if (idleLeft(session)) {
         const spent = performance.now() - began;
         const budget = talk.peek() !== null ? 8 : Math.max(1.5, Math.min(6, 11 - spent));
         paintIdle(session, budget, aheadOf(world));
@@ -532,17 +532,18 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
     };
 
     // 그림을 처음 찍을 때는 잠깐 걸린다. "그리는 중"(처음)이나 앞 장(계절이 바뀔 때)을 띄워 둔 채,
-    // 그림 벌과 처음 보이는 화면의 땅을 나눠 짓고(한 번에 12ms쯤 — 2배 그림의 일감 하나가 낮은 사양에서 30ms 남짓이라, 일감이 넘쳐도
-    // 50ms 넘는 긴 일을 만들지 않으면서 쉬는 틈을 줄인다) 다 되면 판을 연다.
+    // 처음 보이는 화면에 걸치는 그림과 그 화면의 땅을 나눠 짓고(한 번에 12ms쯤 — 2배 그림의 일감 하나가 낮은 사양에서 30ms 남짓이라, 일감이 넘쳐도
+    // 50ms 넘는 긴 일을 만들지 않으면서 쉬는 틈을 줄인다) 다 되면 판을 연다. 나머지 그림은 판을 연 뒤 쉬는 틈에 걷는 쪽부터 짓는다(paintIdle).
+    // 쉬는 틈은 MessageChannel로 잇는다(setTimeout은 다섯 번째부터 4ms씩 밀린다 — Review 권고 1의 길 1). 없는 환경이면 setTimeout.
     // 제목 화면·계절 닫기·소개 화면에서 미리 지어 두었으면 바로 연다.
-    let pump = 0;
+    const pump = idleLoop();
     const openWhenReady = (): void => {
       if (stopped) return;
       const now = game.peek();
       if (!now) return;
       if (!prepReady(map)) {
         stepPrepare(12);
-        pump = window.setTimeout(openWhenReady, 0);
+        pump.next(openWhenReady);
         return;
       }
       openNow(now);
@@ -711,7 +712,7 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       stopped = true;
       cancelAnimationFrame(raf);
       window.clearTimeout(start);
-      window.clearTimeout(pump);
+      pump.stop();
       observer.disconnect();
       canvas.removeEventListener('pointerdown', onPointer);
       window.removeEventListener('keydown', onKeyDown);

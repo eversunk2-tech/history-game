@@ -9,7 +9,7 @@
 // 계절: 그림 벌(atlas)과 맵이 그 계절의 것이다. 여기서는 그 계절의 날림만 가른다(봄 꽃잎, 여름 잠자리, 가을 가랑잎, 겨울 눈, 큰비).
 
 import { anchorOf, thingKey } from '../pixel/catalog';
-import { MASK_CELL, WATER_TILE, critterImg, footBox, groundCanvas, paintAround, personCanvas, shadesOf, thingImg, type Atlas, type GroundCanvas, type Img } from '../pixel/atlas';
+import { MASK_CELL, WATER_TILE, critterImg, footBox, groundCanvas, paintAround, personCanvas, shadesOf, thingImg, thingMetaOf, type Atlas, type GroundCanvas, type Img } from '../pixel/atlas';
 import { GROUND_TILE } from '../pixel/ground';
 import { COL, DIRS, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W } from '../pixel/people';
 import { ART, clamp, hash2, mix } from '../pixel/px';
@@ -19,7 +19,13 @@ import { T, TILE, type MapData } from './types';
 import { spotPoint, type Actor, type World } from './world';
 
 interface Static {
-  img: Img;
+  /** 그림(아직 짓지 않았으면 null — 보이게 되면 짓는다. 맵을 연 뒤 쉬는 틈에 걷는 쪽부터 미리 짓는다) */
+  img: Img | null;
+  /** 그림 벌의 열쇠(갈래:생김새) */
+  key: string;
+  /** 한 장의 크기(그림 점 — 그림을 짓기 전에도 안다) */
+  w: number;
+  h: number;
   /** 그림의 왼쪽 위(맵의 점 — 그림 점의 반이 남을 수 있다) */
   x: number;
   y: number;
@@ -107,6 +113,8 @@ export interface Scene {
   flock: { x: number; y: number; vx: number; vy: number; n: number } | null;
   flockWait: number;
   shown: (Static | Actor)[];
+  /** 그리면서 그 자리에서 지은 세운 것의 수(미리 짓기가 모자랐는가) */
+  late: number;
 }
 
 /** 맵의 땅 캔버스(아직 칠하지 않았다 — 그리기가 보이는 조각부터 칠한다) */
@@ -129,27 +137,32 @@ function sceneFrom(map: MapData, atlas: Atlas, world: World, ground: GroundCanva
   const shutIds = new Set(closedGates(map, world.who).map((c) => c.gate.id));
   for (const o of map.objects) {
     const variant = o.gate ? (shutIds.has(o.gate) ? 1 : 0) : o.variant;
-    const img = thingImg(atlas, thingKey(o.kind, variant));
-    if (!img) continue;
+    const key = thingKey(o.kind, variant);
+    // 판은 꼴의 표로 세운다(그림은 지은 것만 걸어 두고, 나머지는 보이게 될 때 짓는다)
+    const meta = thingMetaOf(atlas, key);
+    if (!meta) continue;
     const def = thing(o.kind);
     const at = anchorOf(o.kind, o.tx, o.ty, o.dx, o.dy);
-    const x = at.x - img.ax / ART;
-    const y = at.y - img.ay / ART;
+    const x = at.x - meta.ax / ART;
+    const y = at.y - meta.ay / ART;
     (def.flat ? flats : statics).push({
-      img,
+      img: atlas.things.get(key) ?? null,
+      key,
+      w: meta.w,
+      h: meta.h,
       x,
       y,
-      sortY: at.y + img.sort,
+      sortY: at.y + meta.sort,
       tall: Boolean(def.tall),
-      sways: Boolean(def.sways || def.moves) && img.n > 1,
+      sways: Boolean(def.sways || def.moves) && meta.n > 1,
       phase: def.moves ? 0 : hash2(o.tx, o.ty, 5) * 4 + o.tx / 9,
       alpha: 1,
       kind: o.kind,
     });
-    if (img.smoke) chimneys.push({ x: x + img.smoke.x / ART, y: y + img.smoke.y / ART, next: hash2(o.tx, o.ty, 6) });
+    if (meta.smoke) chimneys.push({ x: x + meta.smoke.x / ART, y: y + meta.smoke.y / ART, next: hash2(o.tx, o.ty, 6) });
     if (o.kind === 'blossom') blossoms.push({ x: at.x, y: at.y - 30 });
     // 가을: 넓은 잎 나무에서 잎이 진다(솔은 지지 않는다)
-    if (sheds && LEAF_TREES.has(o.kind)) leafy.push({ x: at.x, y: at.y - (img.h / ART) * 0.55 });
+    if (sheds && LEAF_TREES.has(o.kind)) leafy.push({ x: at.x, y: at.y - (meta.h / ART) * 0.55 });
   }
   statics.sort((a, b) => a.sortY - b.sortY);
   flats.sort((a, b) => a.sortY - b.sortY);
@@ -207,6 +220,7 @@ function sceneFrom(map: MapData, atlas: Atlas, world: World, ground: GroundCanva
     flock: null,
     flockWait: 5,
     shown: [],
+    late: 0,
   };
 }
 
@@ -364,8 +378,9 @@ export function stepScene(scene: Scene, world: World, dt: number): void {
   for (const s of scene.statics) {
     if (!s.tall) continue;
     let want = 1;
-    if (p.y < s.sortY && bx1 > s.x && bx0 < s.x + s.img.w / ART && by1 > s.y && by0 < s.y + s.img.h / ART && hides(s.img, bx0 - s.x, by0 - s.y, bx1 - s.x, by1 - s.y)) {
-      want = 0.45;
+    if (p.y < s.sortY && bx1 > s.x && bx0 < s.x + s.w / ART && by1 > s.y && by0 < s.y + s.h / ART) {
+      const img = staticImg(scene, s);
+      if (img && hides(img, bx0 - s.x, by0 - s.y, bx1 - s.x, by1 - s.y)) want = 0.45;
     }
     if (s.alpha !== want) {
       const k = Math.min(1, dt * 9);
@@ -373,6 +388,22 @@ export function stepScene(scene: Scene, world: World, dt: number): void {
       if (Math.abs(s.alpha - want) < 0.02) s.alpha = want;
     }
   }
+}
+
+/**
+ * 세운 것의 그림(아직 짓지 않았으면 지금 짓는다 — 맵을 연 뒤 쉬는 틈에 걷는 쪽부터 미리 지어 두므로 드물다).
+ * 그 자리에서 지은 수를 scene.late에 센다(미리 짓기가 모자랐는지 시험과 잼이 본다).
+ */
+function staticImg(scene: Scene, s: Static): Img | null {
+  if (s.img) return s.img;
+  const built = scene.atlas.things.get(s.key);
+  if (built) {
+    s.img = built;
+    return built;
+  }
+  s.img = thingImg(scene.atlas, s.key) ?? null;
+  if (s.img) scene.late++;
+  return s.img;
 }
 
 /** 그림 안의 네모(맵 점 — 그림의 왼쪽 위에서)가 찍힌 점으로 셋에 하나 넘게 덮여 있는가. 마스크는 그림 점이다. */
@@ -510,8 +541,10 @@ export function render(view: View, world: World, scene: Scene): void {
 
   // 땅바닥에 깔린 것(씨름판의 모래, 멍석)
   for (const it of scene.flats) {
-    if (it.x > vx1 || it.x + it.img.w / ART < vx0 || it.y > vy1 || it.y + it.img.h / ART < vy0) continue;
-    ctx.drawImage(it.img.canvas, 0, 0, it.img.w, it.img.h, it.x * s - camX, it.y * s - camY, it.img.w * m, it.img.h * m);
+    if (it.x > vx1 || it.x + it.w / ART < vx0 || it.y > vy1 || it.y + it.h / ART < vy0) continue;
+    const img = staticImg(scene, it);
+    if (!img) continue;
+    ctx.drawImage(img.canvas, 0, 0, img.w, img.h, it.x * s - camX, it.y * s - camY, img.w * m, img.h * m);
   }
 
   // 4. 세운 것과 사람: 아래쪽에 있는 것을 나중에 그린다
@@ -531,7 +564,7 @@ export function render(view: View, world: World, scene: Scene): void {
   for (let i = lo; i < list.length; i++) {
     const it = list[i];
     if (it.sortY > bottom) break;
-    if (it.x > vx1 || it.x + it.img.w / ART < vx0 || it.y > vy1) continue;
+    if (it.x > vx1 || it.x + it.w / ART < vx0 || it.y > vy1) continue;
     shown.push(it);
   }
   for (const a of world.actors) {
@@ -546,7 +579,8 @@ export function render(view: View, world: World, scene: Scene): void {
   for (const it of shown) {
     if (isActor(it)) drawActor(view, world, scene, it, camX, camY);
     else {
-      const img = it.img;
+      const img = staticImg(scene, it);
+      if (!img) continue;
       let frame = 0;
       if (it.sways) frame = img.seq[Math.floor(world.time * img.rate + it.phase) % img.seq.length];
       if (it.alpha < 1) ctx.globalAlpha = it.alpha;

@@ -8,7 +8,7 @@
 // 땅은 화면 둘레부터 조각으로 나눠 칠하고 나머지는 쉬는 틈에 칠한다(GroundCanvas).
 
 import type { Season } from '../engine/types';
-import { shadesFor, thingDef, thingJob, thingKey } from './catalog';
+import { shadesFor, thingDef, thingJob, thingKey, thingMeta, type ThingMeta } from './catalog';
 import * as critters from './critters';
 import { GROUND_TILE, groundJob, snapperOf, waterFrame, type Ground, type GroundJob, type GroundMap, type Shade } from './ground';
 import { paletteOf, type Palette } from './palette';
@@ -286,25 +286,44 @@ export function runSteps(steps: readonly Step[]): void {
   for (const step of steps) while (step() === true);
 }
 
+/** 사람 시트 하나를 방향 한 줄씩(열두 장씩) 넷으로 나눠 짓는 일감들(이미 지었으면 빈 목록) */
+export function personSteps(atlas: Atlas, name: string): Step[] {
+  const p = personOf(name);
+  if (!p || atlas.people.has(name)) return [];
+  const sheet = new Px(PERSON_W * SHEET_COLS, PERSON_H * 4);
+  const out: Step[] = [];
+  for (let row = 0; row < 4; row++) {
+    out.push(() => {
+      if (atlas.people.has(name)) return;
+      personSheetRow(p, sheet, row);
+      if (row === 3) atlas.people.set(name, toCanvas(atlas.snap.apply(sheet)));
+    });
+  }
+  return out;
+}
+
+/** 세운 것 하나를 쉬어 가며 짓는 일감(다 지은 것은 thingImg와 같다) */
+export function thingSteps(atlas: Atlas, key: string): Step[] {
+  return atlas.things.has(key) ? [] : [thingStep(atlas, key)];
+}
+
+/** 짐승 하나를 짓는 일감 */
+export function critterSteps(atlas: Atlas, name: string): Step[] {
+  return atlas.critters.has(name) ? [] : [() => void critterImg(atlas, name)];
+}
+
 /**
  * 지을 것을 한 가지씩 짓는 일감들(쉬는 틈에 하나씩 부른다). 벌의 바탕(물결은 한 장씩), 세운 것(큰 나무는 잎 뭉치 하나씩),
  * 사람 시트(방향 한 줄 — 열두 장씩 넷으로), 짐승 — 일감 하나가 낮은 사양에서도 한 장의 시간 안에 들게.
+ * 세운 것·사람·짐승은 needs에 적힌 차례대로 짓는다(처음 화면 둘레의 것을 앞에 두면 그것부터 — session.ts).
  */
 export function prepareSteps(atlas: Atlas, needs: Needs): Step[] {
-  const people: (() => void)[] = [];
-  for (const name of needs.people) {
-    const p = personOf(name);
-    if (!p || atlas.people.has(name)) continue;
-    const sheet = new Px(PERSON_W * SHEET_COLS, PERSON_H * 4);
-    for (let row = 0; row < 4; row++) {
-      people.push(() => {
-        if (atlas.people.has(name)) return;
-        personSheetRow(p, sheet, row);
-        if (row === 3) atlas.people.set(name, toCanvas(atlas.snap.apply(sheet)));
-      });
-    }
-  }
-  return [...baseSteps(atlas), ...needs.things.map((k) => thingStep(atlas, k)), ...people, ...needs.critters.map((n) => () => void critterImg(atlas, n))];
+  return [
+    ...baseSteps(atlas),
+    ...needs.things.flatMap((k) => thingSteps(atlas, k)),
+    ...needs.people.flatMap((n) => personSteps(atlas, n)),
+    ...needs.critters.flatMap((n) => critterSteps(atlas, n)),
+  ];
 }
 
 const single = (snap: Snapper, px: Px, ax = Math.floor(px.w / 2), ay = px.h - 1): Img => imgOf(snap, [px], ax, ay, undefined);
@@ -380,12 +399,12 @@ function waterStep(atlas: Atlas, st: BaseState): void {
 }
 
 /** 벌의 바탕(물결 스물넉 장, 날림, 표시 …)을 일감으로 나눈다 — 다 지은 것은 빠진다 */
-export function baseSteps(atlas: Atlas): (() => void)[] {
+export function baseSteps(atlas: Atlas, part: 'all' | 'water' | 'rest' = 'all'): (() => void)[] {
   const st = BASE.get(atlas);
   if (!st) return [];
   const out: (() => void)[] = [];
-  for (let k = st.waterDone; k < WATER_FRAMES; k++) out.push(() => waterStep(atlas, st));
-  for (const key of Object.keys(baseMakers(atlas.pal, atlas.snap)) as BaseKey[]) if (!st.made.has(key)) out.push(() => void atlas[key]);
+  if (part !== 'rest') for (let k = st.waterDone; k < WATER_FRAMES; k++) out.push(() => waterStep(atlas, st));
+  if (part !== 'water') for (const key of Object.keys(baseMakers(atlas.pal, atlas.snap)) as BaseKey[]) if (!st.made.has(key)) out.push(() => void atlas[key]);
   return out;
 }
 
@@ -484,31 +503,53 @@ function allPeople(): string[] {
   return Object.keys({ ...HEROES, ...VILLAGERS, ...GUISES });
 }
 
-/** 세운 것들이 바닥에 드리우는 그림자(맵 점). 그 맵의 세운 것을 모두 짓는다. */
+/** 세운 것 하나의 꼴(그림을 짓지 않고 — catalog의 표). 없는 갈래면 undefined */
+export function thingMetaOf(atlas: Atlas, key: string): ThingMeta | undefined {
+  const [kind, v] = kindVariant(key);
+  return thingMeta(atlas.pal, kind, v);
+}
+
+/** 세운 것들이 바닥에 드리우는 그림자(맵 점). 그림을 짓지 않는다(꼴의 표 — 지은 그림의 그림자와 같다) */
 export function shadesOf(atlas: Atlas, objects: readonly Placed[]): Shade[] {
-  return shadesFor((key) => thingImg(atlas, key)?.shades, objects);
+  return shadesFor((key) => thingMetaOf(atlas, key)?.shades, objects);
 }
 
 // ── 땅: 한 장의 캔버스에 조각으로 나눠 칠한다 ─────────────────────────
+// 칠한 것은 칸(맵 칸)마다 적는다. 쉬는 틈에는 조각(맵 칸 8×8) 하나씩 칠하고, 맵을 열기 전에는 처음 보이는 화면에 걸친 칸들만
+// 네모 하나로 칠한다(조각에 맞춰 칠하면 화면의 두 배쯤을 칠하게 된다 — 그림 올리기 ②의 고침, Review 권고 1).
+// 땅의 셈은 네모를 어떻게 나눠 칠해도 같은 그림을 내므로(groundJob — 둘레를 함께 셈한다), 칠한 칸은 다시 칠하지 않는다.
 
 /** 땅의 조각 하나(그림 점) — 맵 칸 8×8 */
 export const GROUND_CHUNK = GROUND_TILE * 8;
 
+/** 조각 하나의 맵 칸 수(한 변) */
+const CHUNK_TILES = GROUND_CHUNK / GROUND_TILE;
+
 export interface GroundCanvas {
   canvas: HTMLCanvasElement;
   job: GroundJob;
-  /** 칸마다 물결/논물/벼(칠한 조각의 칸만 wet이 맞다) */
+  /** 칸마다 물결/논물/벼(칠한 칸만 wet이 맞다) */
   wet: Uint8Array;
   glint: Uint8Array;
   crop: Uint8Array;
+  /** 맵 칸의 수 */
+  tw: number;
+  th: number;
+  /** 칸마다 칠했는가 */
+  painted: Uint8Array;
+  /** 조각의 수 */
   cw: number;
   ch: number;
-  /** 조각마다 칠했는가 */
+  /** 조각마다 다 칠했는가 */
   done: Uint8Array;
+  /** 다 칠하지 않은 조각의 수 */
   left: number;
-  /** 잘게 나눠 칠하는 중인 조각(없으면 null) */
-  cur: { i: number; steps: Generator<undefined, Px, undefined> } | null;
+  /** 잘게 나눠 칠하는 중인 네모(맵 칸 — x0, y0, x1, y1, 끝 포함)와 그 일감(없으면 null). i는 그 네모를 고른 조각(아니면 −1) */
+  cur: { i: number; box: TileBox; steps: Generator<undefined, Px, undefined> } | null;
 }
+
+/** 맵 칸의 네모(끝 포함) */
+export type TileBox = readonly [number, number, number, number];
 
 /** 땅의 캔버스를 만든다(아직 칠하지 않는다) */
 export function groundCanvas(atlas: Atlas, map: GroundMap, shades: readonly Shade[]): GroundCanvas {
@@ -518,101 +559,187 @@ export function groundCanvas(atlas: Atlas, map: GroundMap, shades: readonly Shad
   canvas.height = job.H;
   const cw = Math.ceil(job.W / GROUND_CHUNK);
   const ch = Math.ceil(job.H / GROUND_CHUNK);
-  return { canvas, job, wet: job.wet, glint: job.glint, crop: job.crop, cw, ch, done: new Uint8Array(cw * ch), left: cw * ch, cur: null };
+  const tw = job.W / GROUND_TILE;
+  const th = job.H / GROUND_TILE;
+  return { canvas, job, wet: job.wet, glint: job.glint, crop: job.crop, tw, th, painted: new Uint8Array(tw * th), cw, ch, done: new Uint8Array(cw * ch), left: cw * ch, cur: null };
 }
 
-function chunkRect(g: GroundCanvas, i: number): [number, number, number, number] {
-  const x = (i % g.cw) * GROUND_CHUNK;
-  const y = Math.floor(i / g.cw) * GROUND_CHUNK;
-  return [x, y, Math.min(GROUND_CHUNK, g.job.W - x), Math.min(GROUND_CHUNK, g.job.H - y)];
+/** 조각 하나의 칸 네모 */
+function chunkBox(g: GroundCanvas, i: number): TileBox {
+  const tx = (i % g.cw) * CHUNK_TILES;
+  const ty = Math.floor(i / g.cw) * CHUNK_TILES;
+  return [tx, ty, Math.min(g.tw, tx + CHUNK_TILES) - 1, Math.min(g.th, ty + CHUNK_TILES) - 1];
 }
 
-function putChunk(g: GroundCanvas, i: number, px: Px): void {
-  if (g.done[i]) return;
-  const [x, y] = chunkRect(g, i);
+/** 칸 네모 안에서 아직 칠하지 않은 칸들을 두르는 네모(없으면 null) */
+export function undoneBox(g: GroundCanvas, box: TileBox): TileBox | null {
+  const [x0, y0, x1, y1] = [Math.max(0, box[0]), Math.max(0, box[1]), Math.min(g.tw - 1, box[2]), Math.min(g.th - 1, box[3])];
+  let a = Infinity;
+  let b = Infinity;
+  let c = -1;
+  let d = -1;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if (g.painted[y * g.tw + x]) continue;
+      if (x < a) a = x;
+      if (x > c) c = x;
+      if (y < b) b = y;
+      if (y > d) d = y;
+    }
+  }
+  return c < 0 ? null : [a, b, c, d];
+}
+
+/** 맵 점의 네모(둘레 pad 맵 점까지)에 걸친 칸 네모 */
+export function tilesOver(g: GroundCanvas, x0: number, y0: number, x1: number, y1: number, pad = 0): TileBox {
+  const T = GROUND_TILE / ART;
+  return [Math.max(0, Math.floor((x0 - pad) / T)), Math.max(0, Math.floor((y0 - pad) / T)), Math.min(g.tw - 1, Math.floor((x1 + pad) / T)), Math.min(g.th - 1, Math.floor((y1 + pad) / T))];
+}
+
+const stepsOf = (g: GroundCanvas, box: TileBox): Generator<undefined, Px, undefined> =>
+  g.job.steps(box[0] * GROUND_TILE, box[1] * GROUND_TILE, (box[2] - box[0] + 1) * GROUND_TILE, (box[3] - box[1] + 1) * GROUND_TILE);
+
+/** 칠한 네모를 캔버스에 놓고 칸과 조각을 적는다 */
+function putBox(g: GroundCanvas, box: TileBox, px: Px): void {
   const ctx = g.canvas.getContext('2d');
-  if (ctx) ctx.putImageData(new ImageData(new Uint8ClampedArray(px.d.buffer as ArrayBuffer), px.w, px.h), x, y);
-  g.done[i] = 1;
-  g.left--;
+  if (ctx) ctx.putImageData(new ImageData(new Uint8ClampedArray(px.d.buffer as ArrayBuffer), px.w, px.h), box[0] * GROUND_TILE, box[1] * GROUND_TILE);
+  for (let y = box[1]; y <= box[3]; y++) for (let x = box[0]; x <= box[2]; x++) g.painted[y * g.tw + x] = 1;
+  const c0x = Math.floor(box[0] / CHUNK_TILES);
+  const c1x = Math.floor(box[2] / CHUNK_TILES);
+  const c0y = Math.floor(box[1] / CHUNK_TILES);
+  const c1y = Math.floor(box[3] / CHUNK_TILES);
+  for (let cy = c0y; cy <= c1y; cy++) {
+    for (let cx = c0x; cx <= c1x; cx++) {
+      const i = cy * g.cw + cx;
+      if (g.done[i] || undoneBox(g, chunkBox(g, i))) continue;
+      g.done[i] = 1;
+      g.left--;
+    }
+  }
+}
+
+/** 칸 네모의 칠하지 않은 칸들을 지금 다 칠한다(나눠 칠하던 네모가 그것이면 마저 칠한다) */
+function paintBox(g: GroundCanvas, box: TileBox): void {
+  const todo = undoneBox(g, box);
+  if (!todo) return;
+  let steps: Generator<undefined, Px, undefined>;
+  let at: TileBox = todo;
+  if (g.cur && g.cur.box.every((v, k) => v === todo[k])) {
+    steps = g.cur.steps;
+    at = g.cur.box;
+    g.cur = null;
+  } else steps = stepsOf(g, todo);
+  let r = steps.next();
+  while (!r.done) r = steps.next();
+  putBox(g, at, r.value);
 }
 
 /** 조각 하나를 지금 다 칠한다(나눠 칠하던 조각이면 남은 것을 마저 칠한다) */
 export function paintChunk(g: GroundCanvas, cx: number, cy: number): void {
   const i = cy * g.cw + cx;
   if (g.done[i]) return;
-  let steps: Generator<undefined, Px, undefined>;
-  if (g.cur && g.cur.i === i) {
-    steps = g.cur.steps;
-    g.cur = null;
-  } else steps = g.job.steps(...chunkRect(g, i));
-  let r = steps.next();
-  while (!r.done) r = steps.next();
-  putChunk(g, i, r.value);
+  paintBox(g, g.cur && g.cur.i === i ? g.cur.box : chunkBox(g, i));
 }
 
-/** 맵 점의 네모(둘레 pad 맵 점까지)에 걸친 조각을 모두 지금 칠한다. 칠한 조각의 수를 돌려준다. */
+/** 맵 점의 네모(둘레 pad 맵 점까지)에 걸친 칸을 모두 지금 칠한다(조각마다 그 네모에 걸친 몫만). 칠한 조각의 수를 돌려준다. */
 export function paintAround(g: GroundCanvas, x0: number, y0: number, x1: number, y1: number, pad = 0): number {
   if (g.left === 0) return 0;
-  const c0x = Math.max(0, Math.floor(((x0 - pad) * ART) / GROUND_CHUNK));
-  const c0y = Math.max(0, Math.floor(((y0 - pad) * ART) / GROUND_CHUNK));
-  const c1x = Math.min(g.cw - 1, Math.floor(((x1 + pad) * ART) / GROUND_CHUNK));
-  const c1y = Math.min(g.ch - 1, Math.floor(((y1 + pad) * ART) / GROUND_CHUNK));
+  const box = tilesOver(g, x0, y0, x1, y1, pad);
+  const c0x = Math.floor(box[0] / CHUNK_TILES);
+  const c1x = Math.floor(box[2] / CHUNK_TILES);
+  const c0y = Math.floor(box[1] / CHUNK_TILES);
+  const c1y = Math.floor(box[3] / CHUNK_TILES);
   let n = 0;
   for (let cy = c0y; cy <= c1y; cy++) {
     for (let cx = c0x; cx <= c1x; cx++) {
-      if (g.done[cy * g.cw + cx]) continue;
-      paintChunk(g, cx, cy);
+      const i = cy * g.cw + cx;
+      if (g.done[i]) continue;
+      const c = chunkBox(g, i);
+      const part: TileBox = [Math.max(c[0], box[0]), Math.max(c[1], box[1]), Math.min(c[2], box[2]), Math.min(c[3], box[3])];
+      if (!undoneBox(g, part)) continue;
+      // 나눠 칠하던 네모가 이 조각에 걸쳐 있으면 그것부터 마저 칠한다(같은 칸을 두 번 셈하지 않게)
+      if (g.cur && g.cur.i === i) paintBox(g, g.cur.box);
+      paintBox(g, part);
       n++;
     }
   }
   return n;
 }
 
-/** 아직 칠하지 않은 조각 가운데 (맵 점) 자리에서 가장 가까운 것(없으면 −1). within(맵 점의 네모)을 주면 그 안에 걸친 것만. */
+/** 아직 다 칠하지 않은 조각 가운데 (맵 점) 자리에서 가장 가까운 것(없으면 −1). within(맵 점의 네모)을 주면 그 안에 칠하지 않은 칸이 걸친 것만. */
 export function nearestChunk(g: GroundCanvas, x: number, y: number, within?: [number, number, number, number]): number {
   let best = -1;
   let bestD = Infinity;
-  const [r0x, r0y, r1x, r1y] = within ? within.map((v) => (v * ART) / GROUND_CHUNK) : [0, 0, g.cw, g.ch];
+  const box = within ? tilesOver(g, within[0], within[1], within[2], within[3]) : null;
   for (let cy = 0; cy < g.ch; cy++) {
-    if (cy + 1 <= r0y || cy > r1y) continue;
     for (let cx = 0; cx < g.cw; cx++) {
-      if (cx + 1 <= r0x || cx > r1x) continue;
-      if (g.done[cy * g.cw + cx]) continue;
+      const i = cy * g.cw + cx;
+      if (g.done[i]) continue;
+      if (box) {
+        const c = chunkBox(g, i);
+        if (c[2] < box[0] || c[0] > box[2] || c[3] < box[1] || c[1] > box[3]) continue;
+        if (!undoneBox(g, [Math.max(c[0], box[0]), Math.max(c[1], box[1]), Math.min(c[2], box[2]), Math.min(c[3], box[3])])) continue;
+      }
       const dx = (cx + 0.5) * GROUND_CHUNK - x * ART;
       const dy = (cy + 0.5) * GROUND_CHUNK - y * ART;
       const d = dx * dx + dy * dy * 1.4;
       if (d < bestD) {
         bestD = d;
-        best = cy * g.cw + cx;
+        best = i;
       }
     }
   }
   return best;
 }
 
+/** 나눠 칠하던 네모를 한 걸음 잇는다. 다 칠했으면 true */
+function stepCur(g: GroundCanvas): boolean {
+  if (!g.cur) return true;
+  const r = g.cur.steps.next();
+  if (!r.done) return false;
+  putBox(g, g.cur.box, r.value);
+  g.cur = null;
+  return true;
+}
+
 /**
  * 땅을 budget 밀리초쯤만 칠한다(조각을 잘게 나눠 — 한 장을 오래 막지 않는다). pick이 다음에 칠할 조각을 고른다(없으면 −1).
- * 나눠 칠하던 조각이 있으면 그것부터 잇는다. 다 칠한 조각의 수를 돌려준다.
+ * 나눠 칠하던 네모가 있으면 그것부터 잇는다. 다 칠한 조각의 수를 돌려준다.
  */
 export function workGround(g: GroundCanvas, budgetMs: number, pick: () => number): number {
   if (g.left === 0) return 0;
   const t0 = performance.now();
-  let finished = 0;
+  const before = g.left;
   do {
     if (!g.cur) {
       const i = pick();
-      if (i < 0 || g.done[i]) return finished;
-      g.cur = { i, steps: g.job.steps(...chunkRect(g, i)) };
+      if (i < 0 || g.done[i]) break;
+      const box = undoneBox(g, chunkBox(g, i));
+      if (!box) break;
+      g.cur = { i, box, steps: stepsOf(g, box) };
     }
-    const r = g.cur.steps.next();
-    if (r.done) {
-      putChunk(g, g.cur.i, r.value);
-      g.cur = null;
-      finished++;
-      if (g.left === 0) return finished;
-    }
+    stepCur(g);
+    if (g.left === 0) break;
   } while (performance.now() - t0 < budgetMs);
-  return finished;
+  return before - g.left;
+}
+
+/**
+ * 맵 점의 네모(처음 보이는 화면)에 걸친 칸 가운데 칠하지 않은 것을 네모 하나로 budget 밀리초쯤 칠한다(나눠 칠하던 것이 있으면 그것부터).
+ * 그 칸들을 다 칠했으면 true.
+ */
+export function workView(g: GroundCanvas, budgetMs: number, view: readonly [number, number, number, number]): boolean {
+  const t0 = performance.now();
+  const want = tilesOver(g, view[0], view[1], view[2], view[3]);
+  do {
+    if (!g.cur) {
+      const box = undoneBox(g, want);
+      if (!box) return true;
+      g.cur = { i: -1, box, steps: stepsOf(g, box) };
+    }
+    stepCur(g);
+  } while (performance.now() - t0 < budgetMs);
+  return !g.cur && !undoneBox(g, want);
 }
 
 /** 땅을 다 칠한다(그림 견본, 시험용) */

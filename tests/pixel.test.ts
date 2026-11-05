@@ -29,8 +29,9 @@ const cut = (px: Px, x0: number, y0: number, w: number, h: number): Px => {
 /**
  * 봄의 느티나무 그림의 지문(public/icons의 아이콘이 이 그림에서 떴다 — scripts/make-icons.mjs). 그림 올리기 ②에서 그림 점으로
  * 다시 그리고 아이콘을 다시 떴다(13.1의 56번). 봄의 느티나무를 고치면 아이콘을 다시 뜨고 이 지문을 바꾼다.
+ * (그림 올리기 ②의 고침: 가지를 둥근 붓으로 — 굵기를 가지 방향에 수직으로 쌓아 세 갈래 큰 가지가 조금 바뀌었다. 아이콘을 다시 떴다)
  */
-const ZELKOVA_SPRING = 'beca5beb';
+const ZELKOVA_SPRING = '606b39e3';
 
 /** 그림 벌 다섯: 네 계절과 큰비가 온 해의 여름 */
 const SKIES: [Tone, Season, Weather][] = [
@@ -83,7 +84,8 @@ describe('세운 것의 그림', () => {
       for (const [key, def] of defs) {
         expect(def.frames.length, key).toBeGreaterThan(0);
         const first = def.frames[0];
-        expect(first.count(), key).toBeGreaterThan(8);
+        // 1-라의 1배 문턱(8)을 2배 그림의 넓이에 맞춰(× ART² × 0.8 — 먹빛 테두리 몫만큼 넓이가 0.8~0.95로 준 것을 친다, review 권고 8)
+        expect(first.count(), key).toBeGreaterThan(8 * ART * ART * 0.8);
         expect(def.ax >= 0 && def.ax < first.w && def.ay >= 0 && def.ay <= first.h, key).toBe(true);
         for (const f of def.frames) expect(f.w === first.w && f.h === first.h, key).toBe(true);
       }
@@ -698,19 +700,19 @@ describe('계절의 그림', () => {
       expect(bare.count(), kind).toBeLessThan(full.count() * 0.55);
       expect(bare.count(), kind).toBeGreaterThan(full.count() * 0.08);
       // 눈이 얹혔다
-      expect(countOf(bare, winter.snow), kind).toBeGreaterThan(12);
+      expect(countOf(bare, winter.snow), kind).toBeGreaterThan(12 * ART * ART * 0.8);
       // 그림의 크기와 발치는 같다(맵의 같은 자리에 선다)
       expect([bare.w, bare.h], kind).toEqual([full.w, full.h]);
       expect(w.get(thingKey(kind, 0))!.ay, kind).toBe(s.get(thingKey(kind, 0))!.ay);
     }
     for (const kind of ['pine', 'pineS', 'oldpine']) {
       const tree = w.get(thingKey(kind, 0))!.frames[0];
-      expect(countOf(tree, winter.snow), kind).toBeGreaterThan(40);
-      expect(countOf(tree, winter.pine.slice(0, 4)), kind).toBeGreaterThan(60); // 솔잎은 푸르다
+      expect(countOf(tree, winter.snow), kind).toBeGreaterThan(40 * ART * ART * 0.8);
+      expect(countOf(tree, winter.pine.slice(0, 4)), kind).toBeGreaterThan(60 * ART * ART * 0.8); // 솔잎은 푸르다
       expect(countOf(s.get(thingKey(kind, 0))!.frames[0], summer.snow), kind).toBe(0);
     }
     // 덤불도 잎이 지고 눈을 이고 있다
-    expect(countOf(w.get(thingKey('bush', 0))!.frames[0], winter.snow)).toBeGreaterThan(20);
+    expect(countOf(w.get(thingKey('bush', 0))!.frames[0], winter.snow)).toBeGreaterThan(20 * ART * ART * 0.8);
   });
 
   it('봄의 느티나무 그림은 아이콘을 뜬 그림 그대로다: 잎 뭉치가 가득하고 눈이 없다(그림 점 392×372 — 1-라 196×186의 ART배)', () => {
@@ -754,7 +756,7 @@ describe('계절의 그림', () => {
       expect(countOf(s.get(thingKey(kind, 0))!.frames[0], winter.snow), kind).toBe(0);
     }
     for (const kind of ['wallH', 'wallV', 'well', 'jars', 'woodpile', 'strawstack', 'fenceH', 'stonewallH', 'pagoda', 'lantern', 'rockM', 'rockL', 'stump', 'cairn']) {
-      expect(countOf(w.get(thingKey(kind, 0))!.frames[0], winter.snow), kind).toBeGreaterThan(5);
+      expect(countOf(w.get(thingKey(kind, 0))!.frames[0], winter.snow), kind).toBeGreaterThan(5 * ART * ART * 0.8);
     }
     // 눈을 얹어도 그림의 크기는 같다
     for (const [key, def] of w) expect([def.frames[0].w, def.frames[0].h], key).toEqual([s.get(key)!.frames[0].w, s.get(key)!.frames[0].h]);
@@ -787,7 +789,7 @@ describe('계절의 그림', () => {
     expect(summer.glint[4 * 12 + 3]).toBe(0);
     // 벤 논(가을): 벼의 빛이 거의 없고 마른 흙과 그루터기다
     expect(countOf(region(autumn, 8, 10), on(paletteOf('autumn').crop, 'autumn')) / cells(2)).toBeLessThan(0.05);
-    expect(countOf(region(autumn, 8, 10), on(paletteOf('autumn').thatch, 'autumn'))).toBeGreaterThan(40); // 그루터기
+    expect(countOf(region(autumn, 8, 10), on(paletteOf('autumn').thatch, 'autumn'))).toBeGreaterThan(40 * ART * ART * 0.8); // 그루터기
     expect(autumn.crop[4 * 12 + 8]).toBe(0);
     // 겨울: 눈이 논의 반을 넘게 덮는다
     const snowy = on([...paletteOf('winter').grass.slice(3), ...paletteOf('winter').snow], 'winter');
@@ -850,7 +852,7 @@ describe('계절의 그림', () => {
     const rain = critters.rainSprites(paletteOf('summer', 'rain'));
     expect(rain.streaks.length).toBe(3);
     expect(rain.splash.length).toBe(3);
-    for (const f of [...rain.streaks, ...rain.splash]) expect(f.count()).toBeGreaterThan(2);
+    for (const f of [...rain.streaks, ...rain.splash]) expect(f.count()).toBeGreaterThan(2 * ART * ART * 0.8);
     // 불어난 냇물은 맑은 여름의 냇물과 빛이 다르다
     expect(same(waterFrames(paletteOf('summer'), 2)[0], waterFrames(paletteOf('summer', 'rain'), 2)[0])).toBe(false);
     expect(critters.cropGustFrames(paletteOf('summer')).length).toBe(3);
