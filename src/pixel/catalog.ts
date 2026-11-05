@@ -6,6 +6,7 @@ import type { Palette } from './palette';
 import * as props from './props';
 import * as seasonal from './seasonal';
 import type { Shade } from './ground';
+import { ART } from './px';
 import { snowCap, type ShadeSpec, type SpriteDef } from './shapes';
 import * as trees from './trees';
 
@@ -70,7 +71,7 @@ export const MAKERS: Record<string, Maker> = {
 export const thingKey = (kind: string, variant: number): string => `${kind}:${variant}`;
 
 /**
- * 겨울에 위쪽 면에 눈이 얹히는 것과 그 두께(점). 지붕과 담, 나무는 제 그림 안에서 눈을 그린다
+ * 겨울에 위쪽 면에 눈이 얹히는 것과 그 두께(1-라의 점 — 그림 점으로는 ART배). 지붕과 담, 나무는 제 그림 안에서 눈을 그린다
  * (지붕은 넓게 덮이고, 가지에는 한 점씩 얹힌다).
  */
 const SNOW_DEPTH: Record<string, number> = {
@@ -94,13 +95,30 @@ const SNOW_DEPTH: Record<string, number> = {
   cairn: 2,
 };
 
-/** 갈래 하나 × 생김새 하나의 그림(버퍼, 1배 — 그림 올리기 ②에서 2배로 다시 그린다) */
+/**
+ * 갈래 하나 × 생김새 하나의 그림(버퍼, 그림 점 — 그림 올리기 ②). 크기·발치는 1-라 그림의 ART배이고(꼴이 같다),
+ * 바닥 그림자(shades)와 앞뒤 가림(sort)은 맵 점 그대로다.
+ */
 export function thingDef(pal: Palette, kind: string, variant: number): SpriteDef {
+  return trees.drain(thingJob(pal, kind, variant));
+}
+
+/** 크고 무거운 그림(잎 뭉치를 겹겹이 얹는 나무)은 쉬어 가며 짓는다 — 그림 벌이 한 장의 시간 안에 나눠 짓는다(ㅋ) */
+const JOBS: Record<string, (pal: Palette, variant: number) => trees.Job> = {
+  oak: trees.oakJob,
+  young: trees.youngJob,
+  zelkova: trees.zelkovaJob,
+  bigtree: trees.bigtreeJob,
+};
+
+/** thingDef를 쉬어 가며 짓는다(next()를 부를 때마다 조금씩 — 다 지으면 그림을 돌려준다) */
+export function* thingJob(pal: Palette, kind: string, variant: number): trees.Job {
   const make = MAKERS[kind];
   if (!make) throw new Error(`그림이 없는 갈래: ${kind}`);
-  const sprite = make(pal, variant);
+  const job = JOBS[kind];
+  const sprite = job ? yield* job(pal, variant) : make(pal, variant);
   const depth = pal.season === 'winter' ? SNOW_DEPTH[kind] : undefined;
-  if (depth) sprite.frames.forEach((f) => snowCap(f, pal.snow, depth, 700 + kind.length * 13 + variant));
+  if (depth) sprite.frames.forEach((f) => snowCap(f, pal.snow, depth * ART, 700 + kind.length * 13 + variant, ART));
   return sprite;
 }
 

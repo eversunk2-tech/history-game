@@ -8,15 +8,16 @@
 // 끝난 모습(weedRules.ts): clean(풀을 거의 다 뽑음) · rough(풀이 남음) · left(거의 뽑지 않음).
 // "어른께 맡긴다"를 눌러도 뽑은 만큼은 버리지 않는다(weedLeave — 끝내기 단추와 같은 셈).
 // 한 것은 논에 그대로 보인다: 풀을 뽑은 자리마다 흙탕물이 일어 물빛이 누렇게 흐려지고, 풀이 섰던 자리가 빈다.
+// 벼와 풀, 물그림자, 흙탕물은 모두 그림 점(놀이 점의 반)으로 곱게 그린다(spec 4.7.5). 누르는 자리와 손이 닿는 곳은 놀이 점 그대로다.
 
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Dir } from '../map/types';
 import { paletteOf } from '../pixel/palette';
 import { COL, DIRS, HEROES, footShadow, personSheet } from '../pixel/people';
-import { ART, hash2, toCanvas } from '../pixel/px';
+import { ART, Px, hex, toCanvas } from '../pixel/px';
 import { heroName } from '../state/store';
-import { drawBase, drawFoot, drawPerson, paintPaddy, riceTuft, weedArt, type Art } from './art';
+import { blot, drawArt, drawBase, drawFoot, drawPerson, paintPaddy, riceTuft, weedArt, type Art } from './art';
 import { Gauge, PxIcon, Say, useEndOnce } from './bits';
 import { PlayFrame } from './Frame';
 import type { PlayProps } from './index';
@@ -47,6 +48,15 @@ const BENT_MS = 900;
 
 const MUD = ['#8f8a5e', '#a39c6c', '#77754f'];
 const MUD_RING = '#c9c59a';
+/** 풀이 뽑혀 뿌리가 빠진 자국 */
+const MUD_PIT = '#4a4630';
+
+/** 포기 밑의 물그림자(그림 점 18×6 — 1-라의 놀이 점 9×3 자리를 둥글넓적하게). 물 제 빛을 짙게 한 빛이다. */
+function plantShadow(): Px {
+  const px = new Px(9 * ART, 3 * ART);
+  px.ellipse(4.5 * ART, 1.5 * ART, 4.5 * ART, 1.5 * ART, hex('#162828', 87));
+  return px;
+}
 
 interface Lift {
   i: number;
@@ -77,6 +87,7 @@ export function Weed({ rules, facts, onDone }: PlayProps): JSX.Element {
   const finishRef = useRef(finish);
   finishRef.current = finish;
 
+  // 아래 줄의 그림 보기(벼 하나, 풀 셋). 그림이 그림 점(놀이 점의 반)이라 점 하나의 크기는 1(1-라의 2와 같은 화면 크기)
   const legend = useMemo(() => {
     const pal = paletteOf('summer');
     return { rice: riceTuft(pal, 1).px, weeds: [weedArt(pal, 0).px, weedArt(pal, 1).px, weedArt(pal, 2).px] };
@@ -93,6 +104,7 @@ export function Weed({ rules, facts, onDone }: PlayProps): JSX.Element {
     const shadow = toCanvas(footShadow());
     // 그림: 벼(생김새 셋 × 선 것·왼쪽으로 누운 것·오른쪽으로 누운 것), 풀(세 가지 × 둘)
     const cv = (a: Art): { c: HTMLCanvasElement; ax: number; ay: number } => ({ c: toCanvas(a.px), ax: a.ax, ay: a.ay });
+    const shadowImg = toCanvas(plantShadow());
     const rice = [0, 1, 2].map((look) => ([0, -1, 1] as const).map((lean) => cv(riceTuft(pal, look, lean))));
     const weeds = [0, 1, 2].map((kind) => [0, 1].map((look) => cv(weedArt(pal, kind, look))));
     const spriteOf = (i: number, lean: 0 | 1 | 2): { c: HTMLCanvasElement; ax: number; ay: number } => {
@@ -121,43 +133,46 @@ export function Weed({ rules, facts, onDone }: PlayProps): JSX.Element {
     const sx = (nx: number): number => Math.round(BUND + nx * fw());
     const sy = (ny: number): number => Math.round(BUND + ny * fh());
 
-    /** 포기 밑의 물그림자 */
+    /** 포기 밑의 물그림자(1-라의 놀이 점 (x - 4, y - 1)에서 9×3 — 그림 점으로 둥글넓적하게) */
     const shade = (i: number): void => {
       if (!mctx) return;
-      const x = sx(plants[i].x);
-      const y = sy(plants[i].y);
-      mctx.fillStyle = 'rgba(22, 40, 40, 0.34)';
-      mctx.fillRect(x - 4, y, 9, 1);
-      mctx.fillRect(x - 3, y + 1, 7, 1);
-      mctx.fillRect(x - 3, y - 1, 7, 1);
+      drawArt(mctx, shadowImg, sx(plants[i].x) - 4, sy(plants[i].y) - 1);
     };
-    /** 풀을 뽑은 자리: 흙탕물이 둥글넓적하게 인다(가장자리는 점으로 흩어진다). 가운데에 뿌리가 빠진 자국. */
+    /**
+     * 풀을 뽑은 자리: 흙탕물이 둥글넓적하게 인다(가장자리는 그림 점 둘씩의 무리로 흩어진다). 가운데에 뿌리가 빠진 자국과 밝은 잔물결 둘.
+     * 넓이와 자리는 1-라 그대로(놀이 점 반지름 8×5).
+     */
     const stir = (i: number): void => {
       if (!mctx) return;
       const x = sx(plants[i].x);
       const y = sy(plants[i].y);
-      const rx = 8;
-      const ry = 5;
-      for (let dy = -ry; dy <= ry; dy++) {
-        for (let dx = -rx; dx <= rx; dx++) {
-          const px = x + dx;
-          const py = y + dy;
-          if (px < BUND + 1 || py < BUND + 1 || px >= w - BUND - 1 || py >= h - BUND - 1) continue;
-          const d = Math.hypot(dx / rx, dy / ry);
-          if (d > 1) continue;
-          const hsh = hash2(px, py, 211);
-          if (hsh < (1 - d * d) * 1.25) {
-            mctx.fillStyle = MUD[hsh > 0.8 ? 1 : (px + py) % 5 === 0 ? 2 : 0];
-            mctx.fillRect(px, py, 1, 1);
-          }
-        }
-      }
-      mctx.fillStyle = '#4a4630';
-      mctx.fillRect(x - 1, y, 3, 1);
-      mctx.fillRect(x, y - 1, 1, 3);
+      const cx = x * ART + 1;
+      const cy = y * ART + 1;
+      const lo = (BUND + 1) * ART;
+      blot(
+        mctx,
+        cx,
+        cy,
+        8 * ART,
+        5 * ART,
+        211,
+        (hsh, d, X, Y) => (hsh < (1 - d * d) * 1.25 ? MUD[hsh > 0.8 ? 1 : (X + Y * 3) % 7 === 0 && hsh < 0.2 ? 2 : 0] : null),
+        (X, Y) => X >= lo && Y >= lo && X + 1 < (w - BUND - 1) * ART && Y < (h - BUND - 1) * ART,
+      );
+      // 뿌리가 빠진 자국: 둥글게 패인 작은 구멍
+      const dot = (X: number, Y: number, ww: number, hh: number): void => mctx.fillRect(X / ART, Y / ART, ww / ART, hh / ART);
+      mctx.fillStyle = MUD_PIT;
+      dot(cx - 3, cy - 1, 6, 2);
+      dot(cx - 2, cy - 2, 4, 1);
+      dot(cx - 2, cy + 1, 4, 1);
+      dot(cx - 1, cy - 3, 2, 1);
+      dot(cx - 1, cy + 2, 2, 1);
+      // 밝은 잔물결(그림 점 한 줄의 짧은 활)
       mctx.fillStyle = MUD_RING;
-      mctx.fillRect(x - 3, y - 2, 2, 1);
-      mctx.fillRect(x + 2, y + 2, 2, 1);
+      dot(cx - 6, cy - 4, 3, 1);
+      dot(cx - 7, cy - 3, 1, 1);
+      dot(cx + 4, cy + 4, 3, 1);
+      dot(cx + 7, cy + 3, 1, 1);
     };
 
     const stage = mountStage(box, canvas, {
@@ -200,7 +215,7 @@ export function Weed({ rules, facts, onDone }: PlayProps): JSX.Element {
           if (!heroDrawn && y > hy) drawHero();
           const bent = !p.weed && now - bentAt[i] < BENT_MS;
           const sp = spriteOf(i, bent ? (bentTo[i] < 0 ? 1 : 2) : 0);
-          ctx.drawImage(sp.c, sx(p.x) - sp.ax, y - sp.ay);
+          drawArt(ctx, sp.c, sx(p.x) - sp.ax / ART, y - sp.ay / ART);
         }
         if (!heroDrawn) drawHero();
         // 자판으로 놀 때: Space를 누르면 뽑힐 풀(바라보는 쪽)에 노란 테를 두른다
@@ -209,10 +224,11 @@ export function Weed({ rules, facts, onDone }: PlayProps): JSX.Element {
           if (i >= 0) {
             const p = plants[i];
             const sp = spriteOf(i, 0);
-            const x0 = sx(p.x) - sp.ax - 1;
-            const y0 = sy(p.y) - sp.ay - 1;
-            const x1 = x0 + sp.c.width + 1;
-            const y1 = y0 + sp.c.height + 1;
+            // 테는 놀이판의 기호라 놀이 점으로 그린다(그림의 크기는 그림 점이므로 놀이 점으로 줄여 잰다)
+            const x0 = sx(p.x) - sp.ax / ART - 1;
+            const y0 = sy(p.y) - sp.ay / ART - 1;
+            const x1 = x0 + sp.c.width / ART + 1;
+            const y1 = y0 + sp.c.height / ART + 1;
             const blink = calm || Math.floor(now / 450) % 2 === 0;
             ctx.fillStyle = blink ? AIM : '#2a2422';
             for (const [cx, cy, ex, ey] of [
@@ -237,12 +253,13 @@ export function Weed({ rules, facts, onDone }: PlayProps): JSX.Element {
           const p = plants[lift.i];
           const sp = spriteOf(lift.i, 0);
           ctx.globalAlpha = 1 - t * t;
-          ctx.drawImage(sp.c, sx(p.x) - sp.ax + Math.round(t * 3), sy(p.y) - sp.ay - Math.round(t * 12));
+          // 그림 점마다 올라간다(곱게)
+          drawArt(ctx, sp.c, sx(p.x) - sp.ax / ART + Math.round(t * 3 * ART) / ART, sy(p.y) - sp.ay / ART - Math.round(t * 12 * ART) / ART);
           ctx.globalAlpha = 1;
-          // 뿌리에서 떨어지는 흙물
+          // 뿌리에서 떨어지는 흙물(그림 점 하나 너비에 둘 길이의 방울 — 1-라의 놀이 점 하나 자리)
           ctx.fillStyle = MUD[0];
-          ctx.fillRect(sx(p.x) - 2, sy(p.y) - Math.round(t * 5), 1, 1);
-          ctx.fillRect(sx(p.x) + 2, sy(p.y) - Math.round(t * 8) + 2, 1, 1);
+          ctx.fillRect(sx(p.x) - 2 + 1 / ART, sy(p.y) - Math.round(t * 5 * ART) / ART, 1 / ART, 2 / ART);
+          ctx.fillRect(sx(p.x) + 2, sy(p.y) - Math.round(t * 8 * ART) / ART + 2, 1 / ART, 2 / ART);
         }
       },
     });
@@ -391,11 +408,11 @@ export function Weed({ rules, facts, onDone }: PlayProps): JSX.Element {
         <div class="play-status-row">
           <span class="play-legend">
             <span class="play-legend-item">
-              <PxIcon px={legend.rice} scale={2} />벼
+              <PxIcon px={legend.rice} scale={1} />벼
             </span>
             <span class="play-legend-item">
               {legend.weeds.map((px, index) => (
-                <PxIcon key={index} px={px} scale={2} />
+                <PxIcon key={index} px={px} scale={1} />
               ))}
               풀
             </span>

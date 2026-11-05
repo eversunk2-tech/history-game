@@ -496,8 +496,11 @@ export function harshChecker(img, big = 0.1) {
 /**
  * 사람이 바닥에서 떨어져 보이는 정도(3차에서 바꾼 ㅁ): 사람 그림의 가장 바깥 점마다, 그 바로 밖(위·아래·옆)의 바닥 점과의
  * 밝기 차를 내어 평균한다. 먹빛 테두리가 없어도 잴 수 있다. ground는 사람을 그리기 전의 바닥(그림자 포함).
+ * bare(있으면): 움직이는 발밑 그림자를 얹기 전의 바닥 — ㅁ의 "바로 밖 바닥"은 이것으로 잰다(기획서 4.7.5, 2026-11-04.
+ * 게임의 시험 tests/artRules.ts의 edgeContrast와 같은 셈). 발밑 그림자는 따로 본다(자리·짙기).
  */
-export function edgeContrast(sprite, x0, y0, ground) {
+export function edgeContrast(sprite, x0, y0, ground, bare) {
+  const floor = bare ?? ground;
   const { w, h, d } = sprite;
   const on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && A(d[y * w + x]) > 0;
   let sum = 0;
@@ -507,7 +510,7 @@ export function edgeContrast(sprite, x0, y0, ground) {
       if (!on(x, y)) continue;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         if (on(x + dx, y + dy)) continue;
-        const g = ground.get(x0 + x + dx, y0 + y + dy);
+        const g = floor.get(x0 + x + dx, y0 + y + dy);
         if (A(g) === 0) continue;
         sum += Math.abs(luma(d[y * w + x]) - luma(g));
         n++;

@@ -84,7 +84,9 @@ const SPRING: Palette = {
   leafDeep: R('#142b28', '#1d4030', '#295a37', '#39763c', '#539345', '#7bb056', '#a9cc74'),
   pine: R('#162e2c', '#1f4436', '#2c5c3f', '#3f7947', '#5f9652', '#86b267'),
   blossom: R('#a85c7c', '#d2859d', '#eeb1bf', '#fbd9dd', '#fff3f0'),
-  blossomWhite: R('#b7afbd', '#dcd4dd', '#f6f0f1', '#ffffff'),
+  // (그림 올리기 ②) 먹빛 테두리 없이도 흰 꽃나무의 둥근 꼴이 보이게, 단계 넷이 봄의 벌에서 서로 다른 빛으로 맞춰지도록 따뜻한 흰빛으로 다듬었다
+  // (1-라 '#b7afbd', '#dcd4dd', '#f6f0f1', '#ffffff' — 위 둘이 한 빛으로 뭉쳤고 그늘은 푸르스름했다)
+  blossomWhite: R('#bcb8ae', '#dedad2', '#f4eedd', '#f9f6ef'),
   azalea: R('#8a3672', '#b9529a', '#dc7fba', '#f3b4d6'),
   yellow: R('#a8801c', '#d6ae2a', '#f1d44f', '#fbec9a'),
   path: PATH,
@@ -192,8 +194,10 @@ const RAINY: Palette = {
   blossomWhite: damp(SUMMER.blossomWhite, 0.88),
   azalea: damp(SUMMER.azalea, 0.88),
   crop: damp(SUMMER.crop, 0.9),
-  path: damp(PATH, 0.78),
-  yard: damp(YARD, 0.78),
+  // 젖은 흙길·마당(그림 올리기 ② — 1-라 0.78): 큰비 날에도 사람이 바닥에 묻히지 않게(ㅁ — ①의 Review 권고 9) 한 걸음 덜 가라앉혔다.
+  // 웅덩이·젖은 둘레·화면에 씌우는 비의 빛(wash)은 그대로라 비 오는 날의 맛은 남는다
+  path: damp(PATH, 0.88),
+  yard: damp(YARD, 0.88),
   soil: damp(SOIL, 0.88),
   mud: damp(MUD, 0.9),
   stone: damp(STONE, 0.88),

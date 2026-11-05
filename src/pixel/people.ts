@@ -1803,22 +1803,24 @@ export const FOOT_SHIFT = { x: 3, y: -1 };
 
 /**
  * 사람·짐승 발밑의 따뜻한 그림자(그림 점 32×12). 곱하기로 바닥에 얹어 바닥 빛을 어둡게 한다(spec 4.7.5의 ㅂ —
- * 검은 반투명이 아니다). 그늘은 따뜻한 밤빛, 눈 위에서는 붉은 보랏빛이다. 가운데는 바닥을 3할 남짓 어둡게 해
- * 3.1차 시안처럼 발치의 오른쪽 아래에 또렷이 보인다(더 짙게 하면 흰옷과 바닥의 밝기 차 ㅁ이 여름 대문 앞에서 0.3 아래로 내려간다).
+ * 검은 반투명이 아니다). 그늘은 따뜻한 밤빛, 눈 위에서는 붉은 보랏빛이다.
+ * 짙기는 3.1차 시안과 같다(그림 올리기 ②): 시안은 발밑 바닥을 빛 세기 0.42로 어둡게 칠했다 — 밝기로 바닥의 0.57쯤.
+ * 가운데(타원의 안쪽 0.62)는 바닥 밝기를 0.56배로, 둘레는 0.61배로 한다(둘레가 조금 옅어 가장자리가 부드럽다).
+ * ㅁ(사람과 바닥의 밝기 차)은 이 그림자를 얹기 전의 바닥으로 잰다(spec 4.7.5) — 그림자는 사람을 바닥에서 떼어 보이게 하는 쪽이다.
  */
 export function footShadow(pal?: Palette): Px {
   const W = 32;
   const H = 12;
   const px = new Px(W, H);
   const snowy = pal?.season === 'winter';
-  const core = snowy ? hex('#bca8ba') : hex('#bc9c80');
-  const rim = snowy ? hex('#ddd0dc') : hex('#e0cab3');
+  const core = snowy ? hex('#a08ea0') : hex('#a88a70');
+  const rim = snowy ? hex('#b2a0b0') : hex('#b49880');
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const dx = (x + 0.5 - W / 2) / 15;
       const dy = (y + 0.5 - H / 2) / 5;
       const d = dx * dx + dy * dy;
-      if (d <= 1) px.set(x, y, d < 0.5 ? core : rim);
+      if (d <= 1) px.set(x, y, d < 0.62 ? core : rim);
     }
   }
   return px;

@@ -12,15 +12,17 @@
 // 끝난 모습은 내가 벤 만큼으로 가린다(harvestLeave — 끝내기 단추와 같은 셈).
 // 끝난 모습(harvestRules.ts): all(다 거둠) · some(이삭을 남김) · left(어른께 맡김 — 거의 베지 않고 끝낸 것도).
 // 농민이 낸 곡식을 누가 거두어 갔는지는 확인하지 못해 "나라 몫"으로만 보인다(받으러 온 사람을 그리지 않는다 — spec 12.3의 9번).
+// 벼·그루터기·볏단·자루·멍석과 마당의 자국은 그림 점(놀이 점의 반)으로 곱게 그린다(spec 4.7.5). 놓는 자리와 누르는 자리는 놀이 점 그대로다.
 
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Dir } from '../map/types';
 import { paletteOf } from '../pixel/palette';
 import { COL, DIRS, HEROES, footShadow, personOf, personSheet } from '../pixel/people';
-import { ART, toCanvas } from '../pixel/px';
+import { ART, hash2, toCanvas, withAlpha } from '../pixel/px';
+import { WARM_DARK } from '../pixel/wash';
 import { heroName } from '../state/store';
-import { drawBase, drawFoot, drawPerson, goldClump, matArt, paintPaddy, paintYard, sackArt, shadowArt, sheafArt, stubbleArt, swathArt, type Art } from './art';
+import { drawArt, drawBase, drawFoot, drawPerson, goldClump, matArt, paintPaddy, paintYard, sackArt, shadowArt, sheafArt, silhouette, stubbleArt, swathArt, type Art } from './art';
 import { Gauge, Say, useEndOnce } from './bits';
 import { PlayFrame } from './Frame';
 import { clumpsNear, harvestField, harvestLeave, harvestVerdict, harvestYield, isRainYear, type HarvestEnd } from './harvestRules';
@@ -149,6 +151,8 @@ export function Harvest({ facts, onDone }: PlayProps): JSX.Element {
     const sack = cv(sackArt(pal, 'grain'));
     const sackShade = toCanvas(shadowArt(13, 4, 90));
     const sheaf = cv(sheafArt(pal));
+    /** 볏단 밑의 그림자(1-라의 놀이 점 20×3 자리 — 따뜻한 밤빛으로 둥글넓적하게) */
+    const sheafShade = toCanvas(shadowArt(10, 1.5, 77));
     const clumps = field.clumps;
 
     let w = 0;
@@ -197,9 +201,9 @@ export function Harvest({ facts, onDone }: PlayProps): JSX.Element {
       const x = sx(c.x);
       const y = sy(c.y);
       const st = (byFamily[i] ? stubbleEars : stubble)[c.look % 2];
-      mctx.drawImage(st.c, x - st.ax, y - st.ay);
+      drawArt(mctx, st.c, x - st.ax / ART, y - st.ay / ART);
       const sw = swath[c.look % 2];
-      mctx.drawImage(sw.c, x - sw.ax + (c.look % 2 === 0 ? 7 : -7), y - sw.ay + 3);
+      drawArt(mctx, sw.c, x - sw.ax / ART + (c.look % 2 === 0 ? 7 : -7), y - sw.ay / ART + 3);
     };
 
     const paintYardScene = (): HTMLCanvasElement => {
@@ -210,22 +214,32 @@ export function Harvest({ facts, onDone }: PlayProps): JSX.Element {
       yctx.setTransform(ART, 0, 0, ART, 0, 0);
       yctx.imageSmoothingEnabled = false;
       // 자루가 놓이는 열 자리: 짚 부스러기가 깔린 둥근 자리. 큰비가 온 해에 비는 자리에는 물이 고여 있다.
+      // 자리의 크기는 1-라 그대로(놀이 점 반지름 13×4)이고, 그림 점으로 칠한다: 물웅덩이의 잔물결은 가로로 짧게, 짚 부스러기는
+      // 그림 점 둘셋의 가는 토막으로 흩어진다(자로 잰 듯한 줄무늬가 되지 않게 자리마다 무늬로 정한다).
+      const dot = (X: number, Y: number, ww = 1): void => yctx.fillRect(X / ART, Y / ART, ww / ART, 1 / ART);
       for (let i = 0; i < yields.spots; i++) {
         const [x, y] = spotAt(i);
         const empty = i >= yields.sacks;
-        for (let dy = -4; dy <= 4; dy++) {
-          for (let dx = -13; dx <= 13; dx++) {
-            const d = Math.hypot(dx / 13, dy / 4);
+        const cx = x * ART + 1;
+        const cy = y * ART + 1;
+        const rx = 13 * ART + 1;
+        const ry = 4 * ART + 1;
+        for (let Y = cy - ry; Y <= cy + ry; Y++) {
+          for (let X = cx - rx; X <= cx + rx; X++) {
+            const d = Math.hypot((X + 0.5 - cx) / rx, (Y + 0.5 - cy) / ry);
             if (d > 1) continue;
             if (empty) {
-              yctx.fillStyle = d > 0.78 ? '#7a6a55' : (dx + dy * 3) % 7 === 0 ? '#aebdb6' : d > 0.45 ? '#6f8288' : '#5b7078';
-            } else if (d > 0.82) {
+              const glint = d < 0.7 && hash2((X + (Y & 1) * 2) >> 2, Y, 233) > 0.86;
+              yctx.fillStyle = d > 0.8 ? '#7a6a55' : glint ? '#aebdb6' : d > 0.47 ? '#6f8288' : '#5b7078';
+            } else if (d > 0.84) {
               yctx.fillStyle = '#a6835c'; // 자루에 눌린 둥근 자국
             } else {
-              if ((((dx * 7 + dy * 13) % 4) + 4) % 4 !== 0) continue;
-              yctx.fillStyle = (dx + dy) % 3 === 0 ? '#ecd58b' : '#bd994c';
+              // 짚 부스러기: 그림 점 셋 길이의 토막(줄마다 엇갈린다) 가운데 넷에 하나쯤
+              const cell = Math.floor((X + (Y % 3) * 2) / 3);
+              if (hash2(cell, Y, 231) > 0.25) continue;
+              yctx.fillStyle = hash2(cell, Y, 232) > 0.62 ? '#ecd58b' : '#bd994c';
             }
-            yctx.fillRect(x + dx, y + dy, 1, 1);
+            dot(X, Y);
           }
         }
       }
@@ -234,15 +248,14 @@ export function Harvest({ facts, onDone }: PlayProps): JSX.Element {
       for (let i = 0; i < stacked; i++) {
         const x = Math.round(w * 0.66) + i * 20;
         const y = Math.round(h * 0.2) + 24 + (i % 2) * 3;
-        yctx.fillStyle = 'rgba(26, 32, 48, 0.3)';
-        yctx.fillRect(x - 9, y - 2, 20, 3);
-        yctx.drawImage(sheaf.c, x - sheaf.ax, y - sheaf.ay);
+        drawArt(yctx, sheafShade, x - 9, y - 2);
+        drawArt(yctx, sheaf.c, x - sheaf.ax / ART, y - sheaf.ay / ART);
       }
-      // 나라 몫 자리: 멍석
+      // 나라 몫 자리: 멍석과 그 그림자(멍석의 꼴 그대로 — 따뜻한 밤빛으로 오른쪽 아래에 비낀다)
       const [mx, my] = matAt();
-      yctx.fillStyle = 'rgba(26, 32, 48, 0.3)';
-      yctx.fillRect(mx - MAT_W / 2 + 2, my - MAT_H / 2 + 3, MAT_W, MAT_H);
-      yctx.drawImage(toCanvas(matArt(pal, MAT_W, MAT_H)), mx - MAT_W / 2, my - MAT_H / 2);
+      const mat = matArt(pal, MAT_W, MAT_H);
+      drawArt(yctx, toCanvas(silhouette(mat, withAlpha(WARM_DARK, 77))), mx - MAT_W / 2 + 2, my - MAT_H / 2 + 3);
+      drawArt(yctx, toCanvas(mat), mx - MAT_W / 2, my - MAT_H / 2);
       return base;
     };
 
@@ -325,12 +338,12 @@ export function Harvest({ facts, onDone }: PlayProps): JSX.Element {
         }
         const a = clumpArt[c.look % clumpArt.length];
         if (!s.cut[i]) {
-          ctx.drawImage(a.c, sx(c.x) - a.ax, y - a.ay);
+          drawArt(ctx, a.c, sx(c.x) - a.ax / ART, y - a.ay / ART);
         } else if (!calm && now - cutAt[i] < FALL_MS) {
-          // 막 베인 벼가 옆으로 넘어간다
+          // 막 베인 벼가 옆으로 넘어간다(그림 점마다 — 곱게)
           const t = (now - cutAt[i]) / FALL_MS;
           ctx.globalAlpha = 1 - t;
-          ctx.drawImage(a.c, sx(c.x) - a.ax + Math.round(t * 4 * (c.look % 2 === 0 ? 1 : -1)), y - a.ay + Math.round(t * 6));
+          drawArt(ctx, a.c, sx(c.x) - a.ax / ART + Math.round(t * 4 * ART * (c.look % 2 === 0 ? 1 : -1)) / ART, y - a.ay / ART + Math.round(t * 6 * ART) / ART);
           ctx.globalAlpha = 1;
         }
       }
@@ -375,8 +388,8 @@ export function Harvest({ facts, onDone }: PlayProps): JSX.Element {
           drawHero(ctx, hx, hy, now);
           heroDrawn = true;
         }
-        ctx.drawImage(sackShade, o.x - 13, o.y - 4);
-        ctx.drawImage(sack.c, o.x - sack.ax, o.y - sack.ay - o.hop);
+        drawArt(ctx, sackShade, o.x - 13, o.y - 4);
+        drawArt(ctx, sack.c, o.x - sack.ax / ART, o.y - sack.ay / ART - o.hop);
       }
       if (!heroDrawn) drawHero(ctx, hx, hy, now);
       // 어른이 나라 몫을 덜어 놓는다: 자루를 지고 멍석까지 걸어가 내려놓고 곁에 선다

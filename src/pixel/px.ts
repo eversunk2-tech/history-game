@@ -16,19 +16,6 @@ export const CLEAR: Color = 0;
  */
 export const ART = 2;
 
-/** 점 하나를 k×k로(이웃 점 그대로) 키운다. 그림 올리기 ② 전까지 1배 그림(집·나무·소품·짐승·표시)을 그림 점으로 옮길 때만 쓴다. */
-export function upscale(src: Px, k: number = ART): Px {
-  if (k === 1) return src;
-  const out = new Px(src.w * k, src.h * k);
-  const d = out.d;
-  for (let y = 0; y < out.h; y++) {
-    const row = Math.floor(y / k) * src.w;
-    const o = y * out.w;
-    for (let x = 0; x < out.w; x++) d[o + x] = src.d[row + Math.floor(x / k)];
-  }
-  return out;
-}
-
 export function rgb(r: number, g: number, b: number, a = 255): Color {
   return ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
 }

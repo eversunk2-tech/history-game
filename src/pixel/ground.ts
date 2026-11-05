@@ -1602,10 +1602,16 @@ export function groundJob(map: GroundMap, pal: Palette, shadesIn: readonly Shade
  * 무늬의 크기는 지금(1-라)과 같고, 그림 점으로 곱게 셈한다.
  */
 export function waterFrames(pal: Palette, frames = 24): Px[] {
-  const S = 64 * ART;
   const out: Px[] = [];
+  for (let k = 0; k < frames; k++) out.push(waterFrame(pal, k, frames));
+  return out;
+}
+
+/** 물결 frames장 가운데 k번째 한 장(그림 벌이 한 장씩 나눠 짓는다 — waterFrames와 같은 그림) */
+export function waterFrame(pal: Palette, k: number, frames = 24): Px {
+  const S = 64 * ART;
   const { water } = pal;
-  for (let k = 0; k < frames; k++) {
+  {
     const ph = k / frames;
     const px = new Px(S, S);
     for (let y = 0; y < S; y++) {
@@ -1645,7 +1651,6 @@ export function waterFrames(pal: Palette, frames = 24): Px[] {
         }
       }
     }
-    out.push(px);
+    return px;
   }
-  return out;
 }

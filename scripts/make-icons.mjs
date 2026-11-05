@@ -1,5 +1,7 @@
 // 아이콘을 뜬다: 이 게임의 느티나무(① 마을 어귀의 큰 나무, src/pixel/trees.ts의 zelkova)를
 // 캔버스 없이 화소 버퍼로 그려 정수배로 키우고, Node에 딸린 zlib으로 PNG를 쓴다. 바깥 그림을 쓰지 않는다.
+// 느티나무는 그림 점(맵 점의 반 — 그림 올리기 ②)으로 그린 392×372점이다. 1-라의 1배 나무(196×186)를 두 배로 키워 뜨던 것과
+// 같은 크기로, 이제는 그림 점 하나를 화소 하나로 뜬다(더 곱다).
 //
 //   node scripts/make-icons.mjs        → public/icons/ 에 icon-192.png, icon-512.png, icon-maskable-512.png, apple-touch-icon.png
 //
@@ -60,6 +62,9 @@ try {
   await server.close();
 }
 
+/** 그림 점 / 1-라의 점(둔덕의 크기를 1-라와 같게 셈한다) */
+const K = 2;
+
 // 나무가 실제로 그려진 네모(빈 가장자리를 뺀다)
 let x0 = tree.w, y0 = tree.h, x1 = -1, y1 = -1;
 for (let y = 0; y < tree.h; y++) for (let x = 0; x < tree.w; x++) if (tree.d[y * tree.w + x] >>> 24 > 0) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
@@ -82,9 +87,9 @@ function paint(size, scale, lift = 0) {
   const top = Math.round((size - h) / 2) - lift;
   // 둔덕: 줄기 발치를 지나는 납작한 타원(점이 또렷하게 계단지도록 scale 단위로 찍는다)
   const cx = size / 2;
-  const cy = top + h - 4 * scale;
+  const cy = top + h - 4 * K * scale;
   const rx = w * 0.34;
-  const ry = 5 * scale;
+  const ry = 5 * K * scale;
   for (let y = 0; y < size; y += scale) {
     for (let x = 0; x < size; x += scale) {
       const dx = (x + scale / 2 - cx) / rx;
@@ -118,7 +123,7 @@ function paint(size, scale, lift = 0) {
   return out;
 }
 
-/** 큰 그림을 k로 나누어 줄인다(k×k 칸을 고르게 섞는다). 나무가 한 배로도 192점이라, 작은 아이콘은 두 배로 그려 셋으로 나눈다. */
+/** 큰 그림을 k로 나누어 줄인다(k×k 칸을 고르게 섞는다). 나무가 한 배로도 392점이라, 작은 아이콘은 한 배로 그려 셋으로 나눈다. */
 function shrink(big, size, k) {
   const out = new Uint8Array(size * size * 4);
   const bw = size * k;
@@ -148,16 +153,16 @@ function farthest(scale) {
 
 mkdirSync(outDir, { recursive: true });
 const made = [
-  // 512: 나무 두 배(384×352점)가 그대로 또렷하게
-  ['icon-512.png', 512, paint(512, 2, 6)],
+  // 512: 그림 점 그대로(나무 380×350점쯤)가 또렷하게 — 1-라의 1배 나무를 두 배로 뜬 것과 같은 크기
+  ['icon-512.png', 512, paint(512, 1, 6)],
   // maskable 512: 같은 크기, 한가운데에. 나무에서 가장 먼 점이 안전한 동그라미(반지름 204.8) 안이다
-  ['icon-maskable-512.png', 512, paint(512, 2, 0)],
-  // 192와 아이패드용 180: 두 배로 그린 것을 셋으로 나눈다(나무 128×117점)
-  ['icon-192.png', 192, shrink(paint(576, 2, 6), 192, 3)],
-  ['apple-touch-icon.png', 180, shrink(paint(540, 2, 6), 180, 3)],
+  ['icon-maskable-512.png', 512, paint(512, 1, 0)],
+  // 192와 아이패드용 180: 그림 점 그대로 그린 것을 셋으로 나눈다(나무 127×117점쯤)
+  ['icon-192.png', 192, shrink(paint(576, 1, 6), 192, 3)],
+  ['apple-touch-icon.png', 180, shrink(paint(540, 1, 6), 180, 3)],
 ];
 for (const [name, size, rgba] of made) writeFileSync(join(outDir, name), png(size, size, rgba));
-const far = farthest(2);
+const far = farthest(1);
 console.log(`느티나무 ${tree.w}×${tree.h}점, 그려진 곳 ${tw}×${th}점`);
 console.log(`maskable: 가운데에서 가장 먼 점 ${far.toFixed(1)} / 안전한 반지름 ${(512 * 0.4).toFixed(1)} → ${far <= 512 * 0.4 ? '안에 든다' : '넘는다!'}`);
 for (const [name, size] of made) console.log(`${name} ${size}×${size}`);

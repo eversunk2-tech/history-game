@@ -7,7 +7,8 @@
 // "어른께 맡긴다"를 눌러도 뿌린 만큼은 버리지 않는다(sowLeave — 끝내기 단추와 같은 셈).
 // 맞았다·틀렸다는 말도 점수도 없다. 뿌린 자리는 논에 그대로 보인다:
 //   - 논물은 잔잔한 어두운 물빛이고, 볍씨가 내려앉은 자리는 물이 일어 한결 밝아진다(뿌린 곳과 빈 곳이 한눈에 갈린다).
-//   - 볍씨는 밝은 누런 낟알(석 점 남짓)에 먹빛 그늘을 달아 물빛 위에서 또렷하다. 떨어질 때 잔물결이 한 번 인다.
+//   - 볍씨는 밝은 누런 낟알(석 점 남짓)에 따뜻한 짙은 그늘을 달아 물빛 위에서 또렷하다. 떨어질 때 잔물결이 한 번 인다.
+//   - 물이 인 자리, 볍씨, 잔물결은 모두 그림 점(놀이 점의 반)으로 곱게 찍는다(spec 4.7.5 — 놀이의 셈과 자리는 놀이 점 그대로).
 
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -17,7 +18,7 @@ import { COL, DIRS, HEROES, footShadow, personSheet } from '../pixel/people';
 import { ART, Px, fbm, hash2, hex, mix, pick, toCanvas, vnoise } from '../pixel/px';
 import { game, heroName } from '../state/store';
 import { useEndOnce } from './bits';
-import { drawBase, drawFoot, drawPerson } from './art';
+import { blot, drawArt, drawBase, drawFoot, drawPerson, seedArt } from './art';
 import { PlayFrame } from './Frame';
 import { playScale } from './stage';
 import type { PlayProps } from './index';
@@ -47,10 +48,6 @@ const WATER_DEEP = hex('#47677b');
 const WATER_CALM = hex('#52748a');
 const WATER_STIRRED = '#86a9b6';
 const WATER_RING = '#d6e8e6';
-// 볍씨: 밝은 누런 낟알과 먹빛 그늘
-const SEED_BODY = ['#f7d95f', '#f1c94a', '#fbe488'];
-const SEED_LIGHT = '#fff8cf';
-const SEED_SHADE = 'rgba(30, 26, 26, 0.62)';
 
 /** 0~1 밖으로 나간 값을 가장자리(edge)에서 안쪽으로 되접는다 */
 function bounce(v: number, edge: number): number {
@@ -138,6 +135,9 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
     const hero = HEROES[g ? heroName(g.role, g.look) : 'farmer-boy'] ?? HEROES['farmer-boy'];
     const sheet = toCanvas(personSheet(hero));
     const shadow = toCanvas(footShadow());
+    // 볍씨(그림 점): 내려앉은 알(빛깔 여섯 — 누운 알과 선 알)과 날아가는 알
+    const seedImg = [0, 1, 2, 3, 4, 5].map((tone) => toCanvas(seedArt(tone)));
+    const flyImg = [0, 1, 2].map((tone) => toCanvas(seedArt(tone, true)));
 
     let w = 0;
     let h = 0;
@@ -171,38 +171,24 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
     /** 물이 인 자리의 반지름(점): 칸의 서너 할쯤. 볍씨가 고루 떨어진 곳은 이 자리들이 이어져 밝은 물빛이 된다. */
     const stirR = (): number => Math.max(4, Math.round((fh() / SOW_ROWS) * 0.36));
 
-    /** 볍씨 한 알이 내려앉은 자리: 둥글넓적하게 물이 인다(가장자리는 점으로 흩어진다) */
+    /**
+     * 볍씨 한 알이 내려앉은 자리(놀이 점 (x, y)의 둘레): 둥글넓적하게 물이 인다. 그림 점으로 찍고, 가장자리는 그림 점 둘씩의 무리로 흩어진다.
+     * 넓이는 1-라 그대로(반지름 stirR() + 1 × stirR() 놀이 점).
+     */
     const stir = (x: number, y: number): void => {
       if (!mctx) return;
       const r = stirR();
-      mctx.fillStyle = WATER_STIRRED;
-      for (let dy = -r; dy <= r; dy++) {
-        for (let dx = -r - 1; dx <= r + 1; dx++) {
-          const px = x + dx;
-          const py = y + dy;
-          if (px < BUND + 2 || py < BUND + 2 || px >= w - BUND - 2 || py >= h - BUND - 2) continue;
-          const d = Math.hypot(dx / (r + 1), dy / r);
-          if (d > 1) continue;
-          if (hash2(px, py, 97) < (1 - d * d) * 1.2) mctx.fillRect(px, py, 1, 1);
-        }
-      }
+      const lo = (BUND + 2) * ART;
+      blot(mctx, x * ART + 1, y * ART + 1, (r + 1) * ART, r * ART, 97, (hsh, d) => (hsh < (1 - d * d) * 1.2 ? WATER_STIRRED : null), (X, Y) => X >= lo && Y >= lo && X + 1 < (w - BUND - 2) * ART && Y < (h - BUND - 2) * ART);
     };
 
-    /** 볍씨 한 알: 석 점 남짓의 밝은 낟알(누운 것과 선 것)과 그 아래·옆의 먹빛 그늘 */
+    /** 볍씨 한 알: 석 점 남짓의 밝은 낟알(누운 것과 선 것)과 그 아래·옆의 따뜻한 짙은 그늘(seedArt — 그림 점) */
     const stamp = (nx: number, ny: number, tone: number): void => {
       if (!sctx) return;
       const x = Math.round(BUND + nx * fw());
       const y = Math.round(BUND + ny * fh());
       stir(x + 1, y + 1);
-      const lying = tone % 2 === 0;
-      const bw = lying ? 3 : 2;
-      const bh = lying ? 2 : 3;
-      sctx.fillStyle = SEED_SHADE;
-      sctx.fillRect(x, y + 1, bw + 1, bh);
-      sctx.fillStyle = SEED_BODY[tone % SEED_BODY.length];
-      sctx.fillRect(x, y, bw, bh);
-      sctx.fillStyle = SEED_LIGHT;
-      sctx.fillRect(x, y, lying ? 2 : 1, lying ? 1 : 2);
+      drawArt(sctx, seedImg[tone % seedImg.length], x, y);
     };
 
     const resize = (): void => {
@@ -361,7 +347,7 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
         }
       }
       drawBase(ctx, stirred);
-      // 잔물결: 떨어진 자리에서 둥글넓적한 고리가 한 번 퍼진다
+      // 잔물결: 떨어진 자리에서 둥글넓적한 고리가 한 번 퍼진다(그림 점 한 줄의 고리 — 앞쪽 아래 반은 두 줄로 도톰하다)
       for (let i = ripples.length - 1; i >= 0; i--) {
         const r = ripples[i];
         const t = (now - r.born) / RIPPLE_MS;
@@ -369,15 +355,22 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
           ripples.splice(i, 1);
           continue;
         }
-        const cx = BUND + r.x * fw() + 1;
-        const cy = BUND + r.y * fh() + 1;
-        const rad = 2 + t * 5;
+        const cx = (BUND + r.x * fw() + 1) * ART;
+        const cy = (BUND + r.y * fh() + 1) * ART;
+        const rad = (2 + t * 5) * ART;
         ctx.globalAlpha = 0.8 * (1 - t);
         ctx.fillStyle = WATER_RING;
-        const steps = Math.ceil(rad * 5);
+        const steps = Math.ceil(rad * 5.2);
+        const seen = new Set<number>();
         for (let k = 0; k < steps; k++) {
           const a = (k / steps) * Math.PI * 2;
-          ctx.fillRect(Math.round(cx + Math.cos(a) * rad), Math.round(cy + Math.sin(a) * rad * 0.62), 1, 1);
+          const X = Math.round(cx + Math.cos(a) * rad);
+          const Y = Math.round(cy + Math.sin(a) * rad * 0.62);
+          // 같은 점을 두 번 찍지 않는다(반투명이라 겹치면 그 점만 짙어진다)
+          const key = X * 4096 + Y;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          ctx.fillRect(X / ART, Y / ART, 1 / ART, (Math.sin(a) > 0.25 ? 2 : 1) / ART);
         }
       }
       ctx.globalAlpha = 1;
@@ -389,15 +382,12 @@ export function Sow({ rules, onDone }: PlayProps): JSX.Element {
       const col = walking ? COL.walk + (Math.floor(me.step / 5) % 4) : COL.idle + (Math.floor(now / 700) % 2);
       drawFoot(ctx, shadow, px, py);
       drawPerson(ctx, sheet, col, DIRS.indexOf(me.dir), px, py);
-      // 날아가는 볍씨
+      // 날아가는 볍씨(자리는 그림 점마다 — 곱게 날아간다)
       for (const f of flying) {
         const t = Math.min(1, (now - f.born) / FLY_MS);
-        const x = Math.round(BUND + (f.x0 + (f.x1 - f.x0) * t) * fw());
-        const y = Math.round(BUND + (f.y0 + (f.y1 - f.y0) * t) * fh() - Math.sin(t * Math.PI) * 7);
-        ctx.fillStyle = SEED_SHADE;
-        ctx.fillRect(x, y + 1, 2, 2);
-        ctx.fillStyle = SEED_LIGHT;
-        ctx.fillRect(x, y, 2, 2);
+        const x = Math.round((BUND + (f.x0 + (f.x1 - f.x0) * t) * fw()) * ART) / ART;
+        const y = Math.round((BUND + (f.y0 + (f.y1 - f.y0) * t) * fh() - Math.sin(t * Math.PI) * 7) * ART) / ART;
+        drawArt(ctx, flyImg[f.tone % flyImg.length], x, y);
       }
     };
     paintNow = () => paint(performance.now());

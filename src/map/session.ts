@@ -7,7 +7,7 @@
 // 첫 맵을 미리 짓는다(prepareMap → stepPrepare).
 
 import type { Season } from '../engine/types';
-import { buildAtlas, ensureAll, nearestChunk, needsOf, prepareSteps, workGround, type Atlas, type GroundCanvas, type Needs } from '../pixel/atlas';
+import { buildAtlas, ensureAll, nearestChunk, needsOf, prepareSteps, workGround, type Atlas, type GroundCanvas, type Needs, type Step } from '../pixel/atlas';
 import { cameraGoal } from './camera';
 import { buildScene, groundFor, miniColors, type Scene } from './draw';
 import { TILE, type MapData, type Weather, type Who } from './types';
@@ -50,7 +50,7 @@ let session: MapSession | null = null;
 interface Prep {
   map: MapData;
   atlas: Atlas;
-  steps: (() => void)[];
+  steps: Step[];
   ground: GroundCanvas | null;
   /** 땅을 먼저 칠할 자리(맵 점) */
   focus: { x: number; y: number };
@@ -87,9 +87,10 @@ export function stepPrepare(budgetMs = 8): boolean {
   const p = prep;
   const t0 = performance.now();
   while (performance.now() - t0 < budgetMs) {
-    const step = p.steps.shift();
+    const step = p.steps[0];
     if (step) {
-      step();
+      // 일감이 아직 남았다고 하면(true) 다음에 다시 부른다
+      if (step() !== true) p.steps.shift();
       continue;
     }
     if (!p.ground) {

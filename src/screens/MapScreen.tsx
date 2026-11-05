@@ -532,7 +532,8 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
     };
 
     // 그림을 처음 찍을 때는 잠깐 걸린다. "그리는 중"(처음)이나 앞 장(계절이 바뀔 때)을 띄워 둔 채,
-    // 그림 벌과 처음 보이는 화면의 땅을 나눠 짓고(한 번에 30ms쯤 — 50ms 넘는 긴 일을 만들지 않으면서 쉬는 틈을 줄인다) 다 되면 판을 연다.
+    // 그림 벌과 처음 보이는 화면의 땅을 나눠 짓고(한 번에 12ms쯤 — 2배 그림의 일감 하나가 낮은 사양에서 30ms 남짓이라, 일감이 넘쳐도
+    // 50ms 넘는 긴 일을 만들지 않으면서 쉬는 틈을 줄인다) 다 되면 판을 연다.
     // 제목 화면·계절 닫기·소개 화면에서 미리 지어 두었으면 바로 연다.
     let pump = 0;
     const openWhenReady = (): void => {
@@ -540,7 +541,7 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       const now = game.peek();
       if (!now) return;
       if (!prepReady(map)) {
-        stepPrepare(30);
+        stepPrepare(12);
         pump = window.setTimeout(openWhenReady, 0);
         return;
       }

@@ -17,7 +17,7 @@
 import type { Season } from '../engine/types';
 import { MAKERS } from '../pixel/catalog';
 import { paletteOf, type Palette, type Ramp } from '../pixel/palette';
-import { Px, bayer, clamp, fbm, hash2, hex, mix, pick, vnoise, type Color } from '../pixel/px';
+import { ART, Px, bayer, clamp, fbm, hash2, hex, mix, pick, vnoise, type Color } from '../pixel/px';
 import type { SpriteDef } from '../pixel/shapes';
 
 export const BACKDROP_PLACES = [
@@ -41,6 +41,39 @@ export const BACKDROP_PLACES = [
 
 const spriteCache = new Map<string, SpriteDef | null>();
 
+/**
+ * 맵의 그림은 그림 점(ART — 맵 점의 반)으로 그렸고, 이 배경은 맵 점 하나를 점 하나로 그린다. 그래서 그림 점 ART×ART 칸마다
+ * 가장 많은 빛 하나로 줄여 쓴다(빈 점이 반을 넘으면 빈 점).
+ */
+function shrinkArt(px: Px): Px {
+  const out = new Px(Math.ceil(px.w / ART), Math.ceil(px.h / ART));
+  const count = new Map<Color, number>();
+  for (let y = 0; y < out.h; y++) {
+    for (let x = 0; x < out.w; x++) {
+      count.clear();
+      let empty = 0;
+      for (let j = 0; j < ART; j++) {
+        for (let i = 0; i < ART; i++) {
+          const c = px.get(x * ART + i, y * ART + j);
+          if (c === 0) empty++;
+          else count.set(c, (count.get(c) ?? 0) + 1);
+        }
+      }
+      if (empty * 2 > ART * ART) continue;
+      let best: Color = 0;
+      let n = 0;
+      for (const [c, k] of count) {
+        if (k > n) {
+          best = c;
+          n = k;
+        }
+      }
+      out.d[y * out.w + x] = best;
+    }
+  }
+  return out;
+}
+
 function spriteOf(pal: Palette, kind: string, variant: number): SpriteDef | null {
   const key = `${pal.season}:${kind}:${variant}`;
   if (!spriteCache.has(key)) {
@@ -48,6 +81,7 @@ function spriteOf(pal: Palette, kind: string, variant: number): SpriteDef | null
     let def: SpriteDef | null = null;
     try {
       def = make ? make(pal, variant) : null;
+      if (def) def = { ...def, frames: def.frames.slice(0, 1).map(shrinkArt), ax: Math.floor(def.ax / ART), ay: Math.floor(def.ay / ART) };
     } catch {
       def = null; // 그림 하나가 안 그려져도 배경은 나온다
     }

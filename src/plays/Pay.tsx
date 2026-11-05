@@ -12,14 +12,16 @@
 //
 // 그리지 않는 것: 엽전, 저울과 저울추, 글씨. 소금을 가진 사람은 대본대로 "윗마을 사람"이다(소금 장수라고 하지 않는다 — 확인하지 못했다).
 // "끊은 베는 통째인 베보다 덜 쳐 준다"는 놀이의 규칙으로 꾸민 것이라 사람의 말로만 둔다(배움 쪽지에 쓸 사실이 아니다).
+// 자루·되·쌀 무더기·베·멍석은 그림 점(놀이 점의 반)으로 곱게 그린다(spec 4.7.5). 놓는 자리와 누르는 자리는 놀이 점 그대로다.
 
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { CLOTH, HAIR, SKIN, paletteOf } from '../pixel/palette';
 import { COL, DIRS, HEROES, footShadow, personOf, personSheet, type Person } from '../pixel/people';
-import { toCanvas } from '../pixel/px';
+import { ART, toCanvas, withAlpha } from '../pixel/px';
+import { WARM_DARK } from '../pixel/wash';
 import { heroName } from '../state/store';
-import { clothPiece, drawBase, drawFoot, drawPerson, matArt, measureArt, paintYard, riceHeapArt, sackArt, shadowArt } from './art';
+import { clothPiece, drawArt, drawBase, drawFoot, drawPerson, matArt, measureArt, paintYard, riceHeapArt, sackArt, shadowArt, silhouette } from './art';
 import { Say, useEndOnce } from './bits';
 import { PlayFrame } from './Frame';
 import type { PlayProps } from './index';
@@ -209,6 +211,8 @@ export function Pay({ rules, facts, choice, onDone }: PlayProps): JSX.Element {
     let h = 0;
     let ground: HTMLCanvasElement | null = null;
     let mat: HTMLCanvasElement | null = null;
+    /** 멍석의 그림자(멍석의 꼴 그대로 — 따뜻한 밤빛) */
+    let matShade: HTMLCanvasElement | null = null;
     /** 자리(점): 크기가 바뀔 때마다 다시 잡는다 */
     const at = { matX: 0, matY: 0, matW: 0, matH: 0, heroX: 0, heroY: 0, sackX: 0, sackY: 0, clothX: 0, clothY: 0, keeperX: 0, keeperY: 0, saltX: 0, saltY: 0 };
 
@@ -224,7 +228,9 @@ export function Pay({ rules, facts, choice, onDone }: PlayProps): JSX.Element {
         at.matH = Math.min(46, Math.round(h * 0.42));
         at.matX = Math.round(w / 2 - at.matW / 2);
         at.matY = Math.round(h * 0.94 - at.matH);
-        mat = toCanvas(matArt(pal, at.matW, at.matH));
+        const matPx = matArt(pal, at.matW, at.matH);
+        mat = toCanvas(matPx);
+        matShade = toCanvas(silhouette(matPx, withAlpha(WARM_DARK, 71)));
         const side = Math.max(34, Math.round((w / 2 - at.matW / 2) / 2));
         at.heroX = Math.max(14, side - 20);
         at.heroY = Math.round(h * 0.66);
@@ -240,13 +246,12 @@ export function Pay({ rules, facts, choice, onDone }: PlayProps): JSX.Element {
         setMeasureTag({ x: (at.sackX + 15) / w, y: (at.sackY + 3) / h });
       },
       paint(ctx, now) {
-        if (!ground || !mat) return;
+        if (!ground || !mat || !matShade) return;
         const t = s.table;
         drawBase(ctx, ground);
-        // 멍석(가운데)
-        ctx.fillStyle = 'rgba(26, 32, 48, 0.28)';
-        ctx.fillRect(at.matX + 2, at.matY + 3, at.matW, at.matH);
-        ctx.drawImage(mat, at.matX, at.matY);
+        // 멍석(가운데)과 오른쪽 아래로 비낀 그림자
+        drawArt(ctx, matShade, at.matX + 2, at.matY + 3);
+        drawArt(ctx, mat, at.matX, at.matY);
 
         // 주고받는 동안: 멍석의 것은 상대 쪽으로, 소금 자루는 내 쪽으로 옮겨 간다
         const trade = now >= s.tradeAt && s.closing ? (calm ? 1 : Math.min(1, (now - s.tradeAt) / TRADE_MS)) : 0;
@@ -257,12 +262,12 @@ export function Pay({ rules, facts, choice, onDone }: PlayProps): JSX.Element {
         const heroCol = scooping ? COL.work + (Math.floor((now - s.scoopAt) / 70) % 4) : COL.idle + (Math.floor(now / 760) % 2);
         drawFoot(ctx, shadow, at.heroX, at.heroY);
         drawPerson(ctx, heroSheet, heroCol, DIRS.indexOf('right'), at.heroX, at.heroY);
-        ctx.drawImage(sackShade, at.sackX - 13, at.sackY - 5);
-        ctx.drawImage(riceSacks[t.rice], at.sackX - 13, at.sackY - 27);
-        if (!scooping) ctx.drawImage(measure[0], at.sackX + 9, at.sackY - 8);
+        drawArt(ctx, sackShade, at.sackX - 13, at.sackY - 5);
+        drawArt(ctx, riceSacks[t.rice], at.sackX - 13, at.sackY - 27);
+        if (!scooping) drawArt(ctx, measure[0], at.sackX + 9, at.sackY - 8);
         const joined = joinedCloth[t.joined];
-        if (joined) ctx.drawImage(joined, at.clothX, at.clothY - 10);
-        for (let i = 0; i < t.spare; i++) ctx.drawImage(sparePiece, at.clothX + t.joined * SEG + 4 + i * (SEG + 3), at.clothY - 10 - (i % 2) * 2);
+        if (joined) drawArt(ctx, joined, at.clothX, at.clothY - 10);
+        for (let i = 0; i < t.spare; i++) drawArt(ctx, sparePiece, at.clothX + t.joined * SEG + 4 + i * (SEG + 3), at.clothY - 10 - (i % 2) * 2);
 
         // 멍석 위: 쌀 무더기는 윗줄, 베는 아랫줄. 날아오는 것은 놓일 자리까지 포물선으로 온다.
         const slide = Math.round(ease * (at.keeperX - at.matX - at.matW / 2));
@@ -292,7 +297,7 @@ export function Pay({ rules, facts, choice, onDone }: PlayProps): JSX.Element {
             fromY = at.clothY - 10;
           } else {
             img = wholeCloth;
-            tx = at.matX + Math.round((at.matW - wholeCloth.width) / 2);
+            tx = at.matX + Math.round((at.matW - wholeCloth.width / ART) / 2);
             ty = at.matY + at.matH - 15;
             fromX = at.clothX;
             fromY = at.clothY - 10;
@@ -300,13 +305,14 @@ export function Pay({ rules, facts, choice, onDone }: PlayProps): JSX.Element {
           const flight = s.flights.find((f) => f.index === index);
           if (flight && !calm && now - flight.born < FLY_MS) {
             const u = (now - flight.born) / FLY_MS;
-            const x = Math.round(fromX + (tx - fromX) * u);
-            const y = Math.round(fromY + (ty - fromY) * u - Math.sin(u * Math.PI) * 12);
+            // 날아가는 자리는 그림 점마다(곱게)
+            const x = Math.round((fromX + (tx - fromX) * u) * ART) / ART;
+            const y = Math.round((fromY + (ty - fromY) * u - Math.sin(u * Math.PI) * 12) * ART) / ART;
             // 쌀은 되에 담겨 날아와 쏟아진다
-            ctx.drawImage(thing === 'rice' ? measure[1] : img, x, y);
+            drawArt(ctx, thing === 'rice' ? measure[1] : img, x, y);
             return;
           }
-          ctx.drawImage(img, tx + slide, ty - Math.round(Math.sin(trade * Math.PI) * 6));
+          drawArt(ctx, img, tx + slide, ty - Math.round(Math.sin(trade * Math.PI) * 6));
         });
         s.flights = s.flights.filter((f) => now - f.born < FLY_MS);
 
@@ -323,8 +329,8 @@ export function Pay({ rules, facts, choice, onDone }: PlayProps): JSX.Element {
           const fromY = at.saltY - k * 5;
           const saltX = Math.round(fromX + (at.sackX + 30 + k * 9 - fromX) * ease);
           const saltY = Math.round(fromY + (at.sackY + 6 - k * 5 - fromY) * ease - Math.sin(trade * Math.PI) * 10);
-          ctx.drawImage(sackShade, saltX - 13, saltY - 5);
-          ctx.drawImage(saltSack, saltX - 13, saltY - 27);
+          drawArt(ctx, sackShade, saltX - 13, saltY - 5);
+          drawArt(ctx, saltSack, saltX - 13, saltY - 27);
         }
       },
     });

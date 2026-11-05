@@ -7,7 +7,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../src/engine/rng';
-import { rngOf } from '../src/pixel/px';
+import { paletteOf } from '../src/pixel/palette';
+import { ART, hex, rngOf, type Px } from '../src/pixel/px';
 import { packs } from '../src/content';
 import { newGame } from '../src/engine/game';
 import type { GameState, Mission } from '../src/engine/types';
@@ -24,6 +25,7 @@ import {
   inPool,
   isRainYear,
 } from '../src/plays/harvestRules';
+import * as playArt from '../src/plays/art';
 import { PLAY_KINDS } from '../src/plays/kinds';
 import { playScale } from '../src/plays/stage';
 import {
@@ -1168,5 +1170,52 @@ describe('놀이판의 배율 — 1-라에 가까운 짝수(그림 점이 기기
         expect(s, `${dw}×${dh}`).toBeGreaterThanOrEqual(2);
       }
     }
+  });
+});
+
+describe('일 놀이의 작은 그림 — 그림 점(1-라의 놀이 점 × ART)', () => {
+  // 놀이는 그림을 놀이 점으로 줄여 놓는다(drawArt). 크기와 밑동이 1-라 × ART여야 화면의 크기와 자리가 1-라 그대로다
+  // (값 치르기는 자루를 sackX - 13, sackY - 27에 놓는 등 1-라의 놀이 점으로 자리를 잡는다).
+  const summer = paletteOf('summer');
+  const autumn = paletteOf('autumn');
+  const winter = paletteOf('winter');
+  /** [이름, 그림, 1-라의 너비·높이, 1-라의 밑동(없으면 왼쪽 위에 맞춰 놓는 그림)] */
+  const cases: [string, { px: Px; ax?: number; ay?: number }, number, number, [number, number]?][] = [
+    ['벼', playArt.riceTuft(summer, 1), 19, 17, [9, 16]],
+    ['누운 벼', playArt.riceTuft(summer, 2, -1), 19, 17, [9, 16]],
+    ['피 같은 풀', playArt.weedArt(summer, 0), 21, 23, [9, 22]],
+    ['잎이 넓은 풀', playArt.weedArt(summer, 1), 17, 12, [8, 11]],
+    ['우산살 같은 풀', playArt.weedArt(summer, 2), 17, 19, [8, 18]],
+    ['누런 벼', playArt.goldClump(3), 25, 21, [12, 20]],
+    ['그루터기', playArt.stubbleArt(1, true), 15, 8, [7, 7]],
+    ['눕힌 벼', playArt.swathArt(1), 19, 9, [9, 6]],
+    ['볏단', playArt.sheafArt(autumn), 23, 30, [11, 28]],
+    ['곡식 자루', playArt.sackArt(autumn, 'grain'), 27, 29, [13, 27]],
+    ['쌀 자루(반)', playArt.sackArt(autumn, 'rice', 0.5), 27, 29, [13, 27]],
+    ['소금 자루', playArt.sackArt(autumn, 'salt'), 27, 29, [13, 27]],
+    ['되', playArt.measureArt(autumn, true), 13, 10, [6, 9]],
+    ['쌀 무더기', playArt.riceHeapArt(autumn), 13, 9, [6, 8]],
+    ['북', playArt.shuttleArt(winter), 21, 9, [10, 4]],
+    ['베 조각', { px: playArt.clothPiece(autumn, 12, 9, -1) }, 16, 11],
+    ['통째인 베', { px: playArt.clothPiece(autumn, 36, 9, 0, 12) }, 40, 11],
+    ['멍석', { px: playArt.matArt(autumn, 62, 34) }, 62, 34],
+    ['자루 그림자', { px: playArt.shadowArt(13, 4, 90) }, 26, 8],
+    ['화살표', { px: playArt.arrowArt(0, hex('#fff6c4'), hex('#4a3428')) }, 15, 11],
+    ['아래 화살표', { px: playArt.arrowArt(1, hex('#fff6c4'), hex('#4a3428')) }, 11, 15],
+    ['누운 볍씨', { px: playArt.seedArt(0) }, 4, 3],
+    ['선 볍씨', { px: playArt.seedArt(1) }, 3, 4],
+    ['날아가는 볍씨', { px: playArt.seedArt(2, true) }, 2, 3],
+  ];
+
+  it('크기와 밑동은 1-라의 ART배다(그림 점)', () => {
+    for (const [name, a, w, h, anchor] of cases) {
+      expect([a.px.w, a.px.h], name).toEqual([w * ART, h * ART]);
+      if (anchor) expect([a.ax, a.ay], name).toEqual([anchor[0] * ART, anchor[1] * ART]);
+    }
+  });
+
+  it('먹빛 테두리를 쓰지 않는다(spec 4.7.5의 ㄴ)', () => {
+    const ink = new Set([summer.ink, summer.inkSoft, hex('#2a2422')]);
+    for (const [name, a] of cases) expect(a.px.d.some((c) => ink.has(c)), name).toBe(false);
   });
 });

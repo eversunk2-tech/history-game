@@ -9,7 +9,7 @@
 // 계절: 그림 벌(atlas)과 맵이 그 계절의 것이다. 여기서는 그 계절의 날림만 가른다(봄 꽃잎, 여름 잠자리, 가을 가랑잎, 겨울 눈, 큰비).
 
 import { anchorOf, thingKey } from '../pixel/catalog';
-import { MASK_CELL, WATER_TILE, critterImg, groundCanvas, paintAround, personCanvas, shadesOf, thingImg, type Atlas, type GroundCanvas, type Img } from '../pixel/atlas';
+import { MASK_CELL, WATER_TILE, critterImg, footBox, groundCanvas, paintAround, personCanvas, shadesOf, thingImg, type Atlas, type GroundCanvas, type Img } from '../pixel/atlas';
 import { GROUND_TILE } from '../pixel/ground';
 import { COL, DIRS, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W } from '../pixel/people';
 import { ART, clamp, hash2, mix } from '../pixel/px';
@@ -555,12 +555,13 @@ export function render(view: View, world: World, scene: Scene): void {
     }
   }
 
-  // 5. 구름 그림자(비 오는 날에는 하늘이 온통 흐려 따로 지지 않는다)
+  // 5. 구름 그림자(비 오는 날에는 하늘이 온통 흐려 따로 지지 않는다). 따뜻한 빛을 곱해 바닥을 조금 어둡게 한다(검은·남빛 반투명이 아니다 — ㅂ)
   const cl = atlas.cloud;
   for (const c of scene.clouds) {
-    // 구름 그림자는 그 그림을 맵 점 두 배로 넓게 깐다(그림 점 하나 = 맵 점 하나)
-    if (atlas.pal.rain || c.x > vx1 || c.x + cl.w < vx0 || c.y > vy1 || c.y + cl.h < vy0) continue;
-    ctx.drawImage(cl.canvas, 0, 0, cl.w, cl.h, Math.round(c.x * s) - camX, Math.round(c.y * s) - camY, cl.w * s, cl.h * s);
+    if (atlas.pal.rain || c.x > vx1 || c.x + cl.w / ART < vx0 || c.y > vy1 || c.y + cl.h / ART < vy0) continue;
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.drawImage(cl.canvas, 0, 0, cl.w, cl.h, Math.round(c.x * s) - camX, Math.round(c.y * s) - camY, cl.w * m, cl.h * m);
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   // 6. 날리는 것: 연기, 꽃잎, 나비
@@ -759,7 +760,10 @@ function drawActor(view: View, world: World, scene: Scene, a: Actor, camX: numbe
     const sink = tile === T.paddy ? (state === 'green' ? 6 : state === 'gold' ? 7 : 0) : tile === T.soil && state === 'green' ? 4 : 0;
     // 발밑 그림자(가운데가 발치에서 조금 오른쪽 아래 — 빛은 왼쪽 위에서 온다, ㅂ)
     const f = atlas.foot;
-    if (sink === 0) drawFoot(ctx, f, x - f.ax * m, y - f.ay * m, f.w * m, f.h * m);
+    if (sink === 0) {
+      const b = footBox(f);
+      drawFoot(ctx, f, x + b.x * m, y + b.y * m, b.w * m, b.h * m);
+    }
     const row = DIRS.indexOf(a.dir);
     const fast = a === world.player;
     let col: number;
@@ -803,15 +807,15 @@ function drawActor(view: View, world: World, scene: Scene, a: Actor, camX: numbe
       break;
   }
   if (a.act !== 'fly') {
+    // 짐승의 그림자도 사람과 같은 셈으로 발치의 오른쪽 아래에(몸 너비에 맞춰 줄인다)
     const f = atlas.foot;
-    const fw = Math.min(f.w, Math.round(img.w * 0.8));
-    // 짐승의 그림자도 발치에서 조금 오른쪽 아래(3.1차 시안과 같이 맵 점 하나 오른쪽)
-    drawFoot(ctx, f, x + s - Math.round((fw / 2) * m), y - 2 * s, fw * m, 4 * s);
+    const b = footBox(f, img.w);
+    drawFoot(ctx, f, x + b.x * m, y + b.y * m, b.w * m, b.h * m);
   }
   const right = a.dir === 'right';
   const src = right && img.flipped ? img.flipped : img.canvas;
   const fx = right ? (img.n - 1 - frame) * img.w : frame * img.w;
-  // 뒤집은 그림의 발치: 1배 그림을 키운 것이라 발치 점(ART 칸)이 통째로 뒤집힌다
+  // 뒤집은 그림의 발치: 1-라(1배 그림)와 같은 맵 점에 서도록 발치 점 둘(ART 칸)을 한 덩이로 뒤집는다 — 짐승의 발치는 1-라의 ART배다
   const ax = right ? img.w - ART - img.ax : img.ax;
   ctx.drawImage(src, fx, 0, img.w, img.h, x - ax * m, y - img.ay * m, img.w * m, img.h * m);
 }

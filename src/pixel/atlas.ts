@@ -1,19 +1,19 @@
 // 버퍼에 찍은 그림들을 캔버스로 옮겨 한 벌로 묶는다(브라우저에서만). 계절마다 한 벌.
 //
-// 모든 낱그림의 크기·발치·가림 마스크는 그림 점(ART — 맵 점의 반) 단위다(spec 4.7.5의 ㄱ).
-// 그림 올리기 ①에서 다시 그린 것은 사람과 땅이다. 집·나무·소품·짐승·날림·표시는 ② 전까지
-// 지금(1-라)의 1배 그림을 가까운 점 그대로 ART배로 키워 쓴다(ㄱ의 예외 — 그동안 그 그림만 점이 굵다).
+// 모든 낱그림의 크기·발치·가림 마스크는 그림 점(ART — 맵 점의 반) 단위다(spec 4.7.5의 ㄱ). 그림 올리기 ①에서 사람과 땅을,
+// ②에서 집·나무·소품·짐승·날림·표시를 그림 점으로 다시 그렸다 — 1배 그림을 키워 쓰는 것은 없다.
 //
 // 무게(ㅋ): 지은 그림은 그 맵에 놓인 갈래와 그 맵에 나오는 사람·짐승뿐이다(나머지는 처음 부를 때 짓는다).
+// 물결·날림·표시 같은 벌의 바탕도 처음 쓸 때 짓고, 미리 짓기(prepareSteps)는 그것을 작은 일감으로 나눠 짓는다(한 장을 오래 막지 않는다).
 // 땅은 화면 둘레부터 조각으로 나눠 칠하고 나머지는 쉬는 틈에 칠한다(GroundCanvas).
 
 import type { Season } from '../engine/types';
-import { shadesFor, thingDef, thingKey } from './catalog';
+import { shadesFor, thingDef, thingJob, thingKey } from './catalog';
 import * as critters from './critters';
-import { GROUND_TILE, groundJob, snapperOf, waterFrames, type Ground, type GroundJob, type GroundMap, type Shade } from './ground';
+import { GROUND_TILE, groundJob, snapperOf, waterFrame, type Ground, type GroundJob, type GroundMap, type Shade } from './ground';
 import { paletteOf, type Palette } from './palette';
 import { FOOT_SHIFT, GUISES, HEROES, PERSON_H, PERSON_W, SHEET_COLS, VILLAGERS, footShadow, personOf, personSheet, personSheetRow } from './people';
-import { ART, Px, strip, toCanvas, upscale } from './px';
+import { ART, Px, strip, toCanvas } from './px';
 import type { Snapper } from './quant';
 import type { SpriteDef } from './shapes';
 import { THINGS } from '../map/things';
@@ -48,8 +48,31 @@ export interface Img {
 /** 가림 마스크의 칸 하나(그림 점). 맵 점 넷 — 1-라의 마스크와 같은 넓이를 본다. */
 export const MASK_CELL = 4 * ART;
 
+/**
+ * 그림이 찍힌 자리를 ART점 넓힌다(위아래·옆으로). 1-라 그림은 둘레에 맵 점 하나 굵기의 먹빛 테두리가 있었고 가림 마스크도 그 몫을 쳤다.
+ * 2배 그림은 테두리가 없으므로 그만큼 넓혀 재야 집·나무 뒤로 돌아갈 때 가려지는 자리가 1-라와 같다.
+ */
+function grown(px: Px): Uint8Array {
+  const { w, h } = px;
+  let cur = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) cur[i] = px.d[i] !== 0 ? 1 : 0;
+  for (let t = 0; t < ART; t++) {
+    const out = cur.slice();
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (cur[i]) continue;
+        if ((x > 0 && cur[i - 1]) || (x < w - 1 && cur[i + 1]) || (y > 0 && cur[i - w]) || (y < h - 1 && cur[i + w])) out[i] = 1;
+      }
+    }
+    cur = out;
+  }
+  return cur;
+}
+
 function maskOf(px: Px): { mask: Uint8Array; mw: number; mh: number } {
   const C = MASK_CELL;
+  const on = grown(px);
   const mw = Math.ceil(px.w / C);
   const mh = Math.ceil(px.h / C);
   const mask = new Uint8Array(mw * mh);
@@ -57,36 +80,39 @@ function maskOf(px: Px): { mask: Uint8Array; mw: number; mh: number } {
   for (let cy = 0; cy < mh; cy++) {
     for (let cx = 0; cx < mw; cx++) {
       let n = 0;
-      for (let j = 0; j < C; j++) for (let i = 0; i < C; i++) if (px.get(cx * C + i, cy * C + j) !== 0) n++;
+      for (let j = 0; j < C; j++) {
+        const y = cy * C + j;
+        if (y >= px.h) break;
+        for (let i = 0; i < C; i++) {
+          const x = cx * C + i;
+          if (x < px.w && on[y * px.w + x]) n++;
+        }
+      }
       mask[cy * mw + cx] = n >= need ? 1 : 0;
     }
   }
   return { mask, mw, mh };
 }
 
-/**
- * 낱그림 한 벌(여러 장)을 캔버스로. k는 그림을 그림 점으로 옮기는 배수(1배 그림이면 ART, 그림 점으로 그린 것이면 1).
- * 발치(ax, ay)는 그 그림의 점이고, 옮긴 뒤의 발치는 ×k다.
- */
-function imgOf(snap: Snapper, frames: Px[], ax: number, ay: number, def: Partial<SpriteDef> | undefined, k: number, flips = false): Img {
+/** 낱그림 한 벌(여러 장, 그림 점)을 빛깔 한 벌에 맞춰 캔버스로. 발치(ax, ay)와 굴뚝 끝은 그림 점이다. */
+function imgOf(snap: Snapper, frames: Px[], ax: number, ay: number, def: Partial<SpriteDef> | undefined, flips = false): Img {
   for (const f of frames) snap.apply(f);
-  const big = frames.map((f) => upscale(f, k));
-  const w = big[0].w;
-  const h = big[0].h;
+  const w = frames[0].w;
+  const h = frames[0].h;
   return {
-    canvas: toCanvas(strip(big)),
-    flipped: flips ? toCanvas(strip(big.map((f) => f.flipX()))) : null,
+    canvas: toCanvas(strip(frames)),
+    flipped: flips ? toCanvas(strip(frames.map((f) => f.flipX()))) : null,
     w,
     h,
-    n: big.length,
-    ax: ax * k,
-    ay: ay * k,
-    seq: def?.seq ?? big.map((_, i) => i),
+    n: frames.length,
+    ax,
+    ay,
+    seq: def?.seq ?? frames.map((_, i) => i),
     rate: def?.rate ?? 1.7,
     sort: def?.sort ?? 0,
     shades: def?.shades ?? [],
-    smoke: def?.smoke ? { x: def.smoke.x * k, y: def.smoke.y * k } : undefined,
-    ...maskOf(big[0]),
+    smoke: def?.smoke ? { x: def.smoke.x, y: def.smoke.y } : undefined,
+    ...maskOf(frames[0]),
   };
 }
 
@@ -187,10 +213,37 @@ export function thingImg(atlas: Atlas, key: string): Img | undefined {
     } catch {
       return undefined;
     }
-    img = imgOf(atlas.snap, def.frames, def.ax, def.ay, def, ART);
+    img = imgOf(atlas.snap, def.frames, def.ax, def.ay, def);
     atlas.things.set(key, img);
   }
   return img;
+}
+
+/**
+ * 세운 것 하나를 쉬어 가며 짓는 일감. 부를 때마다 조금씩 짓고, 아직 남았으면 true를 돌려준다(그러면 다시 부른다).
+ * 큰 나무는 잎 뭉치 하나씩, 다른 것은 한 번에 짓는다. 다 지은 것은 thingImg와 같다.
+ */
+function thingStep(atlas: Atlas, key: string): () => boolean {
+  let job: ReturnType<typeof thingJob> | null = null;
+  let def: SpriteDef | null = null;
+  return () => {
+    if (atlas.things.has(key)) return false;
+    try {
+      if (!def) {
+        const [kind, v] = kindVariant(key);
+        job ??= thingJob(atlas.pal, kind, v);
+        const r = job.next();
+        if (!r.done) return true;
+        // 벌에 맞춰 캔버스로 옮기는 것은 다음 번에(큰 나무는 그것만으로도 무겁다)
+        def = r.value;
+        return true;
+      }
+      atlas.things.set(key, imgOf(atlas.snap, def.frames, def.ax, def.ay, def));
+    } catch {
+      // 그림이 없는 갈래(처음 부를 때 thingImg가 undefined를 돌려준다)
+    }
+    return false;
+  };
 }
 
 /** 사람 시트 하나(처음 부를 때 짓는다) */
@@ -212,7 +265,7 @@ export function critterImg(atlas: Atlas, name: string): Img | undefined {
     const make = CRITTERS[name];
     if (!make) return undefined;
     const c = make();
-    img = imgOf(atlas.snap, c.frames, c.ax, c.ay, undefined, c.art ? 1 : ART, true);
+    img = imgOf(atlas.snap, c.frames, c.ax, c.ay, undefined, true);
     atlas.critters.set(name, img);
   }
   return img;
@@ -225,11 +278,19 @@ export function ensureAll(atlas: Atlas, needs: Needs): void {
   for (const n of needs.critters) critterImg(atlas, n);
 }
 
+/** 미리 짓기의 일감 하나: 부를 때마다 조금씩 하고, 아직 남았으면 true(다시 부른다) */
+export type Step = () => boolean | void;
+
+/** 일감들을 모두 끝까지 한다(시험과 그림 견본) */
+export function runSteps(steps: readonly Step[]): void {
+  for (const step of steps) while (step() === true);
+}
+
 /**
- * 지을 것을 한 가지씩 짓는 일감들(쉬는 틈에 하나씩 부른다). 사람 시트는 방향 한 줄(열두 장)씩 넷으로 나눠 짓는다 —
- * 일감 하나가 낮은 사양에서도 한 장의 시간 안에 들게.
+ * 지을 것을 한 가지씩 짓는 일감들(쉬는 틈에 하나씩 부른다). 벌의 바탕(물결은 한 장씩), 세운 것(큰 나무는 잎 뭉치 하나씩),
+ * 사람 시트(방향 한 줄 — 열두 장씩 넷으로), 짐승 — 일감 하나가 낮은 사양에서도 한 장의 시간 안에 들게.
  */
-export function prepareSteps(atlas: Atlas, needs: Needs): (() => void)[] {
+export function prepareSteps(atlas: Atlas, needs: Needs): Step[] {
   const people: (() => void)[] = [];
   for (const name of needs.people) {
     const p = personOf(name);
@@ -243,70 +304,154 @@ export function prepareSteps(atlas: Atlas, needs: Needs): (() => void)[] {
       });
     }
   }
-  return [...needs.things.map((k) => () => void thingImg(atlas, k)), ...people, ...needs.critters.map((n) => () => void critterImg(atlas, n))];
+  return [...baseSteps(atlas), ...needs.things.map((k) => thingStep(atlas, k)), ...people, ...needs.critters.map((n) => () => void critterImg(atlas, n))];
 }
 
-const single = (snap: Snapper, px: Px, ax = Math.floor(px.w / 2), ay = px.h - 1): Img => imgOf(snap, [px], ax, ay, undefined, ART);
+const single = (snap: Snapper, px: Px, ax = Math.floor(px.w / 2), ay = px.h - 1): Img => imgOf(snap, [px], ax, ay, undefined);
+
+/** 가운데 발치(그림 점): 1-라 그림의 가운데 점(floor(1배 너비 ÷ 2))의 ART배 — 화면의 자리가 1-라와 같게 */
+const mid = (n: number): number => Math.floor(n / ART / 2) * ART;
+
+/** 여러 장의 크기를 가장 큰 장에 맞춘다(가운데에 놓는다) */
+function padded(frames: Px[]): Px[] {
+  const w = Math.max(...frames.map((f) => f.w));
+  const h = Math.max(...frames.map((f) => f.h));
+  return frames.map((f) => {
+    if (f.w === w && f.h === h) return f;
+    const out = new Px(w, h);
+    out.blit(f, Math.floor((w - f.w) / 2), Math.floor((h - f.h) / 2));
+    return out;
+  });
+}
+
+/** 벌의 바탕(물결을 뺀 것): 처음 쓸 때 짓는다 */
+type BaseKey = Exclude<keyof Atlas, 'season' | 'weather' | 'pal' | 'things' | 'people' | 'critters' | 'snap' | 'water' | 'waterN'>;
+
+/** 물결의 장 수 */
+const WATER_FRAMES = 24;
+
+function baseMakers(pal: Palette, snap: Snapper): { [K in BaseKey]: () => Atlas[K] } {
+  return {
+    drift: () => critters.driftSprites(pal).map((px) => single(snap, px, 0, 0)),
+    smoke: () => critters.smokePuffs().map((px) => single(snap, px, mid(px.w), mid(px.h))),
+    glint: () => {
+      const frames = padded(critters.glintFrames(pal));
+      return imgOf(snap, frames, mid(frames[0].w), mid(frames[0].h), undefined);
+    },
+    gust: () => imgOf(snap, critters.gustFrames(pal), 0, 0, undefined),
+    ripple: () => imgOf(snap, critters.rippleFrames(pal), 0, 0, undefined),
+    bird: () => imgOf(snap, critters.birdFrames(), 3 * ART, 2 * ART, undefined),
+    cloud: () => cloudImg(critters.cloudShadow(pal)),
+    flag: () => single(snap, critters.flagMark(), 3 * ART, 15 * ART),
+    bubble: () => single(snap, critters.bubbleMark(), 5 * ART, 10 * ART),
+    lock: () => single(snap, critters.barMark(), 7 * ART, 12 * ART),
+    rings: () => imgOf(snap, critters.targetRings(), 9 * ART, 5 * ART, undefined),
+    arrows: () => critters.arrowMarks().map((px) => single(snap, px, mid(px.w), mid(px.h))),
+    // 발밑 그림자는 곱하기로 얹으므로 한 벌에 맞추지 않는다
+    foot: () => footImg(pal),
+    butterflies: () => [critters.butterfly('white'), critters.butterfly('yellow')].map((c) => imgOf(snap, c.frames, c.ax, c.ay, undefined)),
+    dragonflies: () => [critters.dragonfly('blue'), critters.dragonfly('amber')].map((c) => imgOf(snap, c.frames, c.ax, c.ay, undefined)),
+    cropGust: () => imgOf(snap, critters.cropGustFrames(pal), 0, 0, undefined),
+    cropFront: () => single(snap, critters.cropFront(pal), 7 * ART, 3 * ART),
+    rain: () => critters.rainSprites(pal).streaks.map((px) => single(snap, px, 0, px.h - 1)),
+    splash: () => imgOf(snap, critters.rainSprites(pal).splash, 3 * ART, 2 * ART, undefined),
+  };
+}
+
+/** 벌의 바탕을 짓는 상태(물결은 한 장씩 캔버스에 칠한다) */
+interface BaseState {
+  made: Set<string>;
+  waterCanvas: HTMLCanvasElement | null;
+  waterDone: number;
+}
+const BASE = new WeakMap<Atlas, BaseState>();
+
+function waterStep(atlas: Atlas, st: BaseState): void {
+  if (st.waterDone >= WATER_FRAMES) return;
+  if (!st.waterCanvas) {
+    st.waterCanvas = document.createElement('canvas');
+    st.waterCanvas.width = WATER_TILE * WATER_FRAMES;
+    st.waterCanvas.height = WATER_TILE;
+  }
+  const f = atlas.snap.apply(waterFrame(atlas.pal, st.waterDone, WATER_FRAMES));
+  const ctx = st.waterCanvas.getContext('2d');
+  if (ctx) ctx.putImageData(new ImageData(new Uint8ClampedArray(f.d.buffer as ArrayBuffer), f.w, f.h), st.waterDone * WATER_TILE, 0);
+  st.waterDone++;
+}
+
+/** 벌의 바탕(물결 스물넉 장, 날림, 표시 …)을 일감으로 나눈다 — 다 지은 것은 빠진다 */
+export function baseSteps(atlas: Atlas): (() => void)[] {
+  const st = BASE.get(atlas);
+  if (!st) return [];
+  const out: (() => void)[] = [];
+  for (let k = st.waterDone; k < WATER_FRAMES; k++) out.push(() => waterStep(atlas, st));
+  for (const key of Object.keys(baseMakers(atlas.pal, atlas.snap)) as BaseKey[]) if (!st.made.has(key)) out.push(() => void atlas[key]);
+  return out;
+}
+
+/** 벌의 바탕을 지금 다 짓는다 */
+export function ensureBase(atlas: Atlas): void {
+  for (const step of baseSteps(atlas)) step();
+}
 
 /**
  * 계절(과 날씨)의 그림 벌. needs를 주면 그것만 미리 짓고(나머지는 처음 부를 때), 없으면 모든 갈래를 짓는다(그림 견본).
+ * 벌의 바탕(물결·날림·표시)은 처음 쓸 때 짓는다 — 미리 지으려면 prepareSteps나 ensureBase.
  */
 export function buildAtlas(season: Season, weather: Weather = 'clear', needs?: Needs): Atlas {
   const pal = paletteOf(season, weather);
   const snap = snapperOf(pal);
-  const water = waterFrames(pal).map((f) => snap.apply(f));
-  const arrows = critters.arrowMarks().map((px) => single(snap, px, Math.floor(px.w / 2), Math.floor(px.h / 2)));
-  const rain = critters.rainSprites(pal);
-  const atlas: Atlas = {
-    season,
-    weather: pal.rain ? 'rain' : 'clear',
-    pal,
-    things: new Map(),
-    people: new Map(),
-    critters: new Map(),
-    drift: critters.driftSprites(pal).map((px) => single(snap, px)),
-    smoke: critters.smokePuffs().map((px) => single(snap, px, Math.floor(px.w / 2), Math.floor(px.h / 2))),
-    glint: imgOf(
-      snap,
-      critters.glintFrames(pal).map((f) => {
-        // 세 장의 크기를 맞춘다
-        const out = new Px(5, 5);
-        out.blit(f, Math.floor((5 - f.w) / 2), Math.floor((5 - f.h) / 2));
-        return out;
-      }),
-      2,
-      2,
-      undefined,
-      ART,
-    ),
-    gust: imgOf(snap, critters.gustFrames(pal), 0, 0, undefined, ART),
-    ripple: imgOf(snap, critters.rippleFrames(pal), 0, 0, undefined, ART),
-    bird: imgOf(snap, critters.birdFrames(), 3, 2, undefined, ART),
-    cloud: single(snap, critters.cloudShadow(), 0, 0),
-    flag: single(snap, critters.flagMark(), 3, 15),
-    bubble: single(snap, critters.bubbleMark(), 5, 10),
-    lock: single(snap, critters.barMark(), 7, 12),
-    rings: imgOf(snap, critters.targetRings(), 9, 5, undefined, ART),
-    arrows,
-    // 발밑 그림자는 그림 점으로 그렸다(곱하기로 얹으므로 한 벌에 맞추지 않는다)
-    foot: footImg(pal),
-    butterflies: [critters.butterfly('white'), critters.butterfly('yellow')].map((c) => imgOf(snap, c.frames, c.ax, c.ay, undefined, ART)),
-    dragonflies: [critters.dragonfly('blue'), critters.dragonfly('amber')].map((c) => imgOf(snap, c.frames, c.ax, c.ay, undefined, ART)),
-    cropGust: imgOf(snap, critters.cropGustFrames(pal), 0, 0, undefined, ART),
-    cropFront: single(snap, critters.cropFront(pal), 7, 3),
-    rain: rain.streaks.map((px) => single(snap, px, 0, px.h - 1)),
-    splash: imgOf(snap, rain.splash, 3, 2, undefined, ART),
-    water: toCanvas(strip(water)),
-    waterN: water.length,
-    snap,
-  };
+  const st: BaseState = { made: new Set(), waterCanvas: null, waterDone: 0 };
+  const atlas = { season, weather: pal.rain ? 'rain' : 'clear', pal, things: new Map(), people: new Map(), critters: new Map(), snap, waterN: WATER_FRAMES } as Partial<Atlas> as Atlas;
+  BASE.set(atlas, st);
+  Object.defineProperty(atlas, 'water', {
+    enumerable: true,
+    get: (): HTMLCanvasElement => {
+      while (st.waterDone < WATER_FRAMES) waterStep(atlas, st);
+      return st.waterCanvas!;
+    },
+  });
+  for (const [key, make] of Object.entries(baseMakers(pal, snap)) as [BaseKey, () => unknown][]) {
+    let value: unknown;
+    Object.defineProperty(atlas, key, {
+      enumerable: true,
+      get: () => {
+        if (!st.made.has(key)) {
+          value = make();
+          st.made.add(key);
+        }
+        return value;
+      },
+    });
+  }
   if (needs) ensureAll(atlas, needs);
   else {
+    ensureBase(atlas);
     for (const k of allThingKeys()) thingImg(atlas, k);
     for (const n of allPeople()) personCanvas(atlas, n);
     for (const n of Object.keys(CRITTERS)) critterImg(atlas, n);
   }
   return atlas;
+}
+
+/** 구름 그림자(그림 점): 곱하기로 얹으므로 한 벌에 맞추지 않는다 */
+function cloudImg(px: Px): Img {
+  return { canvas: toCanvas(px), flipped: null, w: px.w, h: px.h, n: 1, ax: 0, ay: 0, seq: [0], rate: 1, sort: 0, shades: [], mask: new Uint8Array(0), mw: 0, mh: 0 };
+}
+
+/** 짐승의 발밑 그림자의 가운데가 발치에서 옮겨 앉은 만큼(그림 점, 아래가 +). 3.1차 시안은 맵 점 하나 오른쪽(그림 점 둘)이었다 — 조금 아래로 더 내려 몸에 덜 가리게 */
+export const CRITTER_FOOT_SHIFT = { x: 2, y: 1 };
+
+/**
+ * 발밑 그림자를 놓을 네모(그림 점 — 발치에서의 왼쪽 위와 크기). 사람은 그림자 그대로(가운데가 FOOT_SHIFT),
+ * 짐승은 몸 너비의 4/5(그림자 너비를 넘지 않게)·높이 4/5로 줄여 가운데가 CRITTER_FOOT_SHIFT에 온다. 빛은 왼쪽 위에서 오므로
+ * 그림자는 언제나 발치의 오른쪽 아래로 진다(ㅂ). 그리기(draw.ts)와 시험이 같은 셈을 쓴다.
+ */
+export function footBox(foot: { w: number; h: number }, critterW?: number): { x: number; y: number; w: number; h: number } {
+  if (critterW === undefined) return { x: FOOT_SHIFT.x - (foot.w >> 1), y: FOOT_SHIFT.y - (foot.h >> 1), w: foot.w, h: foot.h };
+  const w = Math.min(foot.w, Math.round(critterW * 0.8));
+  const h = Math.round(foot.h * 0.8);
+  return { x: CRITTER_FOOT_SHIFT.x - (w >> 1), y: CRITTER_FOOT_SHIFT.y - (h >> 1), w, h };
 }
 
 function footImg(pal: Palette): Img {
@@ -468,14 +613,6 @@ export function workGround(g: GroundCanvas, budgetMs: number, pick: () => number
     }
   } while (performance.now() - t0 < budgetMs);
   return finished;
-}
-
-/** 아직 칠하지 않은 조각 가운데 (맵 점) 자리에서 가장 가까운 것 하나를 다 칠한다. 칠할 것이 없으면 false. */
-export function paintNearest(g: GroundCanvas, x: number, y: number): boolean {
-  const i = nearestChunk(g, x, y);
-  if (i < 0) return false;
-  paintChunk(g, i % g.cw, Math.floor(i / g.cw));
-  return true;
 }
 
 /** 땅을 다 칠한다(그림 견본, 시험용) */
