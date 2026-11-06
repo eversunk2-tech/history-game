@@ -1,13 +1,33 @@
 // 그림 자리의 시험: 이름을 찾는 차례(그 이름 → 같은 자리의 다른 계절 → 없음, 표정 → plain → 없음, 확장자 차례)와
 // 실제 그림 폴더의 이름이 약속한 꼴인지. 화면 없이(브라우저 없이) 본다.
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { getPack, packs } from '../src/content';
-import { EXT_ORDER, backgroundNameIn, buildIndex, figureNameIn, preloadOrder, type Pose } from '../src/art/pictureNames';
-import { PRELOAD_AT_ONCE, backgroundName, figureName, hasPicture, pictureNames } from '../src/art/pictures';
+import {
+  EXT_ORDER,
+  backgroundNameIn,
+  buildIndex,
+  figureNameIn,
+  picturePlan,
+  preloadOrder,
+  type PlanHappening,
+  type PlanMission,
+  type Pose,
+  type SeasonPictures,
+} from '../src/art/pictureNames';
+import {
+  PRELOAD_AT_ONCE,
+  RETRY_FIRST_MS,
+  backgroundName,
+  createPictureLoader,
+  figureName,
+  hasPicture,
+  pictureNames,
+  type PictureNet,
+} from '../src/art/pictures';
 import { BACKDROP_PLACES, paintBackdrop } from '../src/art/backdrop';
 import { standInByAge, standInSprite } from '../src/art/standIn';
-import { SEASONS, type Deed, type GameState, type Line, type Person, type SituationPack } from '../src/engine/types';
+import { SEASONS, type Deed, type GameState, type Line, type Person, type Season, type SituationPack } from '../src/engine/types';
 import { personOf } from '../src/pixel/people';
 import type { Px } from '../src/pixel/px';
 import { choiceViews, doHappening, happeningOf, lastDeed, openHappenings, openingLines } from '../src/engine/game';
@@ -435,6 +455,7 @@ describe('대화 장면 — 「곡식이 떨어진 옆집」의 동무는 내내
 });
 
 // Review 1-라 36번: 이야기를 열 때 서른 장 남짓을 이름순으로 한꺼번에 받아, 느린 망에서는 첫 대화의 사람이 한참 도트 대역이었다.
+// 11.8 ⑦: 계절 안에서 배경 다섯 장을 다 받은 뒤에 사람을 받아, 첫 대화를 일찍 열면 사람이 5~7초 대역이었다 → 일 차례대로(일마다 배경 → 사람).
 describe('그림 자리 — 미리 받는 차례', () => {
   const names = [
     'bg/s1/entrance-spring',
@@ -452,28 +473,45 @@ describe('그림 자리 — 미리 받는 차례', () => {
     'bg/s2/entrance-spring',
     'char/s2/elder-plain',
   ];
-  const plan = [
-    { season: 'spring' as const, places: ['entrance', 'paddy'], people: ['elder', 'monk'] },
-    { season: 'summer' as const, places: ['stream', 'paddy'], people: ['girl'] },
-    { season: 'autumn' as const, places: ['yard'], people: [] },
-    { season: 'winter' as const, places: ['room'], people: ['grandma', 'girl'] },
+  const plan: SeasonPictures[] = [
+    {
+      season: 'spring',
+      jobs: [
+        { place: 'entrance', people: ['elder', 'monk'] },
+        { place: 'paddy', people: ['monk'] },
+      ],
+    },
+    {
+      season: 'summer',
+      jobs: [
+        { place: 'stream', people: ['girl'] },
+        { place: 'paddy', people: [] },
+      ],
+    },
+    { season: 'autumn', jobs: [{ place: 'yard', people: [] }] },
+    { season: 'winter', jobs: [{ place: 'room', people: ['grandma', 'girl'] }] },
   ];
 
-  it('봄에 열면: 봄의 배경 → 봄에 서는 사람 → 여름 … → 쓰이지 않는 것은 맨 끝', () => {
+  it('봄에 열면: 첫 일의 배경 → 그 일의 사람(plain → glad → worried) → 다음 일 … → 여름 … → 쓰이지 않는 것은 맨 끝', () => {
     expect(preloadOrder(names, 's1', plan, 'spring')).toEqual([
       'bg/s1/entrance-spring',
-      'bg/s1/paddy-spring',
       'char/s1/elder-plain',
       'char/s1/elder-glad',
       'char/s1/monk-plain',
+      'bg/s1/paddy-spring',
       'bg/s1/stream-summer',
-      'bg/s1/paddy-summer',
       'char/s1/girl-plain',
       'char/s1/girl-worried',
+      'bg/s1/paddy-summer',
       'bg/s1/room-winter',
       'char/s1/grandma-plain',
       'bg/s1/unused-autumn',
     ]);
+  });
+
+  it('첫 일의 사람이 그 계절의 둘째 배경보다 먼저다', () => {
+    const order = preloadOrder(names, 's1', plan, 'spring');
+    expect(order.indexOf('char/s1/monk-plain')).toBeLessThan(order.indexOf('bg/s1/paddy-spring'));
   });
 
   it('겨울에 이어 하면 겨울의 것부터, 그다음 봄으로 돌아간다', () => {
@@ -487,31 +525,373 @@ describe('그림 자리 — 미리 받는 차례', () => {
     expect(order[0]).toBe('bg/s1/yard-spring');
   });
 
-  it('다른 이야기의 그림은 넣지 않고, 같은 이름은 한 번만, 없는 이름은 만들지 않는다', () => {
+  it('다른 이야기의 그림은 넣지 않고, 같은 이름은 한 번만(앞의 일에서 넣은 사람은 건너뛴다), 없는 이름은 만들지 않는다', () => {
     const order = preloadOrder(names, 's1', plan, 'spring');
     expect(order.every((name) => name.includes('/s1/'))).toBe(true);
     expect(new Set(order).size).toBe(order.length);
     expect(order.every((name) => names.includes(name))).toBe(true);
     expect(order.length).toBe(names.filter((name) => name.includes('/s1/')).length);
+    expect(order.filter((name) => name === 'char/s1/monk-plain')).toHaveLength(1);
   });
 
   it('한 번에 받는 수는 둘이다', () => {
     expect(PRELOAD_AT_ONCE).toBe(2);
   });
+});
 
-  it('실제 그림 폴더: ①의 그림이 모두 차례에 들고, 봄에 열면 봄 첫 일의 배경이 맨 앞이다', () => {
-    const all = pictureNames();
-    const p = packs.find((pack) => pack.situation.id === 's1395');
-    expect(p).toBeDefined();
-    const plan1395 = SEASONS.map((season) => ({
-      season,
-      places: [...new Set(p!.happenings.filter((h) => h.season === season).map((h) => h.stage.place))],
-      people: [...new Set(p!.happenings.filter((h) => h.season === season).flatMap((h) => (h.stage.cast ?? []).map((c) => p!.situation.people[c.who]?.pic ?? c.who)))],
-    }));
-    const order = preloadOrder(all, 's1395', plan1395, 'spring');
+describe('그림 자리 — 일 차례(picturePlan)', () => {
+  const hap = (id: string, season: Season, place: string, cast: string[] = [], roles?: string[]): PlanHappening => ({
+    id,
+    season,
+    roles,
+    stage: { place, cast: cast.map((who) => ({ who })) },
+  });
+  // 콘텐츠에 적힌 차례는 덤이 먼저여도, 꼭 할 일이 먼저 온다
+  const happenings = [
+    hap('well', 'spring', 'well', ['neighbor']),
+    hap('sow', 'spring', 'paddy', ['father', 'mother']),
+    hap('return', 'spring', 'entrance', ['elder', 'monk']),
+    hap('return-ours', 'spring', 'yard', ['mother', 'mother']),
+    hap('sow-help', 'spring', 'yard', ['neighbor']),
+    hap('noble-only', 'spring', 'manor', ['official'], ['noble']),
+    hap('dano', 'summer', 'stream', ['girl']),
+  ];
+  const missions: PlanMission[] = [
+    { id: 'm-return', season: 'spring', must: true, parts: ['return', 'return-ours'] },
+    { id: 'm-sow', season: 'spring', must: true, parts: ['sow'], rescue: 'sow-help' },
+    { id: 'm-tales', season: 'year', must: false, parts: ['well'] },
+  ];
+  const picOf = (who: string): string => (who === 'elder' ? 'neighbor-elder' : who);
+  const springOf = (plan: SeasonPictures[]): readonly { place: string; people: readonly string[] }[] => plan.find((s) => s.season === 'spring')!.jobs;
+
+  it('꼭 할 일(미션의 차례 → 그 안의 parts 차례) → 덤(콘텐츠의 차례) → 도움의 일. 일마다 배경 자리와 사람(같은 사람은 한 번)', () => {
+    expect(springOf(picturePlan(happenings, missions, picOf, 'farmer'))).toEqual([
+      { place: 'entrance', people: ['neighbor-elder', 'monk'] },
+      { place: 'yard', people: ['mother'] },
+      { place: 'paddy', people: ['father', 'mother'] },
+      { place: 'well', people: ['neighbor'] },
+      { place: 'yard', people: ['neighbor'] },
+    ]);
+  });
+
+  it('계절마다 하나씩 봄부터 겨울까지, 그 계절의 일만', () => {
+    const plan = picturePlan(happenings, missions, picOf, 'farmer');
+    expect(plan.map((s) => s.season)).toEqual([...SEASONS]);
+    expect(plan.find((s) => s.season === 'summer')!.jobs).toEqual([{ place: 'stream', people: ['girl'] }]);
+    expect(plan.find((s) => s.season === 'winter')!.jobs).toEqual([]);
+  });
+
+  it('역할을 주면 그 역할의 일만(역할이 적히지 않은 일은 모두의 것), 주지 않으면 모두', () => {
+    expect(springOf(picturePlan(happenings, missions, picOf, 'farmer')).some((j) => j.place === 'manor')).toBe(false);
+    expect(springOf(picturePlan(happenings, missions, picOf, 'noble')).some((j) => j.place === 'manor')).toBe(true);
+    expect(springOf(picturePlan(happenings, missions, picOf)).some((j) => j.place === 'manor')).toBe(true);
+  });
+
+  it('다른 역할의 꼭 할 일은 앞으로 오지 않는다', () => {
+    const only = [{ id: 'm-noble', season: 'spring' as const, must: true, parts: ['well'], roles: ['noble'] }, ...missions];
+    expect(springOf(picturePlan(happenings, only, picOf, 'farmer'))[0]).toEqual({ place: 'entrance', people: ['neighbor-elder', 'monk'] });
+  });
+
+  it('이어 하기: 이미 한 일과 푼 미션의 일은 그 계절의 맨 뒤로(차례는 그대로)', () => {
+    const jobs = springOf(picturePlan(happenings, missions, picOf, 'farmer', { done: ['return'], solved: ['m-return'] }));
+    expect(jobs).toEqual([
+      { place: 'paddy', people: ['father', 'mother'] },
+      { place: 'well', people: ['neighbor'] },
+      { place: 'yard', people: ['neighbor'] },
+      { place: 'entrance', people: ['neighbor-elder', 'monk'] },
+      { place: 'yard', people: ['mother'] },
+    ]);
+  });
+});
+
+describe('그림 자리 — 실제 그림 폴더의 미리 받는 차례(①)', () => {
+  const p = getPack('s1395')!;
+  const role = 'farmer';
+  const plan = picturePlan(p.happenings, p.missions, (who) => p.situation.people[who]?.pic ?? who, role);
+  const all = pictureNames();
+  const mustOf = (season: Season) => p.missions.find((m) => m.must && m.season === season && (!m.roles || m.roles.includes(role)))!;
+  const plainsOf = (h: { stage: { cast?: { who: string }[] } }): string[] => [
+    ...new Set(
+      (h.stage.cast ?? []).map((c) => figureName('s1395', p.situation.people[c.who]?.pic ?? c.who, 'plain')).filter((name): name is string => name !== null),
+    ),
+  ];
+
+  it('①의 그림이 모두 한 번씩 차례에 든다', () => {
+    const order = preloadOrder(all, 's1395', plan, 'spring');
     expect(order.length).toBe(all.filter((name) => name.includes('/s1395/')).length);
-    const first = p!.happenings.find((h) => h.season === 'spring')!;
-    const firstBg = backgroundName('s1395', first.stage.place, 'spring');
-    if (firstBg) expect(order[0]).toBe(firstBg);
+    expect(new Set(order).size).toBe(order.length);
+  });
+
+  it('봄에 열면 첫 꼭 할 일의 배경이 맨 앞, 바로 다음이 그 일에 서는 사람이다(배경 다섯을 다 받기 전에 첫 사람)', () => {
+    const order = preloadOrder(all, 's1395', plan, 'spring');
+    const first = p.happenings.find((h) => h.id === mustOf('spring').parts[0])!;
+    expect(order[0]).toBe(backgroundName('s1395', first.stage.place, 'spring'));
+    const people = plainsOf(first);
+    expect(people.length).toBeGreaterThan(0);
+    expect(order.slice(1, 1 + people.length)).toEqual(people);
+    const fifthBg = order.filter((name) => name.startsWith('bg/'))[4];
+    expect(order.findIndex((name) => name.startsWith('char/'))).toBeLessThan(order.indexOf(fifthBg));
+  });
+
+  it('계절 차례는 그대로: 봄에 열면 봄의 일이 쓰는 그림을 다 넣은 뒤에 여름의 것, 겨울에 열면 겨울의 첫 꼭 할 일부터', () => {
+    const order = preloadOrder(all, 's1395', plan, 'spring');
+    const firstSummer = p.happenings.find((h) => h.id === mustOf('summer').parts[0])!;
+    const summerBg = backgroundName('s1395', firstSummer.stage.place, 'summer')!;
+    for (const job of plan.find((s) => s.season === 'spring')!.jobs) {
+      const bg = backgroundName('s1395', job.place, 'spring');
+      if (bg && bg !== summerBg) expect(order.indexOf(bg)).toBeLessThan(order.indexOf(summerBg));
+      for (const pic of job.people) {
+        const plain = figureName('s1395', pic, 'plain');
+        if (plain) expect(order.indexOf(plain)).toBeLessThan(order.indexOf(summerBg));
+      }
+    }
+    const winter = preloadOrder(all, 's1395', plan, 'winter');
+    const firstWinter = p.happenings.find((h) => h.id === mustOf('winter').parts[0])!;
+    expect(winter[0]).toBe(backgroundName('s1395', firstWinter.stage.place, 'winter'));
+  });
+});
+
+// Review 1-라 11.8 ⑥: 끊기는 순간 남은 줄을 다 두드려 콘솔에 받기 실패 72건(한 장에 fetch + Image 둘씩), 다시 이으면 놓친 36장을 한꺼번에,
+// 다시 이은 뒤에도 띠가 "인터넷이 끊겼어요"로 83초. 가짜 fetch·가짜 window(사건)로 받기의 셈만 본다.
+describe('그림 받기 — 인터넷이 끊겼다가 다시 이어질 때', () => {
+  interface Call {
+    url: string;
+    open: boolean;
+    ok(): void;
+    notFound(): void;
+    fail(): void;
+  }
+  function fakeNet(local = false) {
+    const calls: Call[] = [];
+    const images: string[] = [];
+    const timers: { run: () => void; ms: number; live: boolean }[] = [];
+    const events = new EventTarget();
+    let offline = false;
+    let inFlight = 0;
+    let most = 0;
+    const net: PictureNet = {
+      fetch: (url) =>
+        new Promise((resolve, reject) => {
+          inFlight += 1;
+          most = Math.max(most, inFlight);
+          const call: Call = {
+            url,
+            open: true,
+            ok: () => end(() => resolve({ ok: true, blob: async () => new Blob([url]) })),
+            notFound: () => end(() => resolve({ ok: false, blob: async () => new Blob([]) })),
+            fail: () => end(() => reject(new TypeError('Failed to fetch'))),
+          };
+          const end = (then: () => void): void => {
+            if (!call.open) throw new Error(`두 번 끝냄: ${url}`);
+            call.open = false;
+            inFlight -= 1;
+            then();
+          };
+          calls.push(call);
+        }),
+      objectUrl: () => `blob:${calls.length}`,
+      image: async (url) => {
+        images.push(url);
+        return false;
+      },
+      local,
+      offline: () => offline,
+      later: (run, ms) => {
+        const timer = { run, ms, live: true };
+        timers.push(timer);
+        return () => {
+          timer.live = false;
+        };
+      },
+      events,
+    };
+    const say = (type: 'online' | 'offline'): void => {
+      offline = type === 'offline';
+      events.dispatchEvent(new Event(type));
+    };
+    return { net, calls, images, timers, say, setOffline: (v: boolean) => (offline = v), most: () => most, open: () => calls.filter((c) => c.open) };
+  }
+  const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+  const urls = (calls: readonly Call[]): string[] => calls.map((c) => c.url);
+  const names = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+  const urlOf = (name: string): string => `/${name}.jpg`;
+
+  it('끊기면 남은 줄을 두드리지 않고 쉰다 → 다시 이어지면 놓친 것부터 둘씩 → 띠: 끊겼어요 → 다시 받는 중 → 사라짐', async () => {
+    const f = fakeNet();
+    const loader = createPictureLoader(urlOf, f.net);
+    loader.preload(names);
+    expect(urls(f.calls)).toEqual(['/a.jpg', '/b.jpg']); // 둘씩
+    f.calls[0].ok();
+    await flush();
+    expect(urls(f.calls)).toEqual(['/a.jpg', '/b.jpg', '/c.jpg']);
+    expect(loader.notice.value).toBe(null);
+
+    // 끊긴다: 받던 둘이 서버에 닿지 못한다
+    f.calls[1].fail();
+    f.calls[2].fail();
+    await flush();
+    expect(f.calls).toHaveLength(3); // 남은 줄(d·e·f·g)을 두드리지 않는다 — 실패는 받던 두 장뿐
+    expect(f.images).toEqual([]); // Image로 한 번 더 받지 않는다(한 장에 실패 하나)
+    expect(loader.status().paused).toBe(true);
+    expect(loader.notice.value).toBe('lost');
+    expect(loader.queued()).toEqual(['d', 'e', 'f', 'g']);
+
+    // 브라우저도 끊긴 것을 안다: 화면이 새 그림을 찾아도 받으러 가지 않고(실패를 찍지 않고) 놓친 것으로 적어 둔다
+    f.say('offline');
+    expect(loader.src('e')).toBe(null);
+    await flush();
+    expect(loader.src('e')).toBe(null);
+    await flush();
+    expect(f.calls).toHaveLength(3);
+    expect(loader.status().missed).toEqual(['b', 'c', 'e']);
+
+    // 다시 이어진다: 띠는 "다시 받는 중", 놓친 것을 줄 맨 앞에(차례대로) 넣어 둘씩
+    f.say('online');
+    expect(loader.notice.value).toBe('again');
+    expect(urls(f.open())).toEqual(['/b.jpg', '/c.jpg']);
+    expect(loader.queued()).toEqual(['e', 'd', 'f', 'g']);
+    while (f.open().length > 0) {
+      expect(f.open().length).toBeLessThanOrEqual(PRELOAD_AT_ONCE);
+      f.open()[0].ok();
+      await flush();
+      if (loader.status().missed.length > 0) expect(loader.notice.value).toBe('again');
+    }
+    // 놓친 것을 다 받으면 띠가 사라지고, 남은 줄도 끝까지 받는다
+    expect(loader.notice.value).toBe(null);
+    expect(new Set(urls(f.calls))).toEqual(new Set(names.map(urlOf)));
+    expect(f.most()).toBeLessThanOrEqual(PRELOAD_AT_ONCE);
+    for (const name of names) expect(loader.src(name)).toMatch(/^blob:/);
+  });
+
+  it('브라우저가 끊긴 것을 알면 줄을 시작하지도 않는다(받기 실패 0)', async () => {
+    const f = fakeNet();
+    f.setOffline(true);
+    const loader = createPictureLoader(urlOf, f.net);
+    loader.preload(names);
+    await flush();
+    expect(f.calls).toHaveLength(0);
+    expect(loader.status().paused).toBe(true);
+    expect(f.timers).toHaveLength(0); // 'online' 사건을 기다린다
+    f.say('online');
+    expect(urls(f.calls)).toEqual(['/a.jpg', '/b.jpg']);
+    expect(loader.notice.value).toBe(null); // 놓친 것이 없으면 띠에 알릴 것도 없다
+  });
+
+  it("브라우저가 끊김을 모를 때('online'이 오지 않음): 쉬다가 잠시 뒤 한 장만 받아 보고, 받으면 둘씩으로 돌아간다", async () => {
+    const f = fakeNet();
+    const loader = createPictureLoader(urlOf, f.net);
+    loader.preload(names);
+    f.calls[0].fail();
+    f.calls[1].fail();
+    await flush();
+    expect(f.calls).toHaveLength(2);
+    expect(f.timers.filter((t) => t.live)).toHaveLength(1);
+    expect(f.timers[0].ms).toBe(RETRY_FIRST_MS);
+
+    // 한 장만 받아 본다 — 또 못 받으면 더 오래 쉰다
+    f.timers[0].run();
+    expect(urls(f.open())).toEqual(['/a.jpg']);
+    expect(loader.notice.value).toBe('lost'); // 받아 보는 동안은 아직 "다시 이어졌어요"가 아니다
+    f.open()[0].fail();
+    await flush();
+    expect(f.calls).toHaveLength(3);
+    expect(f.timers[1].ms).toBe(RETRY_FIRST_MS * 2);
+
+    f.timers[1].run();
+    expect(urls(f.open())).toEqual(['/a.jpg']);
+    f.open()[0].ok();
+    await flush();
+    expect(loader.status().probing).toBe(false);
+    expect(urls(f.open())).toEqual(['/b.jpg', '/c.jpg']); // 둘씩으로
+    expect(loader.notice.value).toBe('again');
+    f.open()[0].ok();
+    await flush();
+    expect(loader.notice.value).toBe(null);
+  });
+
+  it('쉬기 전에 떠난 받기가 늦게 받아져도 줄을 다시 열지 않는다. 쉬는 동안 화면이 새로 받은 그림이 오면 다시 연다', async () => {
+    const f = fakeNet();
+    const loader = createPictureLoader(urlOf, f.net);
+    loader.preload(names);
+    f.calls[0].fail();
+    await flush();
+    f.calls[1].ok(); // 끊기기 전에 떠난 것
+    await flush();
+    expect(f.calls).toHaveLength(2);
+    expect(loader.status().paused).toBe(true);
+    expect(loader.src('z')).toBe(null); // 화면이 쓰려는 그림은 바로 받는다
+    expect(urls(f.open())).toEqual(['/z.jpg']);
+    f.open()[0].ok();
+    await flush();
+    expect(loader.status().paused).toBe(false);
+    expect(urls(f.open())).toEqual(['/a.jpg', '/c.jpg']); // 놓친 a부터
+  });
+
+  it('서버가 답했는데 못 받은 것(파일 없음)은 끊김이 아니다: 띠에 알리지 않고 줄은 그대로 간다', async () => {
+    const f = fakeNet();
+    const loader = createPictureLoader(urlOf, f.net);
+    loader.preload(names);
+    f.calls[0].notFound();
+    await flush();
+    expect(loader.notice.value).toBe(null);
+    expect(loader.status().paused).toBe(false);
+    expect(urls(f.open())).toEqual(['/b.jpg', '/c.jpg']);
+    expect(loader.src('a')).toBe(null);
+    await flush();
+    expect(f.calls.filter((c) => c.url === '/a.jpg')).toHaveLength(1); // 다시 받으러 가지 않는다(코드 그림)
+  });
+
+  it('파일을 폴더에서 바로 열었으면(file:) fetch 없이 Image로 받고, 안 그려져도 끊김으로 보지 않는다', async () => {
+    const f = fakeNet(true);
+    const loader = createPictureLoader(urlOf, f.net);
+    loader.preload(['a', 'b', 'c']);
+    await flush();
+    await flush();
+    expect(f.calls).toHaveLength(0);
+    expect(f.images).toEqual(['/a.jpg', '/b.jpg', '/c.jpg']);
+    expect(loader.notice.value).toBe(null);
+  });
+
+  it('브라우저 밖(받는 길이 없음)에서는 받지 않는다', async () => {
+    const loader = createPictureLoader(urlOf, null);
+    loader.preload(names);
+    await flush();
+    expect(loader.src('a')).toBe(null);
+    expect(loader.notice.value).toBe(null);
+  });
+});
+
+// 4-1 ㉠(1-라 11.8 ⑤): 꼭 푸는 제삿날 첫 창 "할머니가 쌀독을 들여다보신다"에서 방 왼쪽의 쌀독이 할머니에 가렸다(1280×800에서 22%만 보임).
+// 이 장면만 둘이 오른쪽으로 비켜 선다(무대의 clear). 새 그림(할머니 걱정 얼굴)은 만들지 않았다 — 걱정 그림이 없어 plain으로 선다.
+describe('대화 장면 — 제삿날 첫 창의 쌀독(1-라 11.8 ⑤)', () => {
+  // css는 시험에서 ?raw로 읽으면 비어 온다(vitest의 css 처리) — 파일을 바로 읽는다(device.test.ts의 아이콘처럼)
+  let CSS = '';
+  beforeAll(async () => {
+    const fs = (await import(/* @vite-ignore */ ['node', 'fs'].join(':'))) as { readFileSync(path: string, enc: string): string };
+    CSS = fs.readFileSync(decodeURIComponent(new URL('../src/styles/talk.css', import.meta.url).pathname), 'utf8');
+  });
+  const TALK = Object.values(import.meta.glob<string>('../src/screens/Talk.tsx', { eager: true, query: '?raw', import: 'default' }))[0] ?? '';
+  const px = (rule: string): number => Number((CSS.match(new RegExp(`${rule.replace(/[.()]/g, '\\$&')} \\{\\s*left: (-?[\\d.]+)%;`)) ?? [])[1]);
+
+  it('제삿날(s1395-winter-rite)의 무대는 왼쪽을 비운다. 그런 장면은 이것 하나다', () => {
+    const p = getPack('s1395')!;
+    const rite = p.happenings.find((h) => h.id === 's1395-winter-rite')!;
+    expect(rite.stage.place).toBe('room');
+    expect(rite.stage.clear).toBe('left');
+    expect(rite.lines[0].text).toContain('쌀독');
+    expect(p.happenings.filter((h) => h.stage.clear).map((h) => h.id)).toEqual(['s1395-winter-rite']);
+  });
+
+  it('대화 장면은 clear를 꼴(class)로 건다. 대화하는 동안 두 사람 다 오른쪽으로 비켜 서고, 선택지를 고를 때는 그대로다', () => {
+    expect(CSS.length).toBeGreaterThan(1000);
+    expect(TALK).toMatch(/happening\.stage\.clear \? ` clear-\$\{happening\.stage\.clear\}` : ''/);
+    // 칸의 너비는 50%, 사람은 칸의 가운데에 선다: 왼쪽 사람의 가운데가 46%(전 28%) — 쌀독(배경 너비의 12~26%)에서 비켜난다
+    const left = px('.talk.clear-left:not(.step-choose).cast-2 .talk-slot.at-left');
+    const right = px('.talk.clear-left:not(.step-choose).cast-2 .talk-slot.at-right');
+    expect(left + 25).toBeGreaterThanOrEqual(44);
+    expect(right + 25).toBeLessThanOrEqual(78);
+    expect(right - left).toBeGreaterThanOrEqual(28);
+    expect(px('.talk-slot.at-left')).toBe(3);
+    expect(CSS).not.toMatch(/\.talk\.clear-left\.step-choose/);
   });
 });

@@ -60,6 +60,8 @@ export const happenings: Happening[] = [
         { who: 'grandma', at: 'left' },
         { who: 'mother', at: 'right' },
       ],
+      // 방 왼쪽의 쌀독이 할머니에 가리지 않게 둘이 오른쪽으로 비켜 선다(1-라 11.8 ⑤)
+      clear: 'left',
     },
     lines: [
       { text: '겨울이 깊어 간다. 할아버지 제삿날이 다가오자 할머니가 쌀독을 들여다보신다.' },

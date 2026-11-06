@@ -38,13 +38,10 @@ import { STATS, type Deed, type GameState, type Happening, type Line, type Missi
 import { PLAYS } from '../plays';
 import { closeTalk, commitTalk, game, pack } from '../state/store';
 import { focusInto, useModalKeys } from '../ui/focus';
-import { TapGate } from '../ui/taps';
+import { OPEN_GAP_MS, READ_GAP_MS, TapGate, nowMs, tapTime } from '../ui/taps';
 import { LockIcon, SunIcon } from '../ui/icons';
 import { spotLabel } from '../ui/where';
 import { changeWords, josa, ro, type ChangeWords } from '../ui/words';
-
-/** 배움 쪽지는 뜬 바로 뒤에 닫히지 않는다(잇달아 누르다 읽지 못하고 넘기는 일을 막는다) */
-const NOTE_GAP_MS = 700;
 
 interface Snap {
   story: string;
@@ -167,11 +164,14 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
   });
   const [deed, setDeed] = useState<Deed | null>(null);
   // 잇달아 누른 것을 한 번으로 친다(두 번 두드려 한 창을 읽지 못하고 넘기는 일을 막는다). 뜬 바로 뒤에는 조금 더 기다린다.
+  // 누름은 누른 때(사건의 timeStamp)로 잰다 — ui/taps.ts
   const gate = useRef<TapGate | null>(null);
-  if (!gate.current) gate.current = new TapGate(Date.now());
+  if (!gate.current) gate.current = new TapGate(nowMs());
   const committed = useRef(false);
+  /** 일 놀이를 끝내고 아직 첫 창이 화면에 뜨지 않았다(뜨면 그때부터 다시 READ_GAP_MS를 막는다) */
+  const playedLately = useRef(false);
 
-  const tooSoon = (): boolean => !(gate.current as TapGate).pass(Date.now());
+  const tooSoon = (ev?: Event | null): boolean => !(gate.current as TapGate).pass(tapTime(ev));
 
   /** 일을 마치고 나온 결과에서 다음에 보여 줄 것 */
   const afterResult = (d: Deed): Step | null => {
@@ -182,26 +182,36 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
 
   const noteShownAt = useRef(0);
   const go = (next: Step | null): void => {
-    if (next?.kind === 'note') noteShownAt.current = Date.now();
+    if (next?.kind === 'note') noteShownAt.current = nowMs();
     if (next) setStep(next);
     else closeTalk();
   };
-  const closeNote = (): void => {
-    if (Date.now() - noteShownAt.current < NOTE_GAP_MS) return;
+  /** 배움 쪽지는 뜬 바로 뒤에 닫히지 않는다(잇달아 누르다 읽지 못하고 넘기는 일을 막는다) */
+  const closeNote = (ev?: Event | null): void => {
+    if (tapTime(ev) - noteShownAt.current < READ_GAP_MS) return;
     closeTalk();
   };
 
-  /** 고른 선택지와 놀이의 끝난 모습을 넘겨 일을 마친다 */
-  const commit = (choiceId?: string, played?: string): void => {
+  /** 고른 선택지와 놀이의 끝난 모습을 넘겨 일을 마친다(afterPlay: 일 놀이를 끝내고 왔다) */
+  const commit = (choiceId?: string, played?: string, afterPlay = false): void => {
     if (committed.current) return;
     committed.current = true;
     const done = commitTalk({ id: happeningId, choiceId, play: played });
     if (!done) return; // 가게가 '이어 갈 수 없어요'로 보낸다
-    // 결과의 첫 창이 새로 뜬다: 놀이를 끝낸 그 누름(자판 Enter, 잇달아 두 번 누른 끝내기 단추)이 그 창을 넘기지 않게
-    gate.current?.hold(Date.now());
+    // 결과의 첫 창이 새로 뜬다: 놀이를 끝낸 그 누름(자판 Enter, 잇달아 두 번·세 번 누른 끝내기 단추)이 그 창을 넘기지 않게.
+    // 놀이 뒤의 첫 창은 읽을 틈(READ_GAP_MS)만큼, 그 밖에는 새 창의 틈만큼 막는다
+    gate.current?.hold(nowMs(), afterPlay ? READ_GAP_MS : OPEN_GAP_MS);
+    playedLately.current = afterPlay;
     setDeed(done);
     go(done.lines.length > 0 ? { kind: 'result', i: 0 } : afterResult(done));
   };
+
+  // 놀이 뒤의 첫 창이 화면에 뜬 때부터 다시 읽을 틈을 막는다(느린 기기에서 창이 늦게 뜨면 그만큼 늦게 받는다)
+  useEffect(() => {
+    if (!playedLately.current || step.kind === 'play') return;
+    playedLately.current = false;
+    gate.current?.hold(nowMs(), READ_GAP_MS);
+  }, [step]);
 
   /** 선택이 끝난 뒤: 일 놀이가 있으면 놀이로, 없으면 바로 마친다 */
   const afterChoice = (choiceId?: string): void => {
@@ -214,12 +224,12 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
     commit(choiceId, play ? Object.keys(play.flags)[0] : undefined);
   };
 
-  const advance = (): void => {
+  const advance = (ev?: Event | null): void => {
     if (!snap) return;
     // 선택지가 모두 잠겨 있으면 대화창이 "돌아가기"가 된다(아무 일도 일어나지 않은 채 맵으로)
     const stuckNow = step.kind === 'choose' && snap.stuck !== null && !committed.current;
     if (step.kind !== 'blocked' && step.kind !== 'open' && step.kind !== 'result' && step.kind !== 'change' && !stuckNow) return;
-    if (tooSoon()) return;
+    if (tooSoon(ev)) return;
     if (step.kind === 'blocked' || stuckNow) {
       closeTalk();
     } else if (step.kind === 'open') {
@@ -235,15 +245,15 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
     }
   };
 
-  const choose = (view: ChoiceView): void => {
-    if (view.locked || step.kind !== 'choose' || tooSoon()) return;
+  const choose = (view: ChoiceView, ev?: Event | null): void => {
+    if (view.locked || step.kind !== 'choose' || tooSoon(ev)) return;
     afterChoice(view.id);
   };
 
   /** "나중에 할게요": 일을 마치기 전이면 아무 일도 일어나지 않은 채 맵으로 돌아간다 */
   const canLeave = !committed.current && (step.kind === 'open' || step.kind === 'choose');
-  const later = (): void => {
-    if (!canLeave || tooSoon()) return;
+  const later = (ev?: Event | null): void => {
+    if (!canLeave || tooSoon(ev)) return;
     closeTalk();
   };
 
@@ -257,7 +267,7 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
         rootRef.current?.querySelector<HTMLElement>('button.talk-choice')?.focus();
         return;
       }
-      advance();
+      advance(ev);
     } else if (step.kind === 'choose' && (ev.key === 'ArrowDown' || ev.key === 'ArrowUp')) {
       // 화살표로 선택지를 오간다(PC와 TV). 고르는 것은 Enter·Space다.
       ev.preventDefault();
@@ -267,9 +277,9 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
       const next = ev.key === 'ArrowDown' ? (at + 1) % items.length : (at <= 0 ? items.length : at) - 1;
       items[next].focus();
     } else if (ev.key === 'Escape') {
-      if (canLeave) later();
+      if (canLeave) later(ev);
       else if (step.kind === 'blocked') closeTalk();
-      else if (step.kind === 'note') closeNote();
+      else if (step.kind === 'note') closeNote(ev);
     }
   });
 
@@ -307,7 +317,7 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
 
   return (
     <div
-      class={`talk season-${snap.season} step-${step.kind} cast-${showsFigures ? cast.length : 0}`}
+      class={`talk season-${snap.season} step-${step.kind} cast-${showsFigures ? cast.length : 0}${happening.stage.clear ? ` clear-${happening.stage.clear}` : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label="대화 장면"
@@ -315,7 +325,7 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
       onClick={(ev) => {
         // 창 어디를 눌러도 넘어간다(단추와 놀이, 쪽지는 저마다 받는다)
         if (ev.target instanceof Element && ev.target.closest('[data-own]')) return;
-        advance();
+        advance(ev);
       }}
     >
       <Scenery story={snap.story} place={happening.stage.place} season={snap.season} />
@@ -390,7 +400,7 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
                 </div>
               ) : (
                 // Tab의 첫 자리는 첫 선택지다("나중에 할게요"가 아니라 — focus.ts의 data-first-tab)
-                <button type="button" class="talk-choice" data-first-tab={view.id === firstOpen ? true : undefined} onClick={() => choose(view)}>
+                <button type="button" class="talk-choice" data-first-tab={view.id === firstOpen ? true : undefined} onClick={(ev) => choose(view, ev)}>
                   <span class="talk-choice-label">{view.label}</span>
                 </button>
               )}
@@ -401,7 +411,7 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
 
       {step.kind === 'play' && play && playDef && (
         <div class="talk-play" data-own>
-          {g && <playDef.View rules={play.rules} facts={factsOf(g)} choice={step.choiceId} onDone={(result) => commit(step.choiceId, result)} />}
+          {g && <playDef.View rules={play.rules} facts={factsOf(g)} choice={step.choiceId} onDone={(result) => commit(step.choiceId, result, true)} />}
         </div>
       )}
 

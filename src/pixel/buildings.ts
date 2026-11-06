@@ -1034,6 +1034,25 @@ export const temple: Maker = (pal, variant) => drainJob(templeJob(pal, variant))
 // 되풀이된다(tileWash) ④ 칸의 옆 끝은 제 빛깔 그늘을 두지 않는다. 세로 담도 위아래로 같은 셈이다.
 // 돌은 켜마다 높이가 다르고(5~7점), 켜 안에서도 한 점씩 오르내리며(켜의 경계가 흔들린다) 둥근 돌이 섞인다(ㅌ — 자로 잰 듯 고르지 않게).
 
+/** 담 돌의 다듬기(아래 WALL_LOOK). 고친 몫은 모두 이 넷이다 */
+export interface WallStoneLook {
+  /** 따뜻한 돌의 몫(돌마다 제비뽑기의 문턱 — 남는 몫은 잿빛 돌과 짙은 잿빛 돌이 같은 만큼 나눠 덜어 낸다) */
+  warmShare: number;
+  /** 따뜻한 돌의 빛을 흙빛 쪽으로 더 옮긴다(벌에 맞춘 뒤에도 따뜻한 잿빛 — 옮기지 않으면 봄·여름 벌에서 잿빛 돌과 같은 빛으로 맞춰진다) */
+  warmTone: boolean;
+  /** 칸마다 두 켜에 걸친 큰 돌 하나(칸 안쪽에, 생김새마다 자리가 다르다 — 칸 경계에 걸친 돌은 그대로) */
+  bigStone: boolean;
+  /** 잿빛 돌의 그늘을 한 칸 밝게(흙벽과의 대비를 조금 줄인다) */
+  lighterShade: boolean;
+}
+
+/** 그림 올리기 ②의 고침 판(eca5628)의 담 돌 — 이것으로 지으면 그 판과 점 하나까지 같다(tests/art2fix.test.ts가 묶는다) */
+export const WALL_STONES_ECA5628: WallStoneLook = { warmShare: 0.16, warmTone: false, bigStone: false, lighterShade: false };
+/** 4-1 ㉠에서 다듬은 담 돌(review 권고 C — 사용자 결정 spec 13.1의 61번) */
+export const WALL_STONES_41A: WallStoneLook = { warmShare: 0.3, warmTone: true, bigStone: true, lighterShade: true };
+/** 게임이 쓰는 담 돌. 미리 보기에서 보고 되돌리려면 이 한 줄을 WALL_STONES_ECA5628로 바꾼다 */
+export const WALL_LOOK: WallStoneLook = WALL_STONES_41A;
+
 /** 담 지붕의 기왓골 너비(칸마다 같다 — 합이 칸의 너비 16K) */
 const WALL_RIBS = [5, 6, 5, 5, 6, 5];
 
@@ -1055,17 +1074,19 @@ interface WallStone {
   h: number;
   R: Ramp; // [그늘, 몸, 볕]
   round?: boolean;
+  /** 두 켜에 걸친 큰 돌: 모가 조금 선 덩이이고, 몸에도 빛 하나의 둥근 명암(왼쪽 위 볕·오른쪽 아래 그늘)을 넣고 결을 입히지 않는다 */
+  big?: boolean;
 }
 
 function drawStone(s: Sheet, st: WallStone, shadow: Color, xa = 0, xb = s.w - 1): void {
   const ex = st.sx + st.w - 1;
-  const put = (x: number, y: number, c: Color): void => {
-    if (x >= xa && x <= xb) s.set(x, y, c);
+  const put = (x: number, y: number, c: Color, still = false): void => {
+    if (x >= xa && x <= xb) (still ? s.calm : s.set).call(s, x, y, c);
   };
   // 막돌의 꼴: 네모와 타원 사이(초타원 — 지수 p가 클수록 네모에 가깝다)에 테두리를 조금 울퉁불퉁하게 흔든다. 둥근 돌은 p = 2
   const rx = st.w / 2;
   const ry = st.h / 2;
-  const p = st.round ? 2 : 2.3 + hash2(st.sx & 1023, st.y, 611) * 1.5;
+  const p = st.big ? BIG_STONE_P : st.round ? 2 : 2.3 + hash2(st.sx & 1023, st.y, 611) * 1.5;
   // 돌마다 한쪽으로 조금 기운다(윗선·아랫선이 수평으로 곧지 않게)
   const tilt = st.round ? 0 : (hash2(st.sx & 1023, st.y, 613) - 0.5) * 0.5;
   const seed = 612 + ((st.sx * 7 + st.y * 13 + st.w * 3) & 1023);
@@ -1088,21 +1109,40 @@ function drawStone(s: Sheet, st: WallStone, shadow: Color, xa = 0, xb = s.w - 1)
     for (let i = st.sx; i <= ex; i++) {
       if (!inside(i, j)) continue;
       let c = st.R[1];
+      if (st.big) {
+        // 큰 돌의 몸: 왼쪽 위 모서리 쪽은 볕, 오른쪽 아래 모서리 쪽은 그늘(넓은 몸에 결의 얼룩이 빛과 어긋나게 지지 않게)
+        const t = (i + 0.5 - st.sx) / st.w + (j + 0.5) / st.h;
+        if (t < 0.55) c = st.R[2];
+        else if (t > 1.6) c = st.R[0];
+      }
       if (!inside(i, j - 1) || !inside(i - 1, j)) c = st.R[2];
       if (!inside(i, j + 1) || !inside(i + 1, j)) c = st.R[0];
-      put(i, st.y + j, c);
+      put(i, st.y + j, c, st.big);
     }
   }
 }
 
-/** 담 돌의 빛깔: 잿빛이 대부분, 여섯에 하나쯤 따뜻한 잿빛(흙빛을 반만 섞은 돌 — ㅎ) */
-function wallStoneRamps(pal: Palette): { gray: Ramp; dim: Ramp; warm: Ramp } {
+/**
+ * 담 돌의 빛깔: 잿빛 돌·짙은 잿빛 돌과 따뜻한 잿빛 돌(흙빛을 섞은 돌). ②는 따뜻한 돌이 여섯에 하나쯤(ㅎ),
+ * 다듬은 판은 셋에 하나쯤이고(warmShare) 그 빛을 흙빛 쪽으로 더 옮겨 벌에 맞춘 뒤에도 연한 흙빛 잿빛이다(warmTone — 봄 #bdb095).
+ * 다듬은 판은 잿빛 돌의 그늘이 한 칸 밝다(lighterShade — stone[2] 대신 stone[2]와 stone[3]의 가운데. 봄 벌에서 #7e756a → #8a8789).
+ */
+export function wallStoneRamps(pal: Palette, look: WallStoneLook = WALL_LOOK): { gray: Ramp; dim: Ramp; warm: Ramp } {
   const { stone, clay } = pal;
+  const shade = look.lighterShade ? mix(stone[2], stone[3], 0.5) : stone[2];
   return {
-    gray: [stone[2], stone[3], stone[4]],
+    gray: [shade, stone[3], stone[4]],
+    // 짙은 잿빛 돌은 그늘을 그대로 둔다(한 칸 밝히면 몸과 같은 빛이 되어 돌이 납작한 덩이로 보인다)
     dim: [stone[2], mix(stone[2], stone[3], 0.5), stone[3]],
-    warm: [mix(stone[2], clay[1], 0.45), mix(stone[3], clay[2], 0.45), mix(stone[4], clay[3], 0.45)],
+    warm: look.warmTone
+      ? [mix(stone[3], clay[1], 0.6), mix(stone[4], clay[2], 0.4), mix(stone[4], clay[4], 0.4)]
+      : [mix(stone[2], clay[1], 0.45), mix(stone[3], clay[2], 0.45), mix(stone[4], clay[3], 0.45)],
   };
+}
+
+/** 돌의 빛 갈래: 제비뽑기(0~1) → 따뜻한 돌(위의 warmShare만큼) · 짙은 잿빛 돌 · 잿빛 돌 */
+function stoneKind(pick: number, look: WallStoneLook): 'warm' | 'dim' | 'gray' {
+  return pick > 1 - look.warmShare ? 'warm' : pick > 0.5 - (look.warmShare - 0.16) / 2 ? 'dim' : 'gray';
 }
 
 /** 흙벽(토담)의 빛: [처마 밑 짙은 줄, 처마 그늘, 몸, 볕, 돌이 드리운 그늘] */
@@ -1122,38 +1162,69 @@ interface Course {
   room?: boolean;
 }
 
+/** 두 켜에 걸친 큰 돌(칸 안쪽): row는 위 켜의 번호(가로 담), x·w는 칸 안의 왼쪽 끝과 너비, y·h는 위 끝과 높이(그림 점) */
+interface BigStone {
+  row: number;
+  x: number;
+  w: number;
+  y: number;
+  h: number;
+  R: 'gray' | 'dim' | 'warm';
+}
+
+/** 큰 돌의 꼴의 지수(둥근 달걀꼴로 서 보이지 않게 모가 조금 선 덩이로) */
+const BIG_STONE_P = 3.4;
+
+/**
+ * 가로 담 생김새마다의 큰 돌. 칸 경계에 걸친 돌과 두 점 넘게 떨어진 칸 안쪽에, 생김새마다 다른 두 켜에 걸친다
+ * (0은 아래 두 켜, 1은 위 두 켜, 2는 가운데 두 켜 — 네 켜가 칸마다 가지런히 보이지 않게).
+ */
+const WALL_BIG_H: readonly BigStone[] = [
+  { row: 2, x: 9, w: 12, y: 35, h: 12, R: 'warm' },
+  { row: 0, x: 8, w: 11, y: 18, h: 13, R: 'gray' },
+  { row: 1, x: 9, w: 10, y: 26, h: 12, R: 'gray' },
+];
+
 /**
  * 담 몸의 돌 켜들(가로 담). 켜마다 칸 경계에 걸친 돌(생김새와 상관없이 같다)과, 그 사이의 생김새마다 다른 돌:
  * 너비 6~16, 높이는 켜의 높이이거나 한 점 낮고(위나 아래로 붙어 켜의 경계가 한 점씩 흔들린다), 넷에 하나쯤은 둥근 돌.
+ * 큰 돌(big)이 있으면 그 돌이 걸친 두 켜는 큰 돌의 양옆 두 토막에 돌을 놓는다(좁은 토막에는 너비 넷의 잔돌).
  */
-function wallStones(pal: Palette, variant: number, W: number, courses: readonly Course[]): WallStone[] {
-  const R = wallStoneRamps(pal);
+function wallStones(pal: Palette, variant: number, W: number, courses: readonly Course[], look: WallStoneLook, big?: BigStone): WallStone[] {
+  const R = wallStoneRamps(pal, look);
   const out: WallStone[] = [];
   courses.forEach((c, row) => {
     // 칸 경계에 걸친 돌: 왼쪽 칸 오른쪽 끝(가운데 W)과 오른쪽 칸 왼쪽 끝(가운데 0)이 한 돌이다
     for (const at of [0, W]) out.push({ sx: at - c.a, w: c.a + c.b, y: c.y, h: c.h, R: R[c.R] });
-    let x = c.b + 2 + (hash2(variant, row, 607) < 0.4 ? 1 : 0);
+    const x0 = c.b + 2 + (hash2(variant, row, 607) < 0.4 ? 1 : 0);
     const xb = W - c.a - 3;
     const seed = 600 + variant * 41 + row * 7;
-    for (let k = 0; x <= xb; k++) {
-      const rem = xb - x + 1;
-      if (rem < 5) break;
-      const round = hash2(k, 6, seed) < 0.27;
-      let w = round ? 6 + Math.floor(hash2(k, 1, seed) * 4) : 6 + Math.floor(hash2(k, 1, seed) * 11);
-      if (rem - w < 8) w = Math.min(rem, round ? 9 : 16);
-      // 높이: 켜의 높이에서 한 점 낮거나(위나 아래로 붙는다) 같거나, 아래 틈이 넉넉하면 한 점 높다(5~7)
-      const r2 = hash2(k, 2, seed);
-      const h = clamp(c.h + (r2 < 0.4 ? -1 : r2 > 0.86 && c.room ? 1 : 0) - (round && c.h > 5 ? 1 : 0), 5, 7);
-      const dy = h < c.h ? (hash2(k, 3, seed) < 0.5 ? 0 : c.h - h) : 0;
-      const pick = hash2(k, 4, seed);
-      out.push({ sx: x, w, y: c.y + dy, h, R: pick > 0.84 ? R.warm : pick > 0.5 ? R.dim : R.gray, round });
-      x += w + 2 + (hash2(k, 5, seed) < 0.4 ? 1 : 0);
+    // 돌을 놓는 토막 [처음, 끝, 가장 좁은 돌]. 큰 돌과는 두 점(그늘 한 점 + 흙 한 점) 띄운다
+    const spans: [number, number, number][] =
+      big && (row === big.row || row === big.row + 1) ? [[x0, big.x - 3, 4], [big.x + big.w + 2, xb, 4]] : [[x0, xb, 5]];
+    let k = 0;
+    for (const [s0, s1, least] of spans) {
+      for (let x = s0; x <= s1; k++) {
+        const rem = s1 - x + 1;
+        if (rem < least) break;
+        const round = hash2(k, 6, seed) < 0.27;
+        let w = round ? 6 + Math.floor(hash2(k, 1, seed) * 4) : 6 + Math.floor(hash2(k, 1, seed) * 11);
+        if (rem - w < 8) w = Math.min(rem, round ? 9 : 16);
+        // 높이: 켜의 높이에서 한 점 낮거나(위나 아래로 붙는다) 같거나, 아래 틈이 넉넉하면 한 점 높다(5~7)
+        const r2 = hash2(k, 2, seed);
+        const h = clamp(c.h + (r2 < 0.4 ? -1 : r2 > 0.86 && c.room ? 1 : 0) - (round && c.h > 5 ? 1 : 0), 5, 7);
+        const dy = h < c.h ? (hash2(k, 3, seed) < 0.5 ? 0 : c.h - h) : 0;
+        out.push({ sx: x, w, y: c.y + dy, h, R: R[stoneKind(hash2(k, 4, seed), look)], round });
+        x += w + 2 + (hash2(k, 5, seed) < 0.4 ? 1 : 0);
+      }
     }
   });
+  if (big) out.push({ sx: big.x, w: big.w, y: big.y, h: big.h, R: R[big.R], big: true });
   return out;
 }
 
-export const wallH: Maker = (pal, variant) => {
+/** 가로 담 한 칸(look: 담 돌의 다듬기 — 게임은 WALL_LOOK, 시험은 WALL_STONES_ECA5628로도 짓는다) */
+export function wallHOf(pal: Palette, variant: number, look: WallStoneLook = WALL_LOOK): SpriteDef {
   const W = 16 * K;
   const H = 30 * K;
   const s = new Sheet(W, H);
@@ -1191,12 +1262,19 @@ export const wallH: Maker = (pal, variant) => {
   // 담 몸(줄 16~47): 황토빛 흙벽. 위는 처마 그늘(결을 입히지 않는다 — 그늘 속에 밝은 점이 흩어지지 않게)
   for (let y = 16; y < 48; y++) for (let x = 0; x < W; x++) (y < 18 ? s.calm : s.set).call(s, x, y, y < 18 ? earth.shade : earth.body);
   // 돌 켜: 높이가 켜마다 다르다(6·7·5·6) — 칸 경계에 걸친 돌의 자리는 생김새와 상관없이 같다
-  const stones = wallStones(pal, variant, W, [
-    { y: 18, h: 6, a: 5, b: 6, R: 'gray' },
-    { y: 25, h: 7, a: 11, b: 2, R: 'dim' },
-    { y: 34, h: 5, a: 3, b: 7, R: 'gray', room: true },
-    { y: 41, h: 6, a: 8, b: 4, R: 'dim' },
-  ]);
+  const stones = wallStones(
+    pal,
+    variant,
+    W,
+    [
+      { y: 18, h: 6, a: 5, b: 6, R: 'gray' },
+      { y: 25, h: 7, a: 11, b: 2, R: 'dim' },
+      { y: 34, h: 5, a: 3, b: 7, R: 'gray', room: true },
+      { y: 41, h: 6, a: 8, b: 4, R: 'dim' },
+    ],
+    look,
+    look.bigStone ? WALL_BIG_H[variant % WALL_BIG_H.length] : undefined,
+  );
   for (const st of stones) drawStone(s, st, earth.drop);
   // 장대석 기단(줄 48~59): 칸 경계에 걸친 긴 돌 하나와 생김새마다 다른 이음매. 위가 볕, 아래는 그늘
   // 칸 경계에 걸친 돌은 왼쪽으로 8점, 오른쪽으로 6점(한가운데가 아니어서 이음매의 사이가 18·14점으로 엇갈린다)
@@ -1217,13 +1295,21 @@ export const wallH: Maker = (pal, variant) => {
       }
     }
   }
-  const ramps = rampsOf(pal, Object.values(wallStoneRamps(pal)));
+  const ramps = rampsOf(pal, Object.values(wallStoneRamps(pal, look)));
   const dark = tileWash(s, ramps, pal, 640, variant, { big: 10, bigY: 5, amp: 1.25 }, { x: W });
   calmSprite(s);
   return { frames: [s.done()], ax: 8 * K, ay: 26 * K, shades: [{ dx: 3, dy: 2, rx: 10, ry: 4, strength: 0.3 }], wash: dark };
-};
+}
+export const wallH: Maker = (pal, variant) => wallHOf(pal, variant);
 
-export const wallV: Maker = (pal, variant) => {
+/** 세로 담 남쪽 끝 마구리면의 큰 돌(두 켜에 걸친다 — 0은 왼쪽, 1은 오른쪽. 위 끝은 첫 켜의 위 끝) */
+const WALL_BIG_V: readonly Pick<BigStone, 'x' | 'w' | 'h' | 'R'>[] = [
+  { x: 5, w: 9, h: 12, R: 'warm' },
+  { x: 12, w: 9, h: 12, R: 'warm' },
+];
+
+/** 세로 담 한 칸(look은 wallHOf와 같다) */
+export function wallVOf(pal: Palette, variant: number, look: WallStoneLook = WALL_LOOK): SpriteDef {
   const W = 14 * K;
   const H = 38 * K;
   const s = new Sheet(W, H);
@@ -1264,25 +1350,32 @@ export const wallV: Maker = (pal, variant) => {
   const fx1 = W - 2 * K - 1;
   const fy = roofEnd + 2;
   for (let y = fy; y < fy + 16; y++) for (let x = fx0; x <= fx1; x++) (y < fy + 3 ? s.calm : s.set).call(s, x, y, y === fy ? earth.line : y < fy + 3 ? earth.shade : earth.body);
-  const R = wallStoneRamps(pal);
+  const R = wallStoneRamps(pal, look);
+  // 큰 돌: 두 켜(줄 fy+3 ~ fy+14)에 걸친다. 그 양옆 토막에 켜의 돌을 놓는다(큰 돌과 두 점 띄운다)
+  const big = look.bigStone ? WALL_BIG_V[variant % WALL_BIG_V.length] : undefined;
   // 두 켜(높이 6·5) — 켜 안에서 돌이 한 점씩 오르내리고 둥근 돌이 섞인다
   [
     [fy + 3, 6],
     [fy + 10, 5],
   ].forEach(([cy, ch], row) => {
-    let x = fx0 + (row === 0 ? 1 : 0) + Math.floor(hash2(row, variant, 63) * 3);
-    for (let k = 0; x <= fx1 - 3; k++) {
-      const seed = 650 + variant * 13 + row;
-      const round = hash2(k, 6, seed) < 0.3;
-      const w = Math.min(fx1 - 1 - x, round ? 6 + Math.floor(hash2(k, 1, seed) * 3) : 6 + Math.floor(hash2(k, 1, seed) * 8));
-      if (w < 4) break;
-      const h = Math.max(5, ch - (hash2(k, 2, seed) < 0.45 ? 1 : 0));
-      const dy = ch - h > 0 && hash2(k, 3, seed) < 0.5 ? ch - h : 0;
-      const pick = hash2(k, 4, seed);
-      drawStone(s, { sx: x, w, y: cy + dy, h, R: pick > 0.84 ? R.warm : pick > 0.5 ? R.dim : R.gray, round }, earth.drop, fx0, fx1);
-      x += w + 2 + (hash2(k, 5, seed) < 0.35 ? 1 : 0);
+    const x0 = fx0 + (row === 0 ? 1 : 0) + Math.floor(hash2(row, variant, 63) * 3);
+    // 토막 [처음, 돌이 끝날 수 있는 가장 오른쪽 점]
+    const spans: [number, number][] = big ? [[x0, big.x - 3], [big.x + big.w + 2, fx1 - 2]] : [[x0, fx1 - 2]];
+    let k = 0;
+    for (const [s0, e] of spans) {
+      for (let x = s0; x <= e - 1; k++) {
+        const seed = 650 + variant * 13 + row;
+        const round = hash2(k, 6, seed) < 0.3;
+        const w = Math.min(e + 1 - x, round ? 6 + Math.floor(hash2(k, 1, seed) * 3) : 6 + Math.floor(hash2(k, 1, seed) * 8));
+        if (w < 4) break;
+        const h = Math.max(5, ch - (hash2(k, 2, seed) < 0.45 ? 1 : 0));
+        const dy = ch - h > 0 && hash2(k, 3, seed) < 0.5 ? ch - h : 0;
+        drawStone(s, { sx: x, w, y: cy + dy, h, R: R[stoneKind(hash2(k, 4, seed), look)], round }, earth.drop, fx0, fx1);
+        x += w + 2 + (hash2(k, 5, seed) < 0.35 ? 1 : 0);
+      }
     }
   });
+  if (big) drawStone(s, { sx: big.x, w: big.w, y: fy + 3, h: big.h, R: R[big.R], big: true }, earth.drop, fx0, fx1);
   const by = fy + 16;
   const cut = variant % 2 === 0 ? -1 : fx0 + 8 + Math.floor(hash2(variant, 7, 64) * 5);
   for (let y = by; y < H; y++) {
@@ -1300,7 +1393,8 @@ export const wallV: Maker = (pal, variant) => {
   const dark = tileWash(s, ramps, pal, 660, variant, { big: 6, bigY: 10, amp: 1.5 }, { y: 16 * K });
   calmSprite(s);
   return { frames: [s.done()], ax: 7 * K, ay: 34 * K, shades: [{ dx: 5, dy: -6, rx: 7, ry: 10, strength: 0.3 }], wash: dark };
-};
+}
+export const wallV: Maker = (pal, variant) => wallVOf(pal, variant);
 
 // ── 대문 ─────────────────────────────────────────────────────
 // 기둥 둘에 작은 기와지붕을 얹은 문. 0은 열린 문, 1은 닫힌 문.

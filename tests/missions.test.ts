@@ -1118,13 +1118,20 @@ describe.each(LOOKS)('① 여름 · 농민 집 아이(%s)', (look) => {
       });
       expect(playEndProblems(Object.fromEntries(deeds.map((d) => [d.play as string, d.requested])), 'rough'), choiceId).toEqual([]);
       expect(new Set(deeds.map((d) => d.lines[0].text)).size).toBe(3);
-      // 둘째 창은 고른 길. 쉬엄쉬엄 맸는데 놀이에서 풀을 다 뽑았으면 둘째 창이 그 일과 맞게 갈린다(review 1-라 3번)
+      // 둘째 창은 고른 길. 쉬엄쉬엄 맸는데 놀이에서 풀을 다 뽑았으면 둘째 창이 그 일과 맞게 갈린다(review 1-라 3번).
+      // 어른께 맡겼으면 어머니가 매신 것을 곁에서 본 창이다(4-1 ㉠, 1-라 11.8 ⑧ — "곁에서 보아라" 뒤에 "온 식구가 엎드려…"가 어긋났다).
+      // 이웃과 서로 거드는 길은 맡겨도 이웃 어른의 말 그대로다
+      const LEFT = '어머니가 논에 엎드려 풀을 뽑으셨다. 곁에서 보니 벼와 풀이 조금씩 가려 보인다.';
+      const [clean, rough, left] = deeds.map((d) => d.lines[1].text);
       if (choiceId === 'rest') {
-        expect(deeds[0].lines[1].text).toBe('쉬엄쉬엄 맸지만 내 손이 닿은 데는 말끔하다. 남은 데는 다음에 매자.');
-        expect(deeds[1].lines[1].text).toBe(deeds[2].lines[1].text);
-        expect(deeds[1].lines[1].text).not.toBe(deeds[0].lines[1].text);
+        expect(clean).toBe('쉬엄쉬엄 맸지만 내 손이 닿은 데는 말끔하다. 남은 데는 다음에 매자.');
+        expect(rough).toBe('쉬엄쉬엄 논 한쪽만 맸다. 남은 풀이 벼와 키를 겨룬다.');
+        expect(left).toBe(LEFT);
+      } else if (choiceId === 'all') {
+        expect(clean).toBe(rough);
+        expect(left).toBe(LEFT);
       } else {
-        expect(new Set(deeds.map((d) => d.lines[1].text)).size).toBe(1);
+        expect(new Set([clean, rough, left]).size).toBe(1);
       }
     }
     // 맡기면 어머니가 대신 매고, 그만큼 어머니의 일이 밀린다

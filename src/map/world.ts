@@ -463,6 +463,10 @@ function beyondNear(world: World, fx: number, fy: number, within: number): numbe
   return best;
 }
 
+/** 표시의 누름 칸: 표시의 자리에서 왼쪽·오른쪽으로(맵 점) */
+export const MARK_LEFT = 8;
+export const MARK_RIGHT = 12;
+
 /**
  * 맵의 한 곳을 눌렀다(점 좌표). 사람이나 표시를 누르면 그 앞까지 가서 말을 걸고,
  * 그 밖에는 그곳까지(갈 수 없으면 가장 가까운 곳까지) 걸어간다. 걷는 도중에 누르면 바로 바뀐다.
@@ -472,10 +476,11 @@ export function tapWorld(world: World, wx: number, wy: number): void {
   world.wish = false;
   // 다시 누르면 문 앞의 까닭도 다시 뜬다
   world.shownGate = null;
-  // 표시(깃발, 말풍선)
+  // 표시(깃발, 말풍선). 누름 칸은 그림처럼 오른쪽으로 치우친다(깃발 −3~+11, 말풍선 −5~+8 — 맵 점): 가로 −8~+12.
+  // 4-1 ㉠(1-라 11.8 ③): 왼쪽이 ±12였을 때 여름 「이웃집 논」의 말풍선 칸이 곁의 논둑길(44,57)에 4점 걸쳐, 길을 누르다 덤이 열렸다
   for (const mark of world.marks) {
     const p = spotPoint(mark.spot);
-    if (Math.abs(wx - p.x) <= 12 && wy >= p.y - 34 && wy <= p.y + 14) {
+    if (wx - p.x >= -MARK_LEFT && wx - p.x <= MARK_RIGHT && wy >= p.y - 34 && wy <= p.y + 14) {
       walkToMark(world, mark);
       world.target = null;
       return;

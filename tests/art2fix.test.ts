@@ -1,4 +1,4 @@
-// 그림 올리기 ②의 고침 바퀴(review.md 3절 권고 1~11, spec 13.1의 59번).
+// 그림 올리기 ②의 고침 바퀴(docs/reviews/그림2.md 3절 권고 1~11, spec 13.1의 59번).
 // ① 양반 댁 담은 흙빛 토석담 ② 미리 짓기는 처음 화면 둘레부터(나눠 지어도·처음 화면만 지어도 그림이 같다) ③ 큰 나무의 굵은 곁가지
 // ④ 엷던 것(돌탑·돌등, 가을 새 짚, 흰 꽃나무, 소의 털) ⑤ 빗줄기 두 점 ⑦ 시험이 못 잡던 망가뜨림(Y3·Y4·Y7·Y8·Y9·Y10·Y12·Y13).
 
@@ -101,51 +101,59 @@ describe('그림 올리기 ②의 고침: 담·곁가지·엷은 것·빗줄기'
     }
   });
 
-  it('담 돌은 들쭉날쭉하다(ㅌ, review 권고 5): 높이가 5~7 그림 점에서 셋 넘게 갈리고, 둥근 돌이 섞인다', () => {
+  /**
+   * 담 그림의 돌 덩이: 흙벽 단계의 빛이 아닌 불투명한 점이 이웃 넷으로 이어진 것(벌에 맞추기 전의 그림 — 흙벽은 결이 오르내려도 흙벽 단계 안).
+   * 네모 [x0, y0, x1, y1](그 안만 본다)에서 찾고, 네모의 왼쪽·오른쪽 끝에 닿은 덩이(칸 경계에 걸친 돌의 반쪽)와 점 12개 아래의 부스러기는 뺀다.
+   */
+  const wallBlobs = (f: Px, clay: ReadonlySet<number>, [x0, y0, x1, y1]: readonly number[]) => {
+    const stone = (x: number, y: number): boolean => x >= x0 && x <= x1 && y >= y0 && y <= y1 && f.get(x, y) >>> 24 === 255 && !clay.has(f.get(x, y));
+    const seen = new Uint8Array(f.w * f.h);
+    const out: { x0: number; x1: number; y0: number; y1: number; px: number[] }[] = [];
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        if (seen[y * f.w + x] || !stone(x, y)) continue;
+        const b = { x0: x, x1: x, y0: y, y1: y, px: [] as number[] };
+        const stack = [[x, y]];
+        seen[y * f.w + x] = 1;
+        while (stack.length) {
+          const [px, py] = stack.pop() as number[];
+          b.px.push(f.get(px, py));
+          b.x0 = Math.min(b.x0, px);
+          b.x1 = Math.max(b.x1, px);
+          b.y0 = Math.min(b.y0, py);
+          b.y1 = Math.max(b.y1, py);
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const qx = px + dx;
+            const qy = py + dy;
+            if (!stone(qx, qy) || seen[qy * f.w + qx]) continue;
+            seen[qy * f.w + qx] = 1;
+            stack.push([qx, qy]);
+          }
+        }
+        if (b.x0 > x0 && b.x1 < x1 && b.px.length >= 12) out.push(b);
+      }
+    }
+    return out;
+  };
+  /** 가로 담의 몸(줄 16~47, 칸 너비 전부)과 세로 담 남쪽 끝 마구리면(줄 48~63, 열 4~23 — 마구리면의 양옆 끝도 돌이 닿는 끝이라 하나 밖으로) */
+  const WALL_BODY: Record<'wallH' | 'wallV', readonly number[]> = { wallH: [0, 16, 31, 47], wallV: [3, 48, 24, 63] };
+
+  it('담 돌은 들쭉날쭉하다(ㅌ, review 권고 5): 높이가 5~7 그림 점에서 셋 넘게 갈리고, 둥근 돌이 섞인다 — 두 켜에 걸친 큰 돌(높이 11 넘음)은 따로 센다', () => {
     const pal = paletteOf('spring');
-    // 벌에 맞추기 전의 그림: 흙벽은 흙벽 단계의 빛(결이 오르내려도 그 단계 안), 돌은 그 밖의 빛
     const clay = new Set(pal.clay);
-    const stone = (c: number): boolean => c >>> 24 === 255 && !clay.has(c);
     const heights = new Set<number>();
     const fills: number[] = [];
     let round = 0;
     let all = 0;
     for (const v of [0, 1, 2]) {
-      const f = thingDef(pal, 'wallH', v).frames[0];
-      const seen = new Uint8Array(f.w * f.h);
-      for (let y = 16; y < 48; y++) {
-        for (let x = 0; x < f.w; x++) {
-          if (seen[y * f.w + x] || !stone(f.get(x, y))) continue;
-          // 돌 하나(이웃 넷으로 이어진 돌빛 점)
-          const stack = [[x, y]];
-          seen[y * f.w + x] = 1;
-          let x0 = x;
-          let x1 = x;
-          let yy0 = y;
-          let yy1 = y;
-          let n = 0;
-          while (stack.length) {
-            const [px, py] = stack.pop() as number[];
-            n++;
-            x0 = Math.min(x0, px);
-            x1 = Math.max(x1, px);
-            yy0 = Math.min(yy0, py);
-            yy1 = Math.max(yy1, py);
-            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-              const qx = px + dx;
-              const qy = py + dy;
-              if (qx < 0 || qy < 16 || qx >= f.w || qy >= 48 || seen[qy * f.w + qx] || !stone(f.get(qx, qy))) continue;
-              seen[qy * f.w + qx] = 1;
-              stack.push([qx, qy]);
-            }
-          }
-          // 칸의 끝에 걸린 돌(반쪽)은 빼고 센다
-          if (x0 === 0 || x1 === f.w - 1 || n < 12) continue;
-          all++;
-          heights.add(yy1 - yy0 + 1);
-          fills.push(+(n / ((x1 - x0 + 1) * (yy1 - yy0 + 1))).toFixed(2));
-          if (n / ((x1 - x0 + 1) * (yy1 - yy0 + 1)) < 0.86) round++;
-        }
+      for (const b of wallBlobs(thingDef(pal, 'wallH', v).frames[0], clay, WALL_BODY.wallH)) {
+        const h = b.y1 - b.y0 + 1;
+        if (h >= 11) continue; // 큰 돌(아래 시험)
+        const fill = b.px.length / ((b.x1 - b.x0 + 1) * h);
+        all++;
+        heights.add(h);
+        fills.push(+fill.toFixed(2));
+        if (fill < 0.86) round++;
       }
     }
     expect([...heights].filter((h) => h >= 5 && h <= 7).length, [...heights].join(',')).toBeGreaterThanOrEqual(3);
@@ -154,6 +162,93 @@ describe('그림 올리기 ②의 고침: 담·곁가지·엷은 것·빗줄기'
     // 둥근 돌(네모를 0.86 아래로 채운 돌)과 모난 돌(0.9 넘게)이 함께 있다
     expect(round, `둥근 돌 ${round}/${all} ${fills.join(',')}`).toBeGreaterThanOrEqual(1);
     expect(fills.filter((q) => q > 0.9).length, fills.join(',')).toBeGreaterThanOrEqual(3);
+  });
+
+  it('4-1 ㉠ 담 돌 다듬기(review 권고 C, spec 13.1의 61번): 칸마다 두 켜에 걸친 큰 돌이 하나(높이 11 그림 점 넘음, 칸 안쪽) — 생김새마다 자리가 다르다', async () => {
+    const { WALL_STONES_41A, wallHOf, wallVOf } = await import('../src/pixel/buildings');
+    for (const [tone, season, weather] of SKIES) {
+      const pal = paletteOf(season, weather);
+      const clay = new Set(pal.clay);
+      for (const [kind, make, n] of [['wallH', wallHOf, 3], ['wallV', wallVOf, 2]] as const) {
+        const spots = new Set<string>();
+        for (let v = 0; v < n; v++) {
+          const f = make(pal, v, WALL_STONES_41A).frames[0];
+          const big = wallBlobs(f, clay, WALL_BODY[kind]).filter((b) => b.y1 - b.y0 + 1 >= 11);
+          expect(big.length, `${tone} ${kind}:${v} 큰 돌`).toBe(1);
+          const [b] = big;
+          // 칸 안쪽: 가로 담은 칸의 옆 끝에서 셋 넘게(칸 경계에 걸친 돌과 떨어진 덩이), 세로 담은 마구리면 안
+          const [lo, hi] = kind === 'wallH' ? [3, f.w - 4] : [4, 23];
+          expect(b.x0, `${tone} ${kind}:${v}`).toBeGreaterThanOrEqual(lo);
+          expect(b.x1, `${tone} ${kind}:${v}`).toBeLessThanOrEqual(hi);
+          // 너비도 켜의 돌보다 크다(가로로 아홉 넘음)
+          expect(b.x1 - b.x0 + 1, `${tone} ${kind}:${v}`).toBeGreaterThanOrEqual(9);
+          spots.add(`${b.x0},${b.y0}`);
+        }
+        expect(spots.size, `${tone} ${kind} 큰 돌의 자리`).toBe(n);
+      }
+    }
+  });
+
+  it('4-1 ㉠ 담 돌 다듬기: 따뜻한 돌이 칸마다 모아 25~35%이고, 벌에 맞춘 뒤에도 잿빛 돌과 다른 따뜻한 빛이다(봄·여름 벌에서 잿빛으로 맞춰지지 않게)', async () => {
+    const { WALL_STONES_41A, wallHOf, wallStoneRamps, wallVOf } = await import('../src/pixel/buildings');
+    for (const [tone, season, weather] of SKIES) {
+      const pal = paletteOf(season, weather);
+      const clay = new Set(pal.clay);
+      const ramps = wallStoneRamps(pal, WALL_STONES_41A);
+      const warm = new Set(ramps.warm);
+      const share: Record<string, [number, number]> = { wallH: [0, 0], all: [0, 0] };
+      for (const [kind, make, n] of [['wallH', wallHOf, 3], ['wallV', wallVOf, 2]] as const) {
+        for (let v = 0; v < n; v++) {
+          for (const b of wallBlobs(make(pal, v, WALL_STONES_41A).frames[0], clay, WALL_BODY[kind])) {
+            // 따뜻한 돌: 점의 반 넘게가 따뜻한 돌 단계의 빛
+            const isWarm = b.px.filter((c) => warm.has(c)).length * 2 > b.px.length ? 1 : 0;
+            for (const key of kind === 'wallH' ? ['wallH', 'all'] : ['all']) {
+              share[key][0] += isWarm;
+              share[key][1]++;
+            }
+          }
+        }
+      }
+      for (const [key, [w, all]] of Object.entries(share)) {
+        expect(w / all, `${tone} ${key} 따뜻한 돌 ${w}/${all}`).toBeGreaterThanOrEqual(0.25);
+        expect(w / all, `${tone} ${key} 따뜻한 돌 ${w}/${all}`).toBeLessThanOrEqual(0.35);
+      }
+      // 벌에 맞춘 빛: 따뜻한 돌의 몸빛은 잿빛·짙은 잿빛 돌의 어느 빛과도 다르고, R−B가 잿빛 돌의 몸빛보다 15 넘게 크다
+      const snap = snapperOf(pal);
+      const grays = new Set([...ramps.gray, ...ramps.dim].map((c) => snap.nearest(c)));
+      const body = snap.nearest(ramps.warm[1]);
+      expect(grays.has(body), `${tone} 따뜻한 돌의 몸빛`).toBe(false);
+      expect(R(body) - B(body), tone).toBeGreaterThan(R(snap.nearest(ramps.gray[1])) - B(snap.nearest(ramps.gray[1])) + 15);
+    }
+  });
+
+  it('4-1 ㉠ 담 돌 다듬기: 되돌린 값(WALL_STONES_ECA5628)으로 지은 담은 그림 올리기 ②의 고침 판(eca5628)과 점 하나까지 같고, 게임은 WALL_LOOK으로 짓는다', async () => {
+    const { WALL_LOOK, WALL_STONES_ECA5628, wallHOf, wallVOf } = await import('../src/pixel/buildings');
+    const want = (await import('./fixtures/art/wall-eca5628.json')).default.walls as Record<string, string>;
+    // 지문: 장 수·크기·발치·결의 몫·그림자와, 모든 장의 점(RGBA 바이트를 이어 붙인 것)의 SHA-256
+    const print = async (def: ReturnType<typeof wallHOf>): Promise<string> => {
+      const bytes = new Uint8Array(def.frames.reduce((n, f) => n + f.d.byteLength, 0));
+      let at = 0;
+      for (const f of def.frames) {
+        bytes.set(new Uint8Array(f.d.buffer, f.d.byteOffset, f.d.byteLength), at);
+        at += f.d.byteLength;
+      }
+      const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((q) => q.toString(16).padStart(2, '0')).join('');
+      const f0 = def.frames[0];
+      return `${def.frames.length}x${f0.w}x${f0.h} ax${def.ax} ay${def.ay} wash${def.wash?.toFixed(4)} shades${JSON.stringify(def.shades)} ${hex}`;
+    };
+    let n = 0;
+    for (const [tone, season, weather] of SKIES) {
+      const pal = paletteOf(season, weather);
+      for (const [kind, make, count] of [['wallH', wallHOf, 3], ['wallV', wallVOf, 2]] as const) {
+        for (let v = 0; v < count; v++) {
+          expect(await print(make(pal, v, WALL_STONES_ECA5628)), `${tone} ${kind}:${v}`).toBe(want[`${tone} ${kind}:${v}`]);
+          expect(await print(thingDef(pal, kind, v)), `${tone} ${kind}:${v} 게임의 담`).toBe(await print(make(pal, v, WALL_LOOK)));
+          n++;
+        }
+      }
+    }
+    expect(n).toBe(Object.keys(want).length);
   });
 
   it('Y3 담 칸의 이음매가 보이지 않는다: 생김새 둘을 이어 붙였을 때 이음매 열과 옆 열의 평균 밝기 차가 칸 안쪽 이웃 열끼리의 차의 1.5배 이하', () => {
@@ -570,7 +665,7 @@ describe('시험이 못 잡던 것(review 권고 7)', () => {
     expect(ratios.reduce((p, q) => p + q, 0) / ratios.length, ratios.map((q) => q.toFixed(3)).join(',')).toBeLessThan(0.85);
   }, 120_000);
 
-  it('Y7 집·나무 뒤로 돌아가면 가려지는 자리가 1-라와 같다: 큰 것(tall)마다 새 가림 마스크가 1-라 마스크의 켜진 칸을 덮는다(모두 98% 넘게, 갈래마다 90% 넘게)', () => {
+  it('Y7 집·나무 뒤로 돌아가면 가려지는 자리가 1-라와 같다: 큰 것(tall)마다 새 가림 마스크가 1-라 마스크의 켜진 칸을 덮는다(모두 99.5% 넘게, 갈래마다 92% 넘게 — 4-1 ㉠, 권고 E)', () => {
     const want = mask1e as Record<string, string>;
     const keys = Object.keys(want)
       .filter((k) => k.endsWith('@spring'))
@@ -600,9 +695,11 @@ describe('시험이 못 잡던 것(review 권고 7)', () => {
           }
           on += o;
           hit += h;
-          if (o > 0) expect(h / o, `${tone} ${key}`).toBeGreaterThan(0.9);
+          // 지금 값: 갈래마다 가장 낮은 것이 young:2 93.0%, pineS:1 93.8% — 앞으로 1~2칸 더 빠지는 것을 잡는다(review 16.4 권고 E)
+          if (o > 0) expect(h / o, `${tone} ${key}`).toBeGreaterThan(0.92);
         }
-        expect(hit / on, tone).toBeGreaterThan(0.98);
+        // 지금 값: 모두 99.63~99.65%
+        expect(hit / on, tone).toBeGreaterThan(0.995);
       });
     }
   }, 180_000);

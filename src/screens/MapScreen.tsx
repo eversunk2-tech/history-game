@@ -194,7 +194,12 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
   // 같은 맵이 계절마다 다른 모습으로 지어진다(자리와 처음 서는 칸은 같다).
   // 이야기의 때에 따라서도 갈린다: 가을에는 장정들이 떠나고 돌아오고 가을걷이를 마치는 대로,
   // 큰비가 온 해의 여름에는 단오를 보내기 전(비가 잠깐 멎었다)과 뒤로. 큰비가 온 해의 가을에는 낮은 논의 벼가 성기다.
-  const look = mapLook(role.map, tone, sky, { flags: g.flags, flood });
+  // 대화 장면이 떠 있는 동안에는 맵의 모습을 바꾸지 않고 대화가 닫힌 뒤에 다시 짓는다(1-라 11.8 ② — 가을걷이를 마치면 맵을 다시 짓는데
+  // 느린 기기에서 0.9초쯤 걸려, 그동안 쌓인 누름이 놀이 뒤 첫 창을 넘겼다. 대화가 맵을 다 덮고 있어 그동안 맵은 보이지 않는다).
+  const lookNow = mapLook(role.map, tone, sky, { flags: g.flags, flood });
+  const lookRef = useRef(lookNow);
+  if (talking === null) lookRef.current = lookNow;
+  const look = lookRef.current;
   const map = useMemo(() => seasonalMap(role.map, tone, sky, { flags: g.flags, flood }) ?? getMap(role.map), [role.map, look]);
   // 판의 번호가 들어 있어, 같은 씨앗·같은 모습으로 새 판을 열어도 앞 판의 자리를 이어받지 않는다.
   // 계절이나 날씨, 맵의 모습이 바뀌면 열쇠가 달라져 맵의 판을 새로 짓는다(서 있던 칸과 가 본 칸은 이어받는다).
@@ -488,11 +493,13 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       }
       if (tick % 45 === 0 && !world.paused) tellPlace(world);
       // 땅의 남은 조각(spec 4.7.5의 ㅋ): 이 장에서 쓰고 남은 시간만큼만 잘게 나눠 칠한다(한 장 16.7ms 가운데 셈과 그리기를 빼고
-      // 많아야 6ms, 적어도 1.5ms). 걷는 쪽으로 앞선 자리에서 가까운 조각부터 칠해 화면이 닿기 전에 칠해 둔다.
-      // 그래도 칠하지 않은 조각이 화면에 들면 그리기가 그 조각만 그 자리에서 칠한다.
+      // 걸을 때는 많아야 6ms, 서 있을 때는 많아야 10ms(4-1 ㉠ — 연 직후 화면 둘레를 빨리 칠해 두게), 적어도 1.5ms).
+      // 화면 둘레 띠부터, 걷는 쪽으로 앞선 자리에서 가까운 것부터 칠해 화면이 닿기 전에 칠해 둔다(paintIdle).
+      // 그래도 칠하지 않은 칸이 화면에 들면 그리기가 그 칸만 그 자리에서 칠한다.
       if (idleLeft(session)) {
         const spent = performance.now() - began;
-        const budget = talk.peek() !== null ? 8 : Math.max(1.5, Math.min(6, 11 - spent));
+        const still = world.player.route.length === 0 && world.keys.x === 0 && world.keys.y === 0;
+        const budget = talk.peek() !== null ? 8 : still ? Math.max(1.5, Math.min(10, 13 - spent)) : Math.max(1.5, Math.min(6, 11 - spent));
         paintIdle(session, budget, aheadOf(world));
       }
       tick++;

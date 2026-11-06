@@ -116,7 +116,11 @@ export interface Happening {
    * pose는 그 사람의 기본 표정이다: 그 사람이 표정을 적은 창이 나오기 전과 "달라진 것" 창에서 쓴다(없으면 plain).
    * 예: 굶는 동무 `{ who: 'friend-girl', at: 'center', pose: 'worried' }`
    */
-  stage: { place: string; cast?: { who: string; at?: 'left' | 'center' | 'right'; pose?: 'plain' | 'glad' | 'worried' }[] };
+  /**
+   * 무대: 배경의 자리와 선 사람. clear를 적으면 대화하는 동안(선택지를 고를 때 말고) 사람들이 그쪽을 비켜 선다 — 배경의 그쪽에
+   * 이야기가 가리키는 것이 있을 때(4-1 ㉠, 1-라 11.8 ⑤: 제삿날 첫 창 "할머니가 쌀독을…"에서 쌀독이 할머니에 가렸다)
+   */
+  stage: { place: string; cast?: { who: string; at?: 'left' | 'center' | 'right'; pose?: 'plain' | 'glad' | 'worried' }[]; clear?: 'left' | 'right' };
   /** 여는 대화 */
   lines: Line[];
   lineVariants?: { when: Condition; lines: Line[] }[];

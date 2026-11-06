@@ -12,7 +12,7 @@
 
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { picturesMissed } from '../art/pictures';
+import { pictureNotice } from '../art/pictures';
 import { seasonLabels, statLabels } from '../content/labels';
 import { canCloseSeason, currentSeason, deedsOfSeason, openHappenings, roleOf } from '../engine/game';
 import { SEASONS, STATS, STAT_MAX, type Stat } from '../engine/types';
@@ -56,6 +56,23 @@ function useOffline(): boolean {
     };
   }, []);
   return off;
+}
+
+/**
+ * 인터넷 알림 한 줄: "끊겼어요" → 다시 이어지면 "그림을 다시 받는 중" → 놓친 그림을 다 받으면 사라진다(Review 1-라 11.8 ⑥).
+ * 한 줄의 글만 바뀌므로 화면 읽기 프로그램이 새 글을 읽는다(role="status"). 뜻은 글이 전한다(표시 !·…는 덧붙임).
+ */
+function NetNotice({ offline }: { offline: boolean }): JSX.Element | null {
+  const state = offline ? 'lost' : pictureNotice.value;
+  if (!state) return null;
+  return (
+    <p class="band-notice" role="status">
+      <span class="band-notice-mark" aria-hidden="true">
+        {state === 'again' ? '…' : '!'}
+      </span>
+      {state === 'again' ? '인터넷이 다시 이어졌어요. 그림을 다시 받는 중이에요.' : '인터넷이 끊겼어요. 하던 이야기는 계속할 수 있어요. 이 화면을 닫지 마세요.'}
+    </p>
+  );
 }
 
 export function TopBand(): JSX.Element | null {
@@ -206,14 +223,7 @@ export function TopBand(): JSX.Element | null {
           기록을 남기지 못했어요.
         </p>
       )}
-      {(offline || picturesMissed.value) && (
-        <p class="band-notice" role="status">
-          <span class="band-notice-mark" aria-hidden="true">
-            !
-          </span>
-          인터넷이 끊겼어요. 하던 이야기는 계속할 수 있어요. 이 화면을 닫지 마세요.
-        </p>
-      )}
+      <NetNotice offline={offline} />
 
       <span id="band-why-text" class="visually-hidden">
         {reason}

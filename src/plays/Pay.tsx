@@ -181,7 +181,8 @@ export function Pay({ rules, facts, choice, onDone }: PlayProps): JSX.Element {
     s.nodAt = now;
     s.tradeAt = now + (prefersCalm() ? 0 : NOD_MS * 0.6);
     setTraded(verdict);
-    setSaid(verdict === 'generous' ? '넉넉히 주니 고맙구나. 소금 가져가거라.' : '알맞게 가져왔구나. 소금 가져가거라.');
+    // 알맞게 낸 판의 말은 결과 첫 창("알맞게 가져왔구나. 자, 소금 받아라.")과 겹치지 않게(4-1 ㉠, 1-라 11.8 ⑨)
+    setSaid(verdict === 'generous' ? '넉넉히 주니 고맙구나. 소금 가져가거라.' : '그만하면 됐다. 소금 가져가거라.');
     s.timer = window.setTimeout(() => end(verdict), prefersCalm() ? 500 : NOD_MS * 0.6 + TRADE_MS + 500);
   };
 

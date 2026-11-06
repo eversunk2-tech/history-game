@@ -16,6 +16,8 @@ import {
   tapWorld,
   walkToMark,
   WALK_SPEED,
+  MARK_LEFT,
+  MARK_RIGHT,
   type Mark,
   type World,
   type WorldEvent,
@@ -370,6 +372,30 @@ describe('막힌 길의 까닭', () => {
     // 머리를 누르면 말을 건다
     tapWorld(world, mom.x, mom.y - 22);
     expect(run(world, 20, (all) => all.some((e) => e.type === 'dweller')).some((e) => e.type === 'dweller' && e.dweller.id === 'mother')).toBe(true);
+  });
+
+  it('여름 「이웃집 논」의 말풍선: 곁의 논둑길과 아주머니를 누르면 덤이 열리지 않고, 말풍선을 누르면 열린다(4-1 ㉠, 1-라 11.8 ③)', () => {
+    const summer = neutigol('summer');
+    const spot = summer.spots.find((s) => s.id === 'neighborPaddy')!;
+    const bubble: Mark = { id: 'do-neighborPaddy', spot, must: false };
+    const p = { x: spot.at[0] * TILE + 8, y: spot.at[1] * TILE + 4 };
+    const tap = (x: number, y: number): WorldEvent[] => {
+      const world = createWorld(summer, FARMER_GIRL, 'farmer-girl');
+      setMarks(world, [bubble]);
+      tapWorld(world, x, y);
+      return run(world, 25, (all) => all.some((e) => e.type === 'mark'));
+    };
+    // 아주머니는 한 칸 동쪽(47,57)으로 옮겼다 — 아주머니의 몸(맵 점 너비 24)이 말풍선의 누름 칸 밖이다
+    const aunt = summer.dwellers.find((d) => d.sprite === 'wellWomanHoe')!;
+    expect(aunt.at).toEqual([47, 57]);
+    expect(aunt.at[0] * TILE + 8 - 12).toBeGreaterThan(p.x + MARK_RIGHT);
+    // 논둑길(44,57)의 오른쪽 끝(말풍선 높이) — 덤이 열리지 않는다
+    expect(summer.terrain[57 * summer.w + 44]).not.toBe(summer.terrain[57 * summer.w + 45]);
+    expect(p.x - MARK_LEFT).toBeGreaterThanOrEqual(45 * TILE);
+    expect(tap(45 * TILE - 1, p.y - 24).some((e) => e.type === 'mark')).toBe(false);
+    expect(tap(45 * TILE - 4, p.y - 10).some((e) => e.type === 'mark')).toBe(false);
+    // 말풍선(그림은 −5~+8)과 그 오른쪽 끝을 누르면 열린다
+    for (const dx of [-5, 0, 8, MARK_RIGHT]) expect(tap(p.x + dx, p.y - 28).some((e) => e.type === 'mark'), `${dx}`).toBe(true);
   });
 
   it('자판으로 밀어도 닫힌 문을 넘지 못한다', () => {

@@ -45,6 +45,29 @@ const SKIES: [Tone, Season, Weather][] = [
 // 계절마다 맵을 짓고 그림을 찍는 시험은 무겁다. 다른 시험과 함께 돌 때도 시간에 걸리지 않게 넉넉히 준다.
 vi.setConfig({ testTimeout: 60_000 });
 
+/**
+ * 4-1 ㉠(docs/reviews/그림2.md 16.4 권고 D): 1배 그림에 맞춘 문턱 여덟(× ART² × 0.8)을 갈래마다 **지금 값의 절반**으로 둔다(2026-11-06, 이 판에서 잼).
+ * 그림이 반 넘게 엷어지거나 작아지면(1배로 되돌리면 ÷4) 잡는다. 지금 값은 이 수의 두 배쯤이다.
+ * 절반이 앞 판의 문턱보다 낮은 셋(풀포기 tuft 48 → 24, 튀는 물 10·8 → 5·4)은 앞 판의 문턱(25.6, 6.4)을 그대로 둔다 — 느슨해지는 곳이 없게.
+ */
+const HALF = {
+  /** 낱그림의 찍힌 점 수(네 계절·생김새 가운데 가장 작은 값의 절반) */
+  count: { azalea: 345, basin: 527, bigtree: 3090, blossom: 805, bundle: 225, bush: 324, cairn: 556, choga: 16280, fallen: 705, fenceH: 511, fenceV: 388, flatstone: 377, flower: 38, forsythia: 311, gaesang: 781, gate: 3713, grainmat: 2272, hall: 9018, hut: 9014, jars: 1270, lantern: 384, log: 607, manor: 26579, oak: 776, oldpine: 4047, pagoda: 1186, pine: 2003, pineS: 967, reed: 96, rockL: 1079, rockM: 337, rockS: 89, sandring: 4124, sheaf: 519, sheafpile: 1255, shed: 4496, snowpile: 265, stonewallH: 510, stonewallV: 649, strawstack: 1721, stump: 367, swing: 892, temple: 25292, tuft: 25.6, wallH: 960, wallV: 952, well: 1419, willow: 1273, wing: 12327, woodpile: 970, wrestlers: 880, young: 329, zelkova: 13728 } as Record<string, number>,
+  /** 겨울 넓은 잎 나무의 눈 */
+  leafSnow: { bigtree: 458, blossom: 139, oak: 208, willow: 88, young: 63, zelkova: 1695 } as Record<string, number>,
+  /** 겨울 솔의 눈, 솔잎 */
+  pineSnow: { oldpine: 1040, pine: 653, pineS: 320 } as Record<string, number>,
+  needle: { oldpine: 1344, pine: 814, pineS: 388 } as Record<string, number>,
+  /** 겨울 덤불의 눈 */
+  bush: 197,
+  /** 겨울 마당의 것에 얹힌 눈 */
+  yard: { cairn: 102, fenceH: 76, jars: 184, lantern: 89, pagoda: 168, rockL: 296, rockM: 112, stonewallH: 65, strawstack: 278, stump: 75, wallH: 149, wallV: 380, well: 170, woodpile: 143 } as Record<string, number>,
+  /** 가을 벤 논의 그루터기 */
+  stubble: 344,
+  /** 빗줄기 셋·튀는 물 셋 */
+  rain: [16, 12, 8, 6.4, 10, 6.4],
+};
+
 describe('화소 버퍼', () => {
   it('빛깔을 묶고 푼다', () => {
     expect(hex('#ff8000')).toBe(rgb(255, 128, 0));
@@ -84,8 +107,8 @@ describe('세운 것의 그림', () => {
       for (const [key, def] of defs) {
         expect(def.frames.length, key).toBeGreaterThan(0);
         const first = def.frames[0];
-        // 1-라의 1배 문턱(8)을 2배 그림의 넓이에 맞춰(× ART² × 0.8 — 먹빛 테두리 몫만큼 넓이가 0.8~0.95로 준 것을 친다, review 권고 8)
-        expect(first.count(), key).toBeGreaterThan(8 * ART * ART * 0.8);
+        // 갈래마다 지금 값의 절반(권고 D — 앞 판의 1배 문턱 8 × ART² × 0.8 = 25.6을 대신한다)
+        expect(first.count(), key).toBeGreaterThan(HALF.count[key.split(':')[0]]);
         expect(def.ax >= 0 && def.ax < first.w && def.ay >= 0 && def.ay <= first.h, key).toBe(true);
         for (const f of def.frames) expect(f.w === first.w && f.h === first.h, key).toBe(true);
       }
@@ -700,19 +723,19 @@ describe('계절의 그림', () => {
       expect(bare.count(), kind).toBeLessThan(full.count() * 0.55);
       expect(bare.count(), kind).toBeGreaterThan(full.count() * 0.08);
       // 눈이 얹혔다
-      expect(countOf(bare, winter.snow), kind).toBeGreaterThan(12 * ART * ART * 0.8);
+      expect(countOf(bare, winter.snow), kind).toBeGreaterThan(HALF.leafSnow[kind]);
       // 그림의 크기와 발치는 같다(맵의 같은 자리에 선다)
       expect([bare.w, bare.h], kind).toEqual([full.w, full.h]);
       expect(w.get(thingKey(kind, 0))!.ay, kind).toBe(s.get(thingKey(kind, 0))!.ay);
     }
     for (const kind of ['pine', 'pineS', 'oldpine']) {
       const tree = w.get(thingKey(kind, 0))!.frames[0];
-      expect(countOf(tree, winter.snow), kind).toBeGreaterThan(40 * ART * ART * 0.8);
-      expect(countOf(tree, winter.pine.slice(0, 4)), kind).toBeGreaterThan(60 * ART * ART * 0.8); // 솔잎은 푸르다
+      expect(countOf(tree, winter.snow), kind).toBeGreaterThan(HALF.pineSnow[kind]);
+      expect(countOf(tree, winter.pine.slice(0, 4)), kind).toBeGreaterThan(HALF.needle[kind]); // 솔잎은 푸르다
       expect(countOf(s.get(thingKey(kind, 0))!.frames[0], summer.snow), kind).toBe(0);
     }
     // 덤불도 잎이 지고 눈을 이고 있다
-    expect(countOf(w.get(thingKey('bush', 0))!.frames[0], winter.snow)).toBeGreaterThan(20 * ART * ART * 0.8);
+    expect(countOf(w.get(thingKey('bush', 0))!.frames[0], winter.snow)).toBeGreaterThan(HALF.bush);
   });
 
   it('봄의 느티나무 그림은 아이콘을 뜬 그림 그대로다: 잎 뭉치가 가득하고 눈이 없다(그림 점 392×372 — 1-라 196×186의 ART배)', () => {
@@ -756,7 +779,7 @@ describe('계절의 그림', () => {
       expect(countOf(s.get(thingKey(kind, 0))!.frames[0], winter.snow), kind).toBe(0);
     }
     for (const kind of ['wallH', 'wallV', 'well', 'jars', 'woodpile', 'strawstack', 'fenceH', 'stonewallH', 'pagoda', 'lantern', 'rockM', 'rockL', 'stump', 'cairn']) {
-      expect(countOf(w.get(thingKey(kind, 0))!.frames[0], winter.snow), kind).toBeGreaterThan(5 * ART * ART * 0.8);
+      expect(countOf(w.get(thingKey(kind, 0))!.frames[0], winter.snow), kind).toBeGreaterThan(HALF.yard[kind]);
     }
     // 눈을 얹어도 그림의 크기는 같다
     for (const [key, def] of w) expect([def.frames[0].w, def.frames[0].h], key).toEqual([s.get(key)!.frames[0].w, s.get(key)!.frames[0].h]);
@@ -789,7 +812,7 @@ describe('계절의 그림', () => {
     expect(summer.glint[4 * 12 + 3]).toBe(0);
     // 벤 논(가을): 벼의 빛이 거의 없고 마른 흙과 그루터기다
     expect(countOf(region(autumn, 8, 10), on(paletteOf('autumn').crop, 'autumn')) / cells(2)).toBeLessThan(0.05);
-    expect(countOf(region(autumn, 8, 10), on(paletteOf('autumn').thatch, 'autumn'))).toBeGreaterThan(40 * ART * ART * 0.8); // 그루터기
+    expect(countOf(region(autumn, 8, 10), on(paletteOf('autumn').thatch, 'autumn'))).toBeGreaterThan(HALF.stubble); // 그루터기
     expect(autumn.crop[4 * 12 + 8]).toBe(0);
     // 겨울: 눈이 논의 반을 넘게 덮는다
     const snowy = on([...paletteOf('winter').grass.slice(3), ...paletteOf('winter').snow], 'winter');
@@ -852,7 +875,7 @@ describe('계절의 그림', () => {
     const rain = critters.rainSprites(paletteOf('summer', 'rain'));
     expect(rain.streaks.length).toBe(3);
     expect(rain.splash.length).toBe(3);
-    for (const f of [...rain.streaks, ...rain.splash]) expect(f.count()).toBeGreaterThan(2 * ART * ART * 0.8);
+    [...rain.streaks, ...rain.splash].forEach((f, i) => expect(f.count(), `빗줄기·튀는 물 ${i}`).toBeGreaterThan(HALF.rain[i]));
     // 불어난 냇물은 맑은 여름의 냇물과 빛이 다르다
     expect(same(waterFrames(paletteOf('summer'), 2)[0], waterFrames(paletteOf('summer', 'rain'), 2)[0])).toBe(false);
     expect(critters.cropGustFrames(paletteOf('summer')).length).toBe(3);
@@ -877,10 +900,13 @@ const SHEET_LOOKS: { name: string; season: Season; weather: Weather; stage: Stag
   { name: '겨울', season: 'winter', weather: 'clear', stage: 'late' },
 ];
 
-/** 맵의 사람마다 머리와 가슴이 덮인 몫(0~1)과 덮은 것 */
-function hiddenPeople(map: MapData): { id: string; share: number; by: string }[] {
+/**
+ * 맵의 사람마다 덮인 몫(0~1)과 덮은 것: share는 머리와 가슴(그림의 윗부분), body는 몸 전체(발끝까지 — 4-1 ㉠, 1-라 11.8 ④:
+ * 형이 헛간 지붕에 가려 머리와 어깨만 보였는데 머리와 가슴만 세어 5% 아래로 나왔다)
+ */
+function hiddenPeople(map: MapData): { id: string; share: number; body: number; by: string }[] {
   const defs = thingDefs(paletteOf(map.season, map.weather));
-  const out: { id: string; share: number; by: string }[] = [];
+  const out: { id: string; share: number; body: number; by: string }[] = [];
   const things = map.objects
     .filter((o) => !THINGS[o.kind].flat)
     .map((o) => {
@@ -900,20 +926,30 @@ function hiddenPeople(map: MapData): { id: string; share: number; by: string }[]
     const key = fy + (sit ? 8 : 0);
     const ox = fx - PERSON_AX / ART;
     const oy = fy - (sit ? 5 : 0) - PERSON_AY / ART;
+    // 논에 들어선 사람은 그리기(draw.ts)가 종아리·발목 아래를 그리지 않는다(벼가 가린다) — 그려지는 줄만 센다
+    const tile = map.terrain[d.at[1] * map.w + d.at[0]];
+    const state = paletteOf(map.season, map.weather).paddyState;
+    const sink = tile === T.paddy ? (state === 'green' ? 6 : state === 'gold' ? 7 : 0) : tile === T.soil && state === 'green' ? 4 : 0;
+    const rows = sink > 0 ? PERSON_AY + ART - sink * ART : frame.h;
     let all = 0;
     let hid = 0;
+    let allBody = 0;
+    let hidBody = 0;
     const by = new Map<string, number>();
-    for (let y = 0; y <= PERSON_AY - 23; y++) {
+    for (let y = 0; y < rows; y++) {
+      const upper = y <= PERSON_AY - 23;
       for (let x = 0; x < frame.w; x++) {
         if (frame.get(x, y) === 0) continue;
-        all++;
+        allBody++;
+        if (upper) all++;
         const wx = ox + (x + 0.5) / ART;
         const wy = oy + (y + 0.5) / ART;
         for (const t of things) {
           if (t.sortY <= key) continue;
           if (wx < t.x0 || wy < t.y0 || wx >= t.x0 + t.fw || wy >= t.y0 + t.fh) continue;
           if (t.f.get(Math.floor((wx - t.x0) * ART), Math.floor((wy - t.y0) * ART)) === 0) continue;
-          hid++;
+          hidBody++;
+          if (upper) hid++;
           const name = `${t.o.kind}@${t.o.tx},${t.o.ty}`;
           by.set(name, (by.get(name) ?? 0) + 1);
           break;
@@ -921,20 +957,27 @@ function hiddenPeople(map: MapData): { id: string; share: number; by: string }[]
       }
     }
     const worst = [...by.entries()].sort((a, b) => b[1] - a[1])[0];
-    out.push({ id: `${d.id}@${d.at[0]},${d.at[1]}`, share: all ? hid / all : 0, by: worst ? worst[0] : '' });
+    out.push({ id: `${d.id}@${d.at[0]},${d.at[1]}`, share: all ? hid / all : 0, body: allBody ? hidBody / allBody : 0, by: worst ? worst[0] : '' });
   }
   return out;
 }
 
+/** 가림의 문턱: 머리와 가슴, 몸 전체 */
+const OCCLUDE_UPPER = 0.07;
+const OCCLUDE_BODY = 0.2;
+
 describe('나무와 지붕에 가려지는 사람이 없다(1-라 review 8번)', () => {
-  it('모든 계절의 맵에서 사람의 머리와 가슴이 앞에 그려지는 나무·지붕에 가려지지 않는다', () => {
+  it('모든 계절의 맵에서 사람의 머리와 가슴, 몸 전체가 앞에 그려지는 나무·지붕에 가려지지 않는다', () => {
     const bad: string[] = [];
     for (const look of SHEET_LOOKS) {
       const map = neutigol(look.season, look.weather, look.stage, look.flood);
       for (const h of hiddenPeople(map)) {
         // 훑은 값을 보려면: VITE_OCCLUDE_LOG=0.01 npx vitest run tests/pixel.test.ts -t "가려지지 않는다" --silent=false (1%가 넘는 사람을 찍는다)
-        if (import.meta.env.VITE_OCCLUDE_LOG && h.share > Number(import.meta.env.VITE_OCCLUDE_LOG)) console.log(`OCC ${look.name} ${h.id} ${(h.share * 100).toFixed(0)}% ${h.by}`);
-        if (h.share > 0.1) bad.push(`${look.name} ${h.id} ${(h.share * 100).toFixed(0)}% ← ${h.by}`);
+        if (import.meta.env.VITE_OCCLUDE_LOG && Math.max(h.share, h.body) > Number(import.meta.env.VITE_OCCLUDE_LOG)) console.log(`OCC ${look.name} ${h.id} 위 ${(h.share * 100).toFixed(1)}% 몸 ${(h.body * 100).toFixed(1)}% ${h.by}`);
+        // 머리와 가슴은 7%(4-1 ㉠, 1-라 11.8 ⑩ — 10%는 노비 집 어머니의 옛 자리 9.80%를 놓쳤다), 몸 전체는 5분의 1까지
+        // (냇가 빨래하는 아주머니는 갈대 사이에 서서 몸의 18%가 갈대에 가린다 — 그것은 그림이 뜻한 것이다)
+        if (h.share > OCCLUDE_UPPER) bad.push(`${look.name} ${h.id} 위 ${(h.share * 100).toFixed(1)}% ← ${h.by}`);
+        if (h.body > OCCLUDE_BODY) bad.push(`${look.name} ${h.id} 몸 ${(h.body * 100).toFixed(1)}% ← ${h.by}`);
       }
     }
     expect(bad).toEqual([]);
@@ -950,6 +993,24 @@ describe('나무와 지붕에 가려지는 사람이 없다(1-라 review 8번)',
     };
     expect(stand([49, 29])).toBeGreaterThan(0.5);
     expect(stand([49, 32])).toBe(0);
+  });
+
+  it('문턱이 옛 자리를 잡는다: 노비 집 어머니의 1-라 옛 자리(55,29 — 꽃나무에 몸의 51%), 형의 옛 자리(33,31 — 헛간 지붕에 몸의 34%)', () => {
+    const at = (map: MapData, id: string, to: [number, number]): { share: number; body: number } => {
+      const probe: MapData = { ...map, dwellers: map.dwellers.filter((d) => d.id === id).map((d) => ({ ...d, at: to })) };
+      return hiddenPeople(probe)[0];
+    };
+    const autumn = neutigol('autumn', 'clear', 'early');
+    const brother = at(autumn, 'brother', [33, 31]);
+    expect(brother.body).toBeGreaterThan(OCCLUDE_BODY);
+    expect(at(autumn, 'brother', [35, 32]).body).toBeLessThan(0.05);
+    // 노비 집 어머니: 1-라 Review의 옛 자리(55,29 — 1배 그림에서 가슴까지 9.8%). 2배 그림에서는 머리와 가슴 5.2%·몸 51%라
+    // 머리와 가슴의 문턱(7%)만으로는 놓치고 몸 전체의 문턱이 잡는다. 지금 자리(54,29)는 둘 다 넘는다
+    const spring = neutigol('spring');
+    const old = at(spring, 'nobiMother', [55, 29]);
+    expect(old.body, `${old.body}`).toBeGreaterThan(OCCLUDE_BODY);
+    expect(old.share, `${old.share}`).toBeGreaterThan(0.04);
+    expect(at(spring, 'nobiMother', [54, 29]).share).toBeLessThanOrEqual(OCCLUDE_UPPER);
   });
 });
 

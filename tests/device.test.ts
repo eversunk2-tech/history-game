@@ -20,7 +20,7 @@ import {
   guideShape,
 } from '../src/ui/InstallGuide';
 import { guardKeys, holdKeys, keysAreHeld, swallowIfHeld } from '../src/ui/focus';
-import { OPEN_GAP_MS, TAP_GAP_MS, TapGate } from '../src/ui/taps';
+import { OPEN_GAP_MS, READ_GAP_MS, TAP_GAP_MS, TapGate, tapTime } from '../src/ui/taps';
 import { turnNeeded } from '../src/ui/TurnNotice';
 
 const UA = {
@@ -428,15 +428,74 @@ describe('대화 장면 — 잇달아 누르기와 놀이 뒤의 첫 결과 창'
     expect(gate.pass(10_380)).toBe(true);
   });
 
-  it('Talk.tsx는 일을 마치고 결과를 띄울 때 문을 다시 막는다', () => {
+  it('Talk.tsx는 일을 마치고 결과를 띄울 때 문을 다시 막는다(놀이 뒤면 읽을 틈만큼)', () => {
     const talk = SOURCES[Object.keys(SOURCES).find((path) => path.endsWith('/screens/Talk.tsx')) ?? ''] ?? '';
     const commit = talk.slice(talk.indexOf('const commit = '), talk.indexOf('const afterChoice = '));
     expect(commit).toMatch(/commitTalk\(/);
-    expect(commit).toMatch(/gate\.current\?\.hold\(Date\.now\(\)\)/);
+    expect(commit).toMatch(/gate\.current\?\.hold\(nowMs\(\), afterPlay \? READ_GAP_MS : OPEN_GAP_MS\)/);
     // 막는 것이 결과를 띄우기(setDeed) 앞에 있다
     expect(commit.indexOf('hold(')).toBeLessThan(commit.indexOf('setDeed('));
-    // 누름을 받을지 가르는 것은 이 문 하나다
-    expect(talk).toMatch(/const tooSoon = \(\): boolean => !\(gate\.current as TapGate\)\.pass\(Date\.now\(\)\);/);
+    // 놀이를 끝낸 것은 놀이 뒤로 넘긴다
+    expect(talk).toMatch(/onDone=\{\(result\) => commit\(step\.choiceId, result, true\)\}/);
+    // 놀이 뒤 첫 창이 화면에 뜬 때 다시 막는다
+    expect(talk).toMatch(/gate\.current\?\.hold\(nowMs\(\), READ_GAP_MS\);/);
+    // 누름을 받을지 가르는 것은 이 문 하나이고, 누른 때(사건의 timeStamp)로 잰다
+    expect(talk).toMatch(/const tooSoon = \(ev\?: Event \| null\): boolean => !\(gate\.current as TapGate\)\.pass\(tapTime\(ev\)\);/);
+    for (const call of ['advance(ev)', 'choose(view, ev)', 'later(ev)', 'closeNote(ev)']) expect(talk, call).toContain(call);
+    // 처리한 때(Date.now)로 재는 곳이 남지 않았다. 배움 쪽지의 틈은 읽을 틈과 같은 하나다
+    expect(talk).not.toMatch(/Date\.now\(\)/);
+    expect(talk).not.toMatch(/NOTE_GAP_MS/);
+    expect(talk).toMatch(/tapTime\(ev\) - noteShownAt\.current < READ_GAP_MS/);
+  });
+});
+
+// 1-라 11.8 ②: 놀이 뒤 첫 창은 배움 쪽지처럼 0.7초 막는다. 세 번 누름(0.2초 사이), 0.38초를 넘긴 둘째 누름, 잇달아 누르기,
+// 느린 기기에서 맵을 다시 짓는 동안 쌓인 누름이 그 창을 넘겼다. 누른 때(timeStamp)로 재고, 가을걷이 뒤 맵은 대화가 닫힌 뒤 다시 짓는다.
+describe('대화 장면 — 놀이 뒤 첫 창의 읽을 틈(1-라 11.8 ②)', () => {
+  it('읽을 틈은 0.7초이고 새 창의 틈보다 길다', () => {
+    expect(READ_GAP_MS).toBe(700);
+    expect(READ_GAP_MS).toBeGreaterThan(OPEN_GAP_MS);
+  });
+
+  it('놀이를 끝낸 뒤 0.7초 안의 누름은 세 번 눌러도, 0.38초를 넘겨 눌러도 첫 창을 넘기지 않는다', () => {
+    const gate = new TapGate(0);
+    expect(gate.pass(4000)).toBe(true);
+    const end = 64_000;
+    gate.hold(end, READ_GAP_MS);
+    for (const later of [0, 100, 200, 300, 380, 450, 600, 699]) expect(gate.pass(end + later), `${later}ms`).toBe(false);
+    expect(gate.pass(end + READ_GAP_MS)).toBe(true);
+    // 고치기 전(새 창의 틈만)이면 0.38초를 넘긴 둘째 누름이 넘긴다 — 위의 시험이 잘못을 잡는다
+    const before = new TapGate(0);
+    before.pass(4000);
+    before.hold(end);
+    expect(before.pass(end + 450)).toBe(true);
+  });
+
+  it('누른 때로 잰다: 창이 뜨기 전에 누른 것은 늦게 처리되어도 받지 않는다', () => {
+    const gate = new TapGate(0);
+    gate.pass(4000);
+    const end = 64_000;
+    gate.hold(end, READ_GAP_MS);
+    // 맵을 다시 짓느라 0.9초 막혀 있다가 처리된 누름: 누른 때는 끝낸 뒤 0.1~0.3초
+    for (const at of [end - 50, end + 100, end + 300]) expect(gate.pass(at), `${at - end}ms`).toBe(false);
+  });
+
+  it('tapTime: 사건의 timeStamp(같은 시계)를 쓰고, 없거나 다른 시계(1970년부터의 밀리초)면 지금', () => {
+    const now = performance.now();
+    expect(tapTime({ timeStamp: now - 300 })).toBe(now - 300);
+    const epoch = tapTime({ timeStamp: Date.now() });
+    expect(epoch).toBeGreaterThanOrEqual(now);
+    expect(epoch).toBeLessThan(now + 1000);
+    expect(tapTime(null)).toBeGreaterThanOrEqual(now);
+    expect(tapTime({ timeStamp: 0 })).toBeGreaterThanOrEqual(now);
+  });
+
+  it('맵 화면은 대화 장면이 떠 있는 동안 맵의 모습(가을걷이 뒤 등)을 바꾸지 않고, 닫힌 뒤에 다시 짓는다', () => {
+    const screen = SOURCES[Object.keys(SOURCES).find((path) => path.endsWith('/screens/MapScreen.tsx')) ?? ''] ?? '';
+    expect(screen).toMatch(/const lookNow = mapLook\(/);
+    expect(screen).toMatch(/if \(talking === null\) lookRef\.current = lookNow;/);
+    expect(screen).toMatch(/const look = lookRef\.current;/);
+    expect(screen).toMatch(/useMemo\(\(\) => seasonalMap\([^)]*\)[^\n]*\[role\.map, look\]\)/);
   });
 });
 

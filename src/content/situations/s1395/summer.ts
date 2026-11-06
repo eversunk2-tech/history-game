@@ -54,6 +54,8 @@ const WEED_ALL: Line = { text: '온 식구가 논에 엎드려 풀을 뽑았다.
 const WEED_SWAP: Line = { who: 'neighbor-elder', pose: 'glad', text: '오늘은 너희 논, 다음은 우리 논이다. 여럿이 하니 금방이구나.' };
 const WEED_SWAP_REPAY: Line = { who: 'neighbor-elder', pose: 'glad', text: '봄에 네가 우리 논갈이를 거들었지. 이번엔 내가 갚을 차례다.' };
 const WEED_REST: Line = { text: '쉬엄쉬엄 논 한쪽만 맸다. 남은 풀이 벼와 키를 겨룬다.' };
+/** 어른께 맡겼을 때의 둘째 창(4-1 ㉠, 1-라 11.8 ⑧ — 어머니가 "곁에서 보아라" 한 뒤에 "온 식구가 엎드려…"·"쉬엄쉬엄…"이 나와 어긋났다) */
+const WEED_LEFT: Line = { text: '어머니가 논에 엎드려 풀을 뽑으셨다. 곁에서 보니 벼와 풀이 조금씩 가려 보인다.' };
 /** 쉬엄쉬엄 맸는데 놀이에서 풀을 말끔히 뽑았을 때(review 3번) */
 const WEED_REST_CLEAN: Line = { text: '쉬엄쉬엄 맸지만 내 손이 닿은 데는 말끔하다. 남은 데는 다음에 매자.' };
 
@@ -197,7 +199,7 @@ export const happenings: Happening[] = [
         ...weeded('rough', WEED_ALL, { body: -2, living: 1 }),
         variants: [
           { when: whenPlay(SUMMER.weedClean), ...weeded('clean', WEED_ALL, { body: -2, living: 2 }) },
-          { when: whenPlay(SUMMER.weedLeft), ...weeded('left', WEED_ALL, { body: -2, living: 1 }) },
+          { when: whenPlay(SUMMER.weedLeft), ...weeded('left', WEED_LEFT, { body: -2, living: 1 }) },
         ],
       },
       {
@@ -227,7 +229,7 @@ export const happenings: Happening[] = [
         ...weeded('rough', WEED_REST, { living: -1 }),
         variants: [
           { when: whenPlay(SUMMER.weedClean), ...weeded('clean', WEED_REST_CLEAN, {}) },
-          { when: whenPlay(SUMMER.weedLeft), ...weeded('left', WEED_REST, { living: -1 }) },
+          { when: whenPlay(SUMMER.weedLeft), ...weeded('left', WEED_LEFT, { living: -1 }) },
         ],
       },
     ],

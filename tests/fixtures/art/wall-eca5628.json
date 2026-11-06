@@ -1,0 +1,30 @@
+{
+  "_": "그림 올리기 ②의 고침 판(eca5628)의 양반 댁 담: 가로 담 셋·세로 담 둘 × 다섯 벌, catalog의 thingDef가 지은 그림(벌에 맞추기 전). 값은 '장 수x너비x높이 ax ay wash shades 점들의 sha256'. eca5628을 git archive로 꺼내 그 코드로 떴다(4-1 ㉠ 권고 C — 되돌린 값의 시험)",
+  "walls": {
+    "spring wallH:0": "1x32x60 ax16 ay52 wash0.0000 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] ce94450c60da4d6d45ba4cd1553ea26bf4e9142d2eaac1341f460e98a1af53e1",
+    "spring wallH:1": "1x32x60 ax16 ay52 wash0.1042 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] ad82111300c12599d8f1f5219e3f0b68238f4151ba95ad0b3eb36c9dd9cd0cdf",
+    "spring wallH:2": "1x32x60 ax16 ay52 wash0.0000 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] b8da80f8b6ed60e770603e1da81d9f21c2e04a83f5c47959fbcd08c3aeed6806",
+    "spring wallV:0": "1x28x76 ax14 ay68 wash0.0000 shades[{\"dx\":5,\"dy\":-6,\"rx\":7,\"ry\":10,\"strength\":0.3}] 05ed174e9696f14c04fb435984beec070fb0eea03b5479f1a47b77ae7a5c2693",
+    "spring wallV:1": "1x28x76 ax14 ay68 wash0.3676 shades[{\"dx\":5,\"dy\":-6,\"rx\":7,\"ry\":10,\"strength\":0.3}] 19073e7bcfa203d424c3fb26b3ee0501ff08c9cdbaaadfc3cb359b128866fc3d",
+    "summer wallH:0": "1x32x60 ax16 ay52 wash0.0000 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] ce94450c60da4d6d45ba4cd1553ea26bf4e9142d2eaac1341f460e98a1af53e1",
+    "summer wallH:1": "1x32x60 ax16 ay52 wash0.1042 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] ad82111300c12599d8f1f5219e3f0b68238f4151ba95ad0b3eb36c9dd9cd0cdf",
+    "summer wallH:2": "1x32x60 ax16 ay52 wash0.0000 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] b8da80f8b6ed60e770603e1da81d9f21c2e04a83f5c47959fbcd08c3aeed6806",
+    "summer wallV:0": "1x28x76 ax14 ay68 wash0.0000 shades[{\"dx\":5,\"dy\":-6,\"rx\":7,\"ry\":10,\"strength\":0.3}] 05ed174e9696f14c04fb435984beec070fb0eea03b5479f1a47b77ae7a5c2693",
+    "summer wallV:1": "1x28x76 ax14 ay68 wash0.3676 shades[{\"dx\":5,\"dy\":-6,\"rx\":7,\"ry\":10,\"strength\":0.3}] 19073e7bcfa203d424c3fb26b3ee0501ff08c9cdbaaadfc3cb359b128866fc3d",
+    "rain wallH:0": "1x32x60 ax16 ay52 wash0.0000 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] 88f96a3cdd85431e279b81136088fd3a008a7580d8e8c106b957acc459a32cc1",
+    "rain wallH:1": "1x32x60 ax16 ay52 wash0.1042 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] bb844ccaeabf4274fa19d974c77cf6564cc6445c51930f85094bb9eec00d0ce1",
+    "rain wallH:2": "1x32x60 ax16 ay52 wash0.0000 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] a0f028808452bce2e966c554766f6e87826278b6562d116b985111ed421f17d2",
+    "rain wallV:0": "1x28x76 ax14 ay68 wash0.0000 shades[{\"dx\":5,\"dy\":-6,\"rx\":7,\"ry\":10,\"strength\":0.3}] b81cd80d14bf2afba41cc570cf56e0c8c6bb2edfa60bb0abbf5cdf42c3c26da5",
+    "rain wallV:1": "1x28x76 ax14 ay68 wash0.3676 shades[{\"dx\":5,\"dy\":-6,\"rx\":7,\"ry\":10,\"strength\":0.3}] ae779b3abac798f4df4292487a0f39ed38fdc64033d6876ccf13e7371254ef4c",
+    "autumn wallH:0": "1x32x60 ax16 ay52 wash0.0000 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] ce94450c60da4d6d45ba4cd1553ea26bf4e9142d2eaac1341f460e98a1af53e1",
+    "autumn wallH:1": "1x32x60 ax16 ay52 wash0.1042 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] ad82111300c12599d8f1f5219e3f0b68238f4151ba95ad0b3eb36c9dd9cd0cdf",
+    "autumn wallH:2": "1x32x60 ax16 ay52 wash0.0000 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] b8da80f8b6ed60e770603e1da81d9f21c2e04a83f5c47959fbcd08c3aeed6806",
+    "autumn wallV:0": "1x28x76 ax14 ay68 wash0.0000 shades[{\"dx\":5,\"dy\":-6,\"rx\":7,\"ry\":10,\"strength\":0.3}] 05ed174e9696f14c04fb435984beec070fb0eea03b5479f1a47b77ae7a5c2693",
+    "autumn wallV:1": "1x28x76 ax14 ay68 wash0.3676 shades[{\"dx\":5,\"dy\":-6,\"rx\":7,\"ry\":10,\"strength\":0.3}] 19073e7bcfa203d424c3fb26b3ee0501ff08c9cdbaaadfc3cb359b128866fc3d",
+    "winter wallH:0": "1x32x60 ax16 ay52 wash0.0000 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] 671f1507ecf8fffa4bfe82472c5bae3c2b2c29148d1748c7cdf68ea9180fb731",
+    "winter wallH:1": "1x32x60 ax16 ay52 wash0.1042 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] fde0429dae8538e112ee8329b47bf0ec3496d6430c204a9c6e723d928e50f383",
+    "winter wallH:2": "1x32x60 ax16 ay52 wash0.0000 shades[{\"dx\":3,\"dy\":2,\"rx\":10,\"ry\":4,\"strength\":0.3}] bf107b59f1c48149a109119801b768be0f3bb5353efac81fd6df9b72f3688716",
+    "winter wallV:0": "1x28x76 ax14 ay68 wash0.0000 shades[{\"dx\":5,\"dy\":-6,\"rx\":7,\"ry\":10,\"strength\":0.3}] ae88a8ff376824f1bebbbb6da5de12051da12e2f7a7c83bb0c0710459d1253ae",
+    "winter wallV:1": "1x28x76 ax14 ay68 wash0.0000 shades[{\"dx\":5,\"dy\":-6,\"rx\":7,\"ry\":10,\"strength\":0.3}] 01a0ab62ae7458ff6a9a2aa8dc02f2ac868961b17722271b89c50601f223bf19"
+  }
+}

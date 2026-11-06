@@ -73,6 +73,32 @@
   left: 47%;
 }
 
+/* 무대에 clear가 적힌 장면(배경의 한쪽에 이야기가 가리키는 것이 있다 — 겨울 방의 쌀독): 대화하는 동안 둘 다 반대쪽으로 비켜 선다.
+   설 자리의 가운데: 한 사람 62%(clear-left) · 38%(clear-right), 두 사람 46%와 76% · 24%와 54%. 선택지를 고를 때는 아래의 자리 그대로다. */
+.talk.clear-left:not(.step-choose).cast-1 .talk-slot {
+  left: 37%;
+}
+
+.talk.clear-left:not(.step-choose).cast-2 .talk-slot.at-left {
+  left: 21%;
+}
+
+.talk.clear-left:not(.step-choose).cast-2 .talk-slot.at-right {
+  left: 51%;
+}
+
+.talk.clear-right:not(.step-choose).cast-1 .talk-slot {
+  left: 13%;
+}
+
+.talk.clear-right:not(.step-choose).cast-2 .talk-slot.at-left {
+  left: -1%;
+}
+
+.talk.clear-right:not(.step-choose).cast-2 .talk-slot.at-right {
+  left: 29%;
+}
+
 /* 선택지가 뜨면 비켜선다(칸의 너비가 50%이므로 왼쪽 끝 = 설 자리의 가운데 - 25%) */
 .talk.step-choose.cast-1 .talk-slot {
   left: calc((100% - var(--choices-w) - 0.9rem) / 2 - 25%);

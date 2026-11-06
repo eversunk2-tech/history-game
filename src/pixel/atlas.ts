@@ -546,6 +546,8 @@ export interface GroundCanvas {
   left: number;
   /** 잘게 나눠 칠하는 중인 네모(맵 칸 — x0, y0, x1, y1, 끝 포함)와 그 일감(없으면 null). i는 그 네모를 고른 조각(아니면 −1) */
   cur: { i: number; box: TileBox; steps: Generator<undefined, Px, undefined> } | null;
+  /** 화면 둘레 띠를 칠하는 중인 작은 네모(workBand — 조각을 칠하던 cur는 그대로 두고 따로 잇는다) */
+  band: { box: TileBox; steps: Generator<undefined, Px, undefined> } | null;
 }
 
 /** 맵 칸의 네모(끝 포함) */
@@ -561,7 +563,7 @@ export function groundCanvas(atlas: Atlas, map: GroundMap, shades: readonly Shad
   const ch = Math.ceil(job.H / GROUND_CHUNK);
   const tw = job.W / GROUND_TILE;
   const th = job.H / GROUND_TILE;
-  return { canvas, job, wet: job.wet, glint: job.glint, crop: job.crop, tw, th, painted: new Uint8Array(tw * th), cw, ch, done: new Uint8Array(cw * ch), left: cw * ch, cur: null };
+  return { canvas, job, wet: job.wet, glint: job.glint, crop: job.crop, tw, th, painted: new Uint8Array(tw * th), cw, ch, done: new Uint8Array(cw * ch), left: cw * ch, cur: null, band: null };
 }
 
 /** 조각 하나의 칸 네모 */
@@ -657,8 +659,9 @@ export function paintAround(g: GroundCanvas, x0: number, y0: number, x1: number,
       const c = chunkBox(g, i);
       const part: TileBox = [Math.max(c[0], box[0]), Math.max(c[1], box[1]), Math.min(c[2], box[2]), Math.min(c[3], box[3])];
       if (!undoneBox(g, part)) continue;
-      // 나눠 칠하던 네모가 이 조각에 걸쳐 있으면 그것부터 마저 칠한다(같은 칸을 두 번 셈하지 않게)
-      if (g.cur && g.cur.i === i) paintBox(g, g.cur.box);
+      // 보이는 몫만 칠한다. 쉬는 틈에 나눠 칠하던 네모(조각 하나 — 4배 느리게에서 60~100ms)가 이 조각에 걸쳐 있어도 그것을 마저 칠하지
+      // 않는다(4-1 ㉠, Review 권고 A: 걷다가 그 조각에 닿는 장이 길어졌다). 나눠 칠하던 것은 나중에 같은 점을 한 번 더 놓을 뿐이다
+      // (땅의 셈은 둘레를 함께 세어 어느 네모로 칠해도 같은 점을 낸다).
       paintBox(g, part);
       n++;
     }
@@ -740,6 +743,63 @@ export function workView(g: GroundCanvas, budgetMs: number, view: readonly [numb
     stepCur(g);
   } while (performance.now() - t0 < budgetMs);
   return !g.cur && !undoneBox(g, want);
+}
+
+/** 화면 둘레 띠를 칠하는 작은 네모의 한 변(맵 칸) — 조각(8칸)의 반. 한 장 안에 나눠 칠하고, 띠가 바뀌어도 버리는 일이 작다 */
+export const BAND_CELL = 4;
+
+/**
+ * 화면 둘레 띠(want — 맵 칸의 네모)에 칠하지 않은 칸이 걸친 작은 네모(BAND_CELL칸, 맵 전체의 격자에 맞춘다) 가운데
+ * (x, y)(맵 점)에서 가장 가까운 것의 칠하지 않은 칸들(없으면 null). 띠에 한 줄만 걸쳐도 그 작은 네모를 함께 칠한다
+ * — 띠가 한 칸씩 밀려 올 때마다 한 줄씩 칠하면 둘레를 함께 세는 몫(ground의 MARGIN)이 두세 배로 든다.
+ */
+export function bandCell(g: GroundCanvas, want: TileBox, x: number, y: number): TileBox | null {
+  const todo = undoneBox(g, want);
+  if (!todo) return null;
+  const T = GROUND_TILE / ART;
+  let best: TileBox | null = null;
+  let bestD = Infinity;
+  for (let cy = Math.floor(todo[1] / BAND_CELL); cy <= Math.floor(todo[3] / BAND_CELL); cy++) {
+    for (let cx = Math.floor(todo[0] / BAND_CELL); cx <= Math.floor(todo[2] / BAND_CELL); cx++) {
+      const part: TileBox = [Math.max(cx * BAND_CELL, todo[0]), Math.max(cy * BAND_CELL, todo[1]), Math.min(cx * BAND_CELL + BAND_CELL - 1, todo[2]), Math.min(cy * BAND_CELL + BAND_CELL - 1, todo[3])];
+      if (!undoneBox(g, part)) continue;
+      const left = undoneBox(g, [cx * BAND_CELL, cy * BAND_CELL, cx * BAND_CELL + BAND_CELL - 1, cy * BAND_CELL + BAND_CELL - 1]);
+      if (!left) continue;
+      const dx = ((left[0] + left[2] + 1) / 2) * T - x;
+      const dy = ((left[1] + left[3] + 1) / 2) * T - y;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) {
+        bestD = d;
+        best = left;
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * 화면 둘레 띠를 budget 밀리초쯤 칠한다(4-1 ㉠, Review 권고 A). 띠(wants — 맵 칸의 네모들, 앞의 것부터)의 칠하지 않은 칸을
+ * 작은 네모(bandCell — (x, y)에 가까운 것부터)로 나눠 칠한다. 쉬는 틈에 조각을 칠하던 일감(cur)은 건드리지 않고 그대로 둔다
+ * (띠가 먼저다 — 조각 하나를 마저 칠하느라 띠가 늦지 않게). 띠를 다 칠했으면 true.
+ */
+export function workBand(g: GroundCanvas, budgetMs: number, wants: readonly TileBox[], x: number, y: number): boolean {
+  const t0 = performance.now();
+  // 그리기가 그 자리에서 이미 칠한 네모면 버린다
+  if (g.band && !undoneBox(g, g.band.box)) g.band = null;
+  do {
+    if (!g.band) {
+      let box: TileBox | null = null;
+      for (const want of wants) if ((box = bandCell(g, want, x, y))) break;
+      if (!box) return true;
+      g.band = { box, steps: stepsOf(g, box) };
+    }
+    const r = g.band.steps.next();
+    if (r.done) {
+      putBox(g, g.band.box, r.value);
+      g.band = null;
+    }
+  } while (performance.now() - t0 < budgetMs);
+  return false;
 }
 
 /** 땅을 다 칠한다(그림 견본, 시험용) */

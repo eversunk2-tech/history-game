@@ -1232,8 +1232,55 @@ describe('바퀴 1-라에서 더한 규칙', () => {
 /** 대본(docs/script-1395.md). "이 문서의 글이 곧 자료다" — 자료의 글이 대본에 그대로 있는지 본다(Review가 둘을 견준다). */
 const SCRIPT = Object.values(import.meta.glob<string>('../docs/script-1395.md', { eager: true, query: '?raw', import: 'default' }))[0] ?? '';
 
+/**
+ * 대본에서 25절("바퀴 1-라 고치기에서 바뀐 글과 수치" — 고치기 전의 글을 함께 적은 기록)을 뺀 것. 자료의 글은 이 안에서 찾는다
+ * (4-1 ㉠, 1-라 Review 11.8 ⑩: 대본 전체에서 찾으면 고친 글을 25.2의 "전" 글로 되돌려도 통과했다).
+ */
+const SCRIPT_BODY = ((): string => {
+  const at = SCRIPT.indexOf('\n## 25.');
+  if (at < 0) return SCRIPT;
+  const next = SCRIPT.indexOf('\n## ', at + 6);
+  return SCRIPT.slice(0, at) + (next < 0 ? '' : SCRIPT.slice(next));
+})();
+
+// 4-1 ㉠(1-라 11.8 ⑨): 값 치르기를 알맞게 끝내면 놀이판의 마지막 말 바로 뒤에 결과 첫 창이 같은 말("알맞게 가져왔구나")로 떴다
+describe('값 치르기 놀이판의 마지막 말', () => {
+  const PAY = Object.values(import.meta.glob<string>('../src/plays/Pay.tsx', { eager: true, query: '?raw', import: 'default' }))[0] ?? '';
+  it('알맞게 내면 "그만하면 됐다. 소금 가져가거라."이고, 결과 첫 창과 말머리가 겹치지 않는다. 대본에도 같은 글이 있다', () => {
+    expect(PAY.length).toBeGreaterThan(1000);
+    expect(PAY).toContain("'그만하면 됐다. 소금 가져가거라.'");
+    expect(PAY).not.toContain('알맞게 가져왔구나. 소금 가져가거라.');
+    const exact = JSON.stringify(s1395).includes(JSON.stringify('알맞게 가져왔구나. 자, 소금 받아라.'));
+    expect(exact).toBe(true);
+    expect(SCRIPT).toContain('"그만하면 됐다. 소금 가져가거라."');
+  });
+});
+
 describe('대본과 자료가 같은 글이다', () => {
-  const missing = (texts: [string, string][]): string[] => texts.filter(([, text]) => text.length > 0 && !SCRIPT.includes(text)).map(([where, text]) => `${where}: ${text}`);
+  const missing = (texts: [string, string][]): string[] => texts.filter(([, text]) => text.length > 0 && !SCRIPT_BODY.includes(text)).map(([where, text]) => `${where}: ${text}`);
+
+  it('25절(고치기 전의 글)은 빼고 찾는다. 그리고 25.2의 "전" 글은 자료에 하나도 없다(고친 글을 되돌리면 잡는다)', () => {
+    expect(SCRIPT).toContain('## 25. 바퀴 1-라 고치기에서 바뀐 글과 수치');
+    expect(SCRIPT_BODY).not.toContain('## 25.');
+    expect(SCRIPT_BODY.length).toBeGreaterThan(SCRIPT.length * 0.7);
+    // 25.2의 표: | 어디 | 전 | 후 | review |
+    const table = SCRIPT.slice(SCRIPT.indexOf('### 25.2'), SCRIPT.indexOf('### 25.3'));
+    const before = table
+      .split('\n')
+      .filter((row) => row.startsWith('| ') && !row.startsWith('| 어디') && !row.startsWith('|---'))
+      .map((row) => row.split('|').map((cell) => cell.trim()))
+      .map((cells) => [cells[2], cells[3]] as const)
+      .filter(([was, now]) => was.length > 0 && was !== now);
+    expect(before.length).toBeGreaterThan(40);
+    // 자료(이야기 꾸러미와 카드·물건·자리 이름)의 글자값 가운데 "전" 글과 꼭 같은 것. 다른 갈림에서 그대로 쓰는 글(본문에도 있는 글)은 뺀다
+    const data = JSON.stringify([s1395, bundle]);
+    const gone = before.filter(([was]) => !SCRIPT_BODY.includes(was));
+    expect(gone.length).toBeGreaterThan(30);
+    expect(gone.filter(([was]) => data.includes(JSON.stringify(was))).map(([was]) => was)).toEqual([]);
+    // 본문의 설명에도 옛 글이 남은 것(review 18번·5번)은 직접 못 박는다
+    for (const old of ['딱 맞게 가져왔구나', '셈이 밝은 아이로다', '궁궐보다 먼저']) expect(data, old).not.toContain(old);
+    expect(data).toContain(JSON.stringify('알맞게 가져왔구나. 자, 소금 받아라.'));
+  });
 
   it('대본을 읽었다', () => {
     expect(SCRIPT.length).toBeGreaterThan(50000);

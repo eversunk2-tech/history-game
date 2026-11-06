@@ -21,12 +21,14 @@ import {
   thingSteps,
   tilesOver,
   undoneBox,
+  workBand,
   workGround,
   workView,
   type Atlas,
   type GroundCanvas,
   type Needs,
   type Step,
+  type TileBox,
 } from '../pixel/atlas';
 import { ART } from '../pixel/px';
 import { cameraGoal } from './camera';
@@ -377,17 +379,62 @@ export function openSession(spec: SessionSpec): MapSession {
   return session;
 }
 
+/** 한 장에서 뒤로 미룬 그림을 짓기 시작해도 되는 시간(밀리초) */
+const LATER_BUDGET = 6;
+
+/** 화면 둘레 띠의 넉넉함(맵 점): 사방 두 칸, 걷는 쪽은 세 칸 더(4-1 ㉠, Review 권고 A) */
+export const BAND_PAD = 2 * TILE;
+export const BAND_LEAD = 3 * TILE;
+
+/**
+ * 화면 둘레 띠(맵 칸의 네모들 — 먼저 칠할 것부터): ① 보이는 화면 + 사방 BAND_PAD ② 걷는 쪽(ahead가 주인공에서 벗어난 쪽)으로 BAND_LEAD 더.
+ * 보이는 화면은 world.cam·world.view로 잰다.
+ */
+export function bandOf(s: MapSession, ahead: { x: number; y: number }): TileBox[] {
+  const { cam, view, player } = s.world;
+  const g = s.scene.ground;
+  const x0 = cam.x - BAND_PAD;
+  const y0 = cam.y - BAND_PAD;
+  const x1 = cam.x + view.w + BAND_PAD;
+  const y1 = cam.y + view.h + BAND_PAD;
+  const out = [tilesOver(g, x0, y0, x1, y1)];
+  const dx = Math.sign(Math.round(ahead.x - player.x));
+  const dy = Math.sign(Math.round(ahead.y - player.y));
+  if (dx !== 0 || dy !== 0) out.push(tilesOver(g, x0 + Math.min(0, dx) * BAND_LEAD, y0 + Math.min(0, dy) * BAND_LEAD, x1 + Math.max(0, dx) * BAND_LEAD, y1 + Math.max(0, dy) * BAND_LEAD));
+  return out;
+}
+
+/**
+ * 화면을 돌리거나(가로 ↔ 세로) 크기를 바꿀 때 새로 보일 땅: 보이는 화면의 가운데에서 긴 변의 네모(+ 사방 BAND_PAD).
+ * 가로 화면이면 위아래로, 세로 화면이면 좌우로 넓다(4-1 ㉠, Review 권고 A의 "연 직후 화면 크기 바꾸기").
+ */
+export function turnBandOf(s: MapSession): TileBox {
+  const { cam, view } = s.world;
+  const side = Math.max(view.w, view.h) / 2 + BAND_PAD;
+  const cx = cam.x + view.w / 2;
+  const cy = cam.y + view.h / 2;
+  return tilesOver(s.scene.ground, cx - side, cy - side, cx + side, cy + side);
+}
+
 /**
  * 맵을 연 뒤에 남은 그림과 땅을 budget 밀리초만 짓고 칠한다(spec 4.7.5의 ㅋ — 한 장의 시간 안에 나눠). 걷는 쪽으로 앞선 자리(ahead, 맵 점)에서
- * 가까운 것부터 해, 화면이 닿기 전에 해 둔다. 그림을 먼저(땅의 그림자는 그림 없이도 안다), 다음에 땅. 다 했으면 false.
+ * 가까운 것부터 해, 화면이 닿기 전에 해 둔다. 차례(4-1 ㉠, Review 권고 A — 연 직후 곧장 걷거나 화면을 돌려도 그리기가 땅을 그 자리에서
+ * 칠하지 않게): ① 화면 둘레 띠의 땅(작은 네모로 잘게) ② 뒤로 미룬 그림(땅의 그림자는 그림 없이도 안다) ③ 화면을 돌릴 때 보일 땅
+ * ④ 나머지 땅(조각마다). 다 했으면 false.
  */
 export function paintIdle(s: MapSession, budgetMs: number, ahead: { x: number; y: number } = s.world.player): boolean {
   const t0 = performance.now();
-  if (s.later.length > 0 && workLater(s.later, ahead.x, ahead.y, t0, budgetMs)) return true;
   const g = s.scene.ground;
+  const left = (): number => budgetMs - (performance.now() - t0);
+  if (g.left > 0 && !workBand(g, budgetMs, bandOf(s, ahead), ahead.x, ahead.y)) return true;
+  // 서 있으면 ③을 ②보다 먼저(서 있는 동안에는 화면을 돌리는 일이 걷기보다 먼저 온다 — 걷기 시작하면 걷는 쪽의 그림이 먼저다)
+  const still = Math.round(ahead.x - s.world.player.x) === 0 && Math.round(ahead.y - s.world.player.y) === 0;
+  if (still && g.left > 0 && left() > 0.5 && !workBand(g, left(), [turnBandOf(s)], ahead.x, ahead.y)) return true;
+  // 그림의 일감 하나는 나눌 수 없다(4배 느리게에서 30ms 남짓) — 서 있을 때 늘린 몫(MapScreen)은 땅에만 쓰고 그림은 6ms까지만 시작한다
+  if (s.later.length > 0 && workLater(s.later, ahead.x, ahead.y, t0, Math.min(budgetMs, LATER_BUDGET))) return true;
   if (g.left === 0) return s.later.length > 0;
-  const left = budgetMs - (performance.now() - t0);
-  if (left > 0.5) workGround(g, left, () => nearestChunk(g, ahead.x, ahead.y));
+  if (left() > 0.5 && !workBand(g, left(), [turnBandOf(s)], ahead.x, ahead.y)) return true;
+  if (left() > 0.5) workGround(g, left(), () => nearestChunk(g, ahead.x, ahead.y));
   return g.left > 0 || s.later.length > 0;
 }
 

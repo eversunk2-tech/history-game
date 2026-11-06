@@ -446,7 +446,8 @@ function buildingsOf(b: MapBuilder): void {
   b.put('choga', 36, 32, { variant: 0 });
   b.put('shed', 32, 33);
   b.put('jars', 42, 32, { variant: 1 });
-  b.put('woodpile', 34, 30);
+  // 4-1 ㉠(1-라 11.8 ④): 나뭇더미를 한 칸 아래로(34,30 → 34,31), 형은 그 앞(35,32)에 선다 — 헛간 지붕에 가려 머리와 어깨만 보였다
+  b.put('woodpile', 34, 31);
   b.rowOf('fenceH', 33, 37, 36);
   b.rowOf('fenceH', 41, 44, 36);
   b.put('blossom', 44, 31, { variant: 0 });
@@ -1039,9 +1040,10 @@ const DWELLERS: Local[] = [
       solid: true,
     },
     {
-      // 여름: 이웃집 논에서 김을 맨다(덤 「이웃집 논의 김매기」)
+      // 여름: 이웃집 논에서 김을 맨다(덤 「이웃집 논의 김매기」). 4-1 ㉠(1-라 11.8 ③): 한 칸 동쪽(46 → 47) — 말풍선(45,57)의 누름 칸이
+      // 아주머니의 왼다리에 걸쳐, 아주머니를 누르다 덤이 열렸다
       summer: [
-        { ...CLEAR, sprite: 'wellWomanHoe', about: '논에 들어가 김을 매고 있어요.', at: [46, 57], facing: 'right', solid: false },
+        { ...CLEAR, sprite: 'wellWomanHoe', about: '논에 들어가 김을 매고 있어요.', at: [47, 57], facing: 'right', solid: false },
         // 큰비가 온 해: 냇가 쪽 낮은 논은 물에 잠겨, 비탈 쪽 높은 논부터 맨다(대본 15.2)
         { ...RAIN, sprite: 'wellWomanHoe', about: '높은 논에 들어가 김을 매고 있어요.', at: [57, 47], facing: 'right', solid: false },
       ],
@@ -1243,12 +1245,12 @@ const DWELLERS: Local[] = [
       ],
       // 가을: 장정들이 떠난 동안에는 집의 일을 맡고, 돌아온 뒤에는 논에서 벼를 벤다
       autumn: [
-        { about: '집 뒤에서 장작을 패고 있어요.', at: [33, 31], facing: 'right', shows: { notFlags: [FLAG.back] } },
+        { about: '집 뒤에서 장작을 패고 있어요.', at: [35, 32], facing: 'right', shows: { notFlags: [FLAG.back] } },
         { id: 'brotherField', sprite: 'brotherSickle', about: '누렇게 익은 벼를 베고 있어요.', at: [39, 55], facing: 'left', solid: false, shows: { flags: [FLAG.back], notFlags: [FLAG.harvest] } },
         // 가을걷이를 마친 뒤: 겨울에 땔 나무를 장만한다
-        { id: 'brotherDone', about: '겨울에 땔 장작을 패고 있어요.', at: [33, 31], facing: 'right', shows: { flags: [FLAG.harvest] } },
+        { id: 'brotherDone', about: '겨울에 땔 장작을 패고 있어요.', at: [35, 32], facing: 'right', shows: { flags: [FLAG.harvest] } },
       ],
-      winter: { about: '나뭇더미 앞에서 장작을 패고 있어요.', at: [33, 31], facing: 'right' },
+      winter: { about: '나뭇더미 앞에서 장작을 패고 있어요.', at: [35, 32], facing: 'right' },
     },
   ),
   {
