@@ -1,7 +1,7 @@
 // 태블릿과 홈 화면: 기기 가리기, 홈 화면에서 열렸는지, 새 판 알아차리기의 셈, 매니페스트와 아이콘, 안내의 글.
 // 브라우저 없이 돈다(실제 설치와 기기의 모습은 사용자의 점검표에서 본다).
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { kindOf, standaloneOf } from '../src/state/device';
 import { AWAY_MS, awayLongEnough, isNewBuild, scriptNameIn } from '../src/state/update';
 import {
@@ -20,7 +20,10 @@ import {
   guideShape,
 } from '../src/ui/InstallGuide';
 import { guardKeys, holdKeys, keysAreHeld, swallowIfHeld } from '../src/ui/focus';
-import { OPEN_GAP_MS, READ_GAP_MS, TAP_GAP_MS, TapGate, tapTime } from '../src/ui/taps';
+import { OPEN_GAP_MS, READ_GAP_MS, TAP_GAP_MS, TapGate, nowMs, tapTime } from '../src/ui/taps';
+import { mapLook } from '../src/content/maps';
+import { heldLook } from '../src/screens/MapScreen';
+import { tooSoonFor } from '../src/screens/Talk';
 import { turnNeeded } from '../src/ui/TurnNotice';
 
 const UA = {
@@ -432,15 +435,17 @@ describe('대화 장면 — 잇달아 누르기와 놀이 뒤의 첫 결과 창'
     const talk = SOURCES[Object.keys(SOURCES).find((path) => path.endsWith('/screens/Talk.tsx')) ?? ''] ?? '';
     const commit = talk.slice(talk.indexOf('const commit = '), talk.indexOf('const afterChoice = '));
     expect(commit).toMatch(/commitTalk\(/);
-    expect(commit).toMatch(/gate\.current\?\.hold\(nowMs\(\), afterPlay \? READ_GAP_MS : OPEN_GAP_MS\)/);
+    // 놀이 뒤면 읽을 틈, 아니면 새 창의 틈 — 문(TapGate.done)이 가른다(4-1 ㉠ 고침 바퀴 Review 권고 마: 두 번 막기를 문으로 옮김)
+    expect(commit).toMatch(/gate\.current\?\.done\(nowMs\(\), afterPlay\)/);
     // 막는 것이 결과를 띄우기(setDeed) 앞에 있다
-    expect(commit.indexOf('hold(')).toBeLessThan(commit.indexOf('setDeed('));
+    expect(commit.indexOf('done(')).toBeLessThan(commit.indexOf('setDeed('));
     // 놀이를 끝낸 것은 놀이 뒤로 넘긴다
     expect(talk).toMatch(/onDone=\{\(result\) => commit\(step\.choiceId, result, true\)\}/);
-    // 놀이 뒤 첫 창이 화면에 뜬 때 다시 막는다
-    expect(talk).toMatch(/gate\.current\?\.hold\(nowMs\(\), READ_GAP_MS\);/);
-    // 누름을 받을지 가르는 것은 이 문 하나이고, 누른 때(사건의 timeStamp)로 잰다
-    expect(talk).toMatch(/const tooSoon = \(ev\?: Event \| null\): boolean => !\(gate\.current as TapGate\)\.pass\(tapTime\(ev\)\);/);
+    // 놀이 뒤 첫 창이 화면에 뜬 때 다시 막는다(문의 shown — 단계가 바뀔 때마다 부르고, 문이 놀이 뒤의 첫 창에만 막는다)
+    expect(talk).toMatch(/if \(step\.kind !== 'play'\) gate\.current\?\.shown\(nowMs\(\)\);/);
+    // 누름을 받을지 가르는 것은 이 문 하나이고, 누른 때(사건의 timeStamp)로 잰다(tooSoonFor → TapGate.passTap)
+    expect(talk).toMatch(/const tooSoon = \(ev\?: Event \| null\): boolean => tooSoonFor\(gate\.current as TapGate, ev\);/);
+    expect(talk).toMatch(/return !gate\.passTap\(ev\);/);
     for (const call of ['advance(ev)', 'choose(view, ev)', 'later(ev)', 'closeNote(ev)']) expect(talk, call).toContain(call);
     // 처리한 때(Date.now)로 재는 곳이 남지 않았다. 배움 쪽지의 틈은 읽을 틈과 같은 하나다
     expect(talk).not.toMatch(/Date\.now\(\)/);
@@ -490,10 +495,79 @@ describe('대화 장면 — 놀이 뒤 첫 창의 읽을 틈(1-라 11.8 ②)', (
     expect(tapTime({ timeStamp: 0 })).toBeGreaterThanOrEqual(now);
   });
 
+  // 4-1 ㉠ 고침 바퀴(Review 권고 마): "놀이를 끝낸 때 한 번, 첫 창이 화면에 뜬 때 한 번 더 막기"는 문(TapGate)이 맡는다 — 화면을 모르는 꼴이라
+  // 4판의 겨루기 화면도 done·shown을 부르면 된다. 대화 장면(Talk.tsx)의 동작은 그대로다.
+  it('문의 두 번 막기(done → shown): 놀이 뒤면 끝낸 때부터 0.7초, 첫 창이 뜬 때부터 다시 0.7초 받지 않는다. 한 번만 다시 막는다', () => {
+    const gate = new TapGate(0);
+    expect(gate.pass(4000)).toBe(true);
+    const end = 64_000;
+    gate.done(end, true);
+    for (const at of [0, 300, 699]) expect(gate.pass(end + at), `끝낸 뒤 ${at}ms`).toBe(false);
+    // 느린 기기: 첫 창이 0.4초 늦게 뜬다 — 그때부터 다시 0.7초
+    gate.shown(end + 400);
+    for (const at of [700, 900, 1099]) expect(gate.pass(end + at), `끝낸 뒤 ${at}ms`).toBe(false);
+    expect(gate.pass(end + 1100)).toBe(true);
+    // 다음 창(단계가 바뀔 때마다 shown을 부른다)은 다시 막지 않는다 — 잇달아 누름의 틈(0.26초)만
+    gate.shown(end + 1200);
+    expect(gate.pass(end + 1100 + TAP_GAP_MS)).toBe(true);
+  });
+
+  it('문의 두 번 막기: 놀이 없이 마친 일은 새 창의 틈(0.38초)만 막고, 첫 창이 뜬 때 다시 막지 않는다', () => {
+    const gate = new TapGate(0);
+    gate.pass(4000);
+    const end = 64_000;
+    gate.done(end, false);
+    expect(gate.pass(end + OPEN_GAP_MS - 1)).toBe(false);
+    gate.shown(end + 100);
+    expect(gate.pass(end + OPEN_GAP_MS)).toBe(true);
+    // 고치기 전처럼 다시 막지 않으면(shown이 없으면) 0.7초 안의 누름이 첫 창을 넘긴다 — 위의 시험이 잘못을 잡는다
+    const once = new TapGate(0);
+    once.pass(4000);
+    once.hold(end, READ_GAP_MS);
+    expect(once.pass(end + 400 + 500)).toBe(true);
+  });
+
+  // 4-1 ㉠ 고침 바퀴(Review 권고 라 M3b): 대화 장면의 막기 셈을 사건 꼴로 불러 본다(소스 글자가 아니라 하는 일을 본다)
+  it('대화 장면의 막기 셈(tooSoonFor)은 누른 때로 잰다: 막는 틈 안에 누른 것은 처리가 늦어도 넘기지 않고, 틈이 지난 뒤에 누른 것은 받는다', () => {
+    // 시계를 멈춰 둔다(시험이 막 떠서 performance.now()가 작으면 1초 앞의 timeStamp가 0 아래가 된다)
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(100_000);
+    try {
+      const now = nowMs();
+      expect(now).toBe(100_000);
+      const gate = new TapGate(now - 5000);
+      gate.done(now - 1000, true); // 1초 전에 놀이를 끝냈다 → 0.3초 전까지 막는다
+      // 막는 틈 안에 누른 것(처리는 지금 — 맵을 다시 짓느라 늦게 처리되었다)
+      expect(tooSoonFor(gate, { timeStamp: now - 900 })).toBe(true);
+      expect(tooSoonFor(gate, { timeStamp: now - 400 })).toBe(true);
+      // 틈이 지난 뒤에 누른 것은 받고, 그로부터 0.26초 안의 누름은 잇달아 누른 것으로 친다
+      expect(tooSoonFor(gate, { timeStamp: now - 300 })).toBe(false);
+      expect(tooSoonFor(gate, { timeStamp: now - 100 })).toBe(true);
+      // 사건이 없으면 지금으로 친다(받은 누름에서 0.3초 뒤)
+      expect(tooSoonFor(gate, null)).toBe(false);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  // 4-1 ㉠ 고침 바퀴(Review 권고 라 M4b): 맵의 모습을 셈하는 작은 함수를 불러 본다
+  it('맵 모습의 셈(heldLook): 대화 장면이 떠 있는 동안에는 앞의 모습 그대로, 닫히면 지금의 모습(가을걷이 앞뒤의 실제 모습으로)', () => {
+    const before = mapLook('neutigol', 'autumn', 'clear', { flags: ['leave.tend', 'leave.back'] });
+    const after = mapLook('neutigol', 'autumn', 'clear', { flags: ['leave.tend', 'leave.back', 'harvest.done'] });
+    expect(before).not.toBe(after);
+    // 가을걷이 대화가 떠 있는 동안 몇 번을 다시 그려도 앞의 모습
+    let look = before;
+    for (let i = 0; i < 3; i++) look = heldLook(look, after, 's1395-autumn-harvest');
+    expect(look).toBe(before);
+    // 닫히면 새 모습, 그 뒤로는 지금의 모습을 따른다
+    look = heldLook(look, after, null);
+    expect(look).toBe(after);
+    expect(heldLook(look, before, null)).toBe(before);
+  });
+
   it('맵 화면은 대화 장면이 떠 있는 동안 맵의 모습(가을걷이 뒤 등)을 바꾸지 않고, 닫힌 뒤에 다시 짓는다', () => {
     const screen = SOURCES[Object.keys(SOURCES).find((path) => path.endsWith('/screens/MapScreen.tsx')) ?? ''] ?? '';
     expect(screen).toMatch(/const lookNow = mapLook\(/);
-    expect(screen).toMatch(/if \(talking === null\) lookRef\.current = lookNow;/);
+    expect(screen).toMatch(/lookRef\.current = heldLook\(lookRef\.current, lookNow, talking\);/);
     expect(screen).toMatch(/const look = lookRef\.current;/);
     expect(screen).toMatch(/useMemo\(\(\) => seasonalMap\([^)]*\)[^\n]*\[role\.map, look\]\)/);
   });

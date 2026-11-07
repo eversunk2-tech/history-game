@@ -38,7 +38,7 @@ import { STATS, type Deed, type GameState, type Happening, type Line, type Missi
 import { PLAYS } from '../plays';
 import { closeTalk, commitTalk, game, pack } from '../state/store';
 import { focusInto, useModalKeys } from '../ui/focus';
-import { OPEN_GAP_MS, READ_GAP_MS, TapGate, nowMs, tapTime } from '../ui/taps';
+import { READ_GAP_MS, TapGate, nowMs, tapTime } from '../ui/taps';
 import { LockIcon, SunIcon } from '../ui/icons';
 import { spotLabel } from '../ui/where';
 import { changeWords, josa, ro, type ChangeWords } from '../ui/words';
@@ -143,6 +143,23 @@ export function poseOf(member: { who: string; pose?: Pose }, lines: readonly Lin
   return member.pose ?? 'plain';
 }
 
+/**
+ * 대화 장면이 이 누름을 받지 않는가: 잇달아 누른 것과 새 창이 뜬 바로 뒤의 누름. 처리한 때가 아니라 누른 때(사건의 timeStamp)로 잰다
+ * — 느린 기기에서 늦게 처리된 누름도 창이 뜨기 전에 누른 것이면 받지 않는다(ui/taps.ts, 1-라 11.8 ②). 받으면 그 때를 문에 적는다.
+ */
+export function tooSoonFor(gate: TapGate, ev?: { timeStamp?: number } | null): boolean {
+  return !gate.passTap(ev);
+}
+
+/**
+ * 대화 장면의 꼴(class): 계절, 단계, 무대에 선 사람의 수(일 놀이와 쪽지에서는 0). 무대가 비켜 설 쪽(clear-left/right)은
+ * 자료에 stage.clear를 적은 장면(겨울 제삿날 첫 창 — 쌀독이 보이게, 1-라 11.8 ⑤)에만 붙는다.
+ */
+export function talkClass(happening: Happening, season: Season, step: Step['kind'], figures: boolean): string {
+  const cast = (happening.stage.cast ?? []).slice(0, 2).length;
+  return `talk season-${season} step-${step} cast-${figures ? cast : 0}${happening.stage.clear ? ` clear-${happening.stage.clear}` : ''}`;
+}
+
 function changeRows(deed: Deed): ChangeWords[] {
   return STATS.map((stat) => changeWords(stat, deed.requested[stat], deed.delta[stat], deed.before[stat], deed.after[stat])).filter(
     (row): row is ChangeWords => row !== null,
@@ -168,10 +185,8 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
   const gate = useRef<TapGate | null>(null);
   if (!gate.current) gate.current = new TapGate(nowMs());
   const committed = useRef(false);
-  /** 일 놀이를 끝내고 아직 첫 창이 화면에 뜨지 않았다(뜨면 그때부터 다시 READ_GAP_MS를 막는다) */
-  const playedLately = useRef(false);
 
-  const tooSoon = (ev?: Event | null): boolean => !(gate.current as TapGate).pass(tapTime(ev));
+  const tooSoon = (ev?: Event | null): boolean => tooSoonFor(gate.current as TapGate, ev);
 
   /** 일을 마치고 나온 결과에서 다음에 보여 줄 것 */
   const afterResult = (d: Deed): Step | null => {
@@ -199,18 +214,15 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
     const done = commitTalk({ id: happeningId, choiceId, play: played });
     if (!done) return; // 가게가 '이어 갈 수 없어요'로 보낸다
     // 결과의 첫 창이 새로 뜬다: 놀이를 끝낸 그 누름(자판 Enter, 잇달아 두 번·세 번 누른 끝내기 단추)이 그 창을 넘기지 않게.
-    // 놀이 뒤의 첫 창은 읽을 틈(READ_GAP_MS)만큼, 그 밖에는 새 창의 틈만큼 막는다
-    gate.current?.hold(nowMs(), afterPlay ? READ_GAP_MS : OPEN_GAP_MS);
-    playedLately.current = afterPlay;
+    // 놀이 뒤의 첫 창은 읽을 틈(READ_GAP_MS)만큼, 그 밖에는 새 창의 틈만큼 막고, 놀이 뒤면 그 창이 뜬 때 한 번 더 막는다(문이 맡는다 — ui/taps.ts)
+    gate.current?.done(nowMs(), afterPlay);
     setDeed(done);
     go(done.lines.length > 0 ? { kind: 'result', i: 0 } : afterResult(done));
   };
 
-  // 놀이 뒤의 첫 창이 화면에 뜬 때부터 다시 읽을 틈을 막는다(느린 기기에서 창이 늦게 뜨면 그만큼 늦게 받는다)
+  // 놀이 뒤의 첫 창이 화면에 뜬 때부터 다시 읽을 틈을 막는다(느린 기기에서 창이 늦게 뜨면 그만큼 늦게 받는다 — 문의 shown)
   useEffect(() => {
-    if (!playedLately.current || step.kind === 'play') return;
-    playedLately.current = false;
-    gate.current?.hold(nowMs(), READ_GAP_MS);
+    if (step.kind !== 'play') gate.current?.shown(nowMs());
   }, [step]);
 
   /** 선택이 끝난 뒤: 일 놀이가 있으면 놀이로, 없으면 바로 마친다 */
@@ -317,7 +329,7 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
 
   return (
     <div
-      class={`talk season-${snap.season} step-${step.kind} cast-${showsFigures ? cast.length : 0}${happening.stage.clear ? ` clear-${happening.stage.clear}` : ''}`}
+      class={talkClass(happening, snap.season, step.kind, showsFigures)}
       role="dialog"
       aria-modal="true"
       aria-label="대화 장면"

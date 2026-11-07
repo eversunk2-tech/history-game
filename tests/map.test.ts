@@ -24,6 +24,7 @@ import {
   type WalkGrid,
 } from '../src/map/path';
 import { dwellerName, gateReason, houseOf, T, TILE, terrainWalkable, zoneAt, type MapData, type Weather, type Who } from '../src/map/types';
+import { createWorld, setHidden } from '../src/map/world';
 
 const WHO: Record<string, Who> = {
   farmerBoy: { role: 'farmer', look: 'boy' },
@@ -1128,6 +1129,48 @@ describe('네 계절의 느티골', () => {
     const bundles = (stage: Stage): number => neutigol('autumn', 'clear', stage).objects.filter((o) => o.kind === 'bundle').length;
     expect(bundles('early')).toBeGreaterThan(0);
     for (const stage of ['gone', 'late', 'done'] as const) expect(bundles(stage), stage).toBe(0);
+  });
+});
+
+// 4-1 ㉠ 고침 바퀴(Review 권고 다): 나뭇더미를 한 칸 아래(34,31)로 옮겼더니 헛간(32~34, 32~33)과 집 사이 한 칸 길목(35,32)이 사철 막혔다.
+// 나뭇더미는 옛 자리(34,30)로 되돌리고, 형(35,32 — 4-1 ㉠)은 장작을 패는 때에 그 길목에 선다(나뭇더미 앞).
+describe('헛간과 집 사이 길목', () => {
+  const facts = (flags: string[]) => ({ role: 'farmer' as const, look: 'boy' as const, stats: { living: 5, body: 5, trust: 5 }, flags, draw: null, items: [] });
+  /** 판의 표시가 이럴 때 맵을 걷는 격자(자리에 없는 사람은 비킨다 — 맵 화면과 같은 셈) */
+  const gridAt = (map: MapData, flags: string[]): WalkGrid => {
+    const world = createWorld(map, WHO.farmerBoy, 'farmer-boy');
+    setHidden(world, new Set(map.dwellers.filter((d) => d.shows && !meets(d.shows, facts(flags))).map((d) => d.id)));
+    return world.grid;
+  };
+  // [이름, 맵, 판의 표시, 형이 길목(35,32)에서 장작을 패는가]
+  const LOOKS: [string, MapData, string[], boolean][] = [
+    ['봄', neutigol('spring'), [], false],
+    ['여름', neutigol('summer'), [], false],
+    ['큰비 여름(단오 전)', neutigol('summer', 'rain', 'early'), [], false],
+    ['가을(떠나기 전)', neutigol('autumn', 'clear', 'early'), [], true],
+    ['가을(떠난 뒤)', neutigol('autumn', 'clear', 'gone'), ['leave.tend'], true],
+    ['가을(돌아온 뒤)', neutigol('autumn', 'clear', 'late'), ['leave.tend', 'leave.back'], false],
+    ['가을(가을걷이 뒤)', neutigol('autumn', 'clear', 'done'), ['leave.tend', 'leave.back', 'harvest.done'], true],
+    ['겨울', neutigol('winter'), ['leave.back', 'harvest.done'], true],
+  ];
+
+  it('나뭇더미(34,30)는 길목을 막지 않는다: 집 뒤 두 칸(34~35, 31)이 늘 열려 있고, 형이 그 자리에 없으면 집 뒤(35,31)에서 길목(35,32)을 지나 앞마당(35,33)으로 두 걸음에 간다', () => {
+    for (const [name, map, flags, chopping] of LOOKS) {
+      const grid = gridAt(map, flags);
+      expect(map.objects.filter((o) => o.kind === 'woodpile' && Math.abs(o.tx - 34) <= 3 && Math.abs(o.ty - 31) <= 3).map((o) => `${o.tx},${o.ty}`), name).toEqual(['34,30']);
+      expect(grid.blocked[31 * grid.w + 34] + grid.blocked[31 * grid.w + 35], `${name} 집 뒤 두 칸`).toBe(0);
+      // 형이 서는 때(장작을 팬다)는 형이 길목에 선다 — 나뭇더미 앞(남쪽)
+      const standing = map.dwellers.filter((d) => d.person === 'brother' && d.at[0] === 35 && d.at[1] === 32 && (!d.shows || meets(d.shows, facts(flags))));
+      expect(standing.length > 0, name).toBe(chopping);
+      if (grid.blocked[32 * grid.w + 35] === 0) {
+        expect(findPath(grid, [35, 31], [35, 33]), name).toEqual([
+          [35, 32],
+          [35, 33],
+        ]);
+      } else expect(chopping, `${name} 길목을 막는 것은 형뿐이다`).toBe(true);
+      // 형이 없으면 길목이 열려 있다
+      if (!chopping) expect(grid.blocked[32 * grid.w + 35], `${name} 길목`).toBe(0);
+    }
   });
 });
 

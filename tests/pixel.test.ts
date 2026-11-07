@@ -962,6 +962,45 @@ function hiddenPeople(map: MapData): { id: string; share: number; body: number; 
   return out;
 }
 
+/**
+ * 세운 것 하나(obj)의 그림이 그보다 나중에 그려지는 세운 것에 덮이는 몫(0~1)과 가장 많이 덮은 것 — hiddenPeople과 같은 셈(그리기의 차례·자리는 draw.ts).
+ * 4-1 ㉠ 고침 바퀴(Review 권고 다): 나뭇더미를 한 칸 아래(34,31)로 옮겼더니 헛간 지붕에 3분의 1이 가렸다.
+ */
+function hiddenThing(map: MapData, obj: MapData['objects'][number]): { share: number; by: string } {
+  const defs = thingDefs(paletteOf(map.season, map.weather));
+  const things = map.objects
+    .filter((o) => !THINGS[o.kind].flat)
+    .map((o) => {
+      const def = defs.get(thingKey(o.kind, o.gate ? 0 : o.variant))!;
+      const at = anchorOf(o.kind, o.tx, o.ty, o.dx, o.dy);
+      return { o, f: def.frames[0], x0: at.x - def.ax / ART, y0: at.y - def.ay / ART, sortY: at.y + (def.sort ?? 0) };
+    });
+  const me = things.find((t) => t.o === obj)!;
+  let all = 0;
+  let hid = 0;
+  const by = new Map<string, number>();
+  for (let y = 0; y < me.f.h; y++) {
+    for (let x = 0; x < me.f.w; x++) {
+      if (me.f.get(x, y) >>> 24 === 0) continue;
+      all++;
+      const wx = me.x0 + (x + 0.5) / ART;
+      const wy = me.y0 + (y + 0.5) / ART;
+      for (const t of things) {
+        if (t === me || t.sortY <= me.sortY) continue;
+        const fx = Math.floor((wx - t.x0) * ART);
+        const fy = Math.floor((wy - t.y0) * ART);
+        if (fx < 0 || fy < 0 || fx >= t.f.w || fy >= t.f.h || t.f.get(fx, fy) >>> 24 === 0) continue;
+        hid++;
+        const name = `${t.o.kind}@${t.o.tx},${t.o.ty}`;
+        by.set(name, (by.get(name) ?? 0) + 1);
+        break;
+      }
+    }
+  }
+  const worst = [...by.entries()].sort((a, b) => b[1] - a[1])[0];
+  return { share: all ? hid / all : 0, by: worst ? worst[0] : '' };
+}
+
 /** 가림의 문턱: 머리와 가슴, 몸 전체 */
 const OCCLUDE_UPPER = 0.07;
 const OCCLUDE_BODY = 0.2;
@@ -993,6 +1032,22 @@ describe('나무와 지붕에 가려지는 사람이 없다(1-라 review 8번)',
     };
     expect(stand([49, 29])).toBeGreaterThan(0.5);
     expect(stand([49, 32])).toBe(0);
+  });
+
+  it('우리 집 나뭇더미는 사철 옛 자리(34,30)에 있고 뒤에 그려지는 지붕에 10% 넘게 가리지 않는다(4-1 ㉠ 고침 바퀴 권고 다 — 한 칸 아래 34,31이면 헛간 지붕에 36%)', () => {
+    for (const look of SHEET_LOOKS) {
+      const map = neutigol(look.season, look.weather, look.stage, look.flood);
+      const piles = map.objects.filter((o) => o.kind === 'woodpile' && Math.abs(o.tx - 34) <= 3 && Math.abs(o.ty - 31) <= 3);
+      expect(piles.map((o) => `${o.tx},${o.ty}`), look.name).toEqual(['34,30']);
+      const hid = hiddenThing(map, piles[0]);
+      expect(hid.share, `${look.name} ${(hid.share * 100).toFixed(1)}% ← ${hid.by}`).toBeLessThan(0.1);
+    }
+    // 셈이 가림을 잡는다: 한 칸 아래로 옮긴 판(4-1 ㉠)이면 헛간 지붕에 3분의 1이 가린다
+    const autumn = neutigol('autumn', 'clear', 'early');
+    const objects = autumn.objects.map((o) => (o.kind === 'woodpile' && o.tx === 34 && o.ty === 30 ? { ...o, ty: 31 } : o));
+    const moved = hiddenThing({ ...autumn, objects }, objects.find((o) => o.kind === 'woodpile' && o.tx === 34 && o.ty === 31)!);
+    expect(moved.share).toBeGreaterThan(0.3);
+    expect(moved.by).toBe('shed@32,33');
   });
 
   it('문턱이 옛 자리를 잡는다: 노비 집 어머니의 1-라 옛 자리(55,29 — 꽃나무에 몸의 51%), 형의 옛 자리(33,31 — 헛간 지붕에 몸의 34%)', () => {

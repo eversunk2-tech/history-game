@@ -9,11 +9,26 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { neutigol } from '../src/content/maps/neutigol';
 import type { Season } from '../src/engine/types';
 import { buildScene, render } from '../src/map/draw';
-import { BAND_LEAD, BAND_PAD, NEAR_PAD, bandOf, idleLoop, openSession, paintIdle, prepReady, prepareMap, splitNeeds, stepPrepare, turnBandOf } from '../src/map/session';
+import {
+  BAND_LEAD,
+  BAND_PAD,
+  NEAR_PAD,
+  TURN_EARLY,
+  bandOf,
+  earlyBandOf,
+  idleLoop,
+  openSession,
+  paintIdle,
+  prepReady,
+  prepareMap,
+  splitNeeds,
+  stepPrepare,
+  turnBandOf,
+} from '../src/map/session';
 import { THINGS } from '../src/map/things';
 import { TILE, type MapData, type Weather } from '../src/map/types';
 import { createWorld, snapCamera } from '../src/map/world';
-import { BAND_CELL, buildAtlas, needsOf, undoneBox, type Atlas } from '../src/pixel/atlas';
+import { BAND_CELL, buildAtlas, needsOf, tilesOver, undoneBox, workBand, type Atlas, type TileBox } from '../src/pixel/atlas';
 import { thingDef } from '../src/pixel/catalog';
 import { snapperOf } from '../src/pixel/ground';
 import { paletteOf } from '../src/pixel/palette';
@@ -221,6 +236,90 @@ describe('(바) 연 직후 곧장 걸을 때 — 화면 둘레 띠(권고 A)', (
       const box = g.band!.box;
       expect(Math.floor(box[0] / BAND_CELL)).toBe(Math.floor(box[2] / BAND_CELL));
       expect(Math.floor(box[1] / BAND_CELL)).toBe(Math.floor(box[3] / BAND_CELL));
+    });
+  });
+});
+
+// 4-1 ㉠ 고침 바퀴(Review 권고 가·라 M2): 맵을 연 뒤 1초 안에 화면을 세로로 돌리면 쉬는 틈이 ① 띠를 다 칠한 뒤에야 돌릴 때 보일 땅(③)을
+// 칠해, 새로 보이는 땅을 그리기가 그 자리에서 칠했다(4배 느리게 한 장 0.07~0.38초). 연 직후 서 있으면 ①과 돌릴 때 보일 땅(둘레 없는 긴 변의 네모)을
+// 함께 가까운 것부터 칠한다 — 가로 화면이면 화면 위아래의 줄이 ①의 옆 줄만큼 가까워 번갈아 칠해진다.
+// 화면은 1180×820·화소 비율 2의 실제 무대: 가로 2360×1380(배율 6 — 맵 점 393×230), 세로로 돌리면 1640×2166(맵 점 273×361).
+describe('(사) 연 직후 화면을 세로로 돌릴 때 — 권고 가·M2', () => {
+  const WIDE = { w: Math.round((2360 / 6) * ART), h: Math.round((1380 / 6) * ART), scale: ART };
+  const TALL = { w: Math.round((1640 / 6) * ART), h: Math.round((2166 / 6) * ART), scale: ART };
+  const laterSteps = (s: ReturnType<typeof openSession>): number => s.later.reduce((n, job) => n + job.steps.length, 0);
+  const turn = (s: ReturnType<typeof openSession>): void => {
+    s.world.view = { w: TALL.w / TALL.scale, h: TALL.h / TALL.scale };
+    snapCamera(s.world);
+  };
+  /** 세로로 돌렸을 때 보일 칸 네모(판은 그대로 두고 셈만 한다) */
+  const tallBox = (s: ReturnType<typeof openSession>): TileBox => {
+    const keep = { view: s.world.view, cam: s.world.cam };
+    turn(s);
+    const { cam, view } = s.world;
+    const box = tilesOver(s.scene.ground, cam.x, cam.y, cam.x + view.w, cam.y + view.h);
+    s.world.view = keep.view;
+    s.world.cam = keep.cam;
+    return box;
+  };
+
+  it('M2: 서 있는 쉬는 틈만으로 — 뒤로 미룬 그림을 짓기 시작하기 전에 돌릴 때 보일 땅을 다 칠해, 세로로 돌린 첫 장에서 그 자리에서 칠한 땅 칸 0(연 직후, TURN_EARLY 뒤)', () => {
+    for (const [season, time] of [
+      ['autumn', 0],
+      ['spring', 0],
+      ['autumn', TURN_EARLY],
+    ] as [Season, number][]) {
+      withSoftCanvas(() => {
+        // 새 판의 땅으로(neutigol은 같은 맵을 돌려주어 앞 시험이 칠한 땅을 이어 쓰게 된다 — 겉만 새 것으로)
+        const map = { ...neutigol(season) };
+        const { s } = openReal(map, `art41afix-m2-${season}-${time}`, WIDE);
+        s.world.time = time;
+        expect(undoneBox(s.scene.ground, tallBox(s)), '연 때에는 세로 화면이 다 칠해져 있지 않다(시험이 헛돌지 않게)').not.toBeNull();
+        // 쉬는 틈의 몫은 넉넉히(한 번에 여러 걸음 — 맵 화면처럼 ③의 "남은 몫 0.5ms" 문턱을 넘게)
+        const steps0 = laterSteps(s);
+        let calls = 0;
+        while (laterSteps(s) === steps0 && calls++ < 1000) paintIdle(s, 60_000, s.world.player);
+        expect(laterSteps(s), '그림을 짓기 시작했다').toBeLessThan(steps0);
+        turn(s);
+        const before = paintedTiles(s);
+        draw(s, TALL);
+        expect(paintedTiles(s) - before, `${season} ${time}초 그 자리에서 칠한 땅 칸`).toBe(0);
+        expect(s.scene.late, `${season} ${time}초 그 자리에서 지은 그림`).toBe(0);
+      });
+    }
+  });
+
+  it('연 직후 서 있으면 세로 화면의 땅을 고치기 전의 차례(① 띠를 다 칠한 뒤 ③)보다 먼저 다 칠한다(①과 돌릴 때 보일 땅을 가까운 것부터 함께)', () => {
+    let runs = 0;
+    /** 맵을 새로 열고, 세로 화면의 땅을 다 칠하기까지 쉬는 틈의 걸음 수(한 번에 한 걸음) */
+    const stepsUntilTall = (paint: (s: ReturnType<typeof openSession>) => void): number => {
+      let n = 0;
+      withSoftCanvas(() => {
+        const map = { ...neutigol('autumn') };
+        const { s } = openReal(map, `art41afix-order-${runs++}`, WIDE);
+        const tall = tallBox(s);
+        const steps0 = laterSteps(s);
+        while (undoneBox(s.scene.ground, tall) && n < 200_000) {
+          paint(s);
+          n++;
+        }
+        expect(undoneBox(s.scene.ground, tall)).toBeNull();
+        expect(laterSteps(s), '그림은 아직 짓지 않았다').toBe(steps0);
+      });
+      return n;
+    };
+    const now = stepsUntilTall((s) => paintIdle(s, 0, s.world.player));
+    // 고치기 전의 차례: ① 띠를 다 칠한 뒤에야 ③(돌릴 때 보일 땅)
+    const before = stepsUntilTall((s) => {
+      const { x, y } = s.world.player;
+      if (workBand(s.scene.ground, 0, bandOf(s, s.world.player), x, y)) workBand(s.scene.ground, 0, [turnBandOf(s)], x, y);
+    });
+    expect(now, `지금 ${now}걸음 · 고치기 전 ${before}걸음`).toBeLessThan(before * 0.95);
+    // 연 직후에 칠하는 네모는 세로 화면을 품는다
+    withSoftCanvas(() => {
+      const { s } = openReal({ ...neutigol('autumn') }, 'art41afix-early-box', WIDE);
+      const [a, b] = [earlyBandOf(s), tallBox(s)];
+      expect(a[0] <= b[0] && a[1] <= b[1] && a[2] >= b[2] && a[3] >= b[3], `${a} ⊇ ${b}`).toBe(true);
     });
   });
 });

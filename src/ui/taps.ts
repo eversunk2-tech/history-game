@@ -1,5 +1,6 @@
 // 누름의 문: 잇달아 누른 것을 한 번으로 치고, 새 창이 뜬 바로 뒤의 누름을 받지 않는다(대화 장면이 쓴다 — 4판의 겨루기도 이 문을 쓴다).
-// 화면을 모르는 셈이다(tests/device.test.ts가 불러 본다).
+// 화면을 모르는 셈이다(tests/device.test.ts가 불러 본다). 화면은 문을 하나 두고 누름마다 passTap(사건), 일을 마칠 때 done, 결과 창이 뜬 때
+// shown을 부르면 된다(놀이 뒤 두 번 막기까지 문이 맡는다).
 //
 // 새 창이 뜬 바로 뒤에는 조금 더 기다린다: 맵에서 자리를 누른 손가락이 떼어지며 첫 창을 넘기거나,
 // 일 놀이를 끝내는 단추를 잇달아 두 번 누르거나 자판 Enter로 끝낸 그 누름이, 놀이 뒤의 첫 결과 창을
@@ -33,6 +34,8 @@ export function tapTime(ev?: { timeStamp?: number } | null): number {
 
 export class TapGate {
   private last: number;
+  /** 일 놀이(4판의 겨루기)를 끝내고 아직 결과의 첫 창이 화면에 뜨지 않았다(뜨면 그때부터 다시 READ_GAP_MS를 막는다 — shown) */
+  private played = false;
 
   /** 창이 뜬 때(now)부터 OPEN_GAP_MS 동안은 받지 않는다 */
   constructor(now: number) {
@@ -49,5 +52,27 @@ export class TapGate {
     if (now - this.last < TAP_GAP_MS) return false;
     this.last = now;
     return true;
+  }
+
+  /** 이 누름 사건을 받는가: 처리한 때가 아니라 누른 때(사건의 timeStamp — tapTime)로 잰다 */
+  passTap(ev?: { timeStamp?: number } | null): boolean {
+    return this.pass(tapTime(ev));
+  }
+
+  /**
+   * 일을 마쳐 결과의 첫 창을 띄울 때(now, 띄우기 바로 앞): 일 놀이(4판의 겨루기)를 끝내고 왔으면(played) 읽을 틈(READ_GAP_MS)만큼,
+   * 아니면 새 창의 틈만큼 막는다. 놀이 뒤면 그 첫 창이 화면에 뜬 때(shown) 한 번 더 읽을 틈을 막는다 — 놀이를 끝낸 그 누름(자판 Enter,
+   * 두세 번 누른 끝내기 단추)과, 느린 기기에서 창이 늦게 뜨는 동안 쌓인 누름이 첫 창을 넘기지 않게(1-라 11.8 ②, 4-1 ㉠ 고침 바퀴 Review 권고 마).
+   */
+  done(now: number, played: boolean): void {
+    this.hold(now, played ? READ_GAP_MS : OPEN_GAP_MS);
+    this.played = played;
+  }
+
+  /** 창이 화면에 뜬 때(now — 화면이 그린 뒤에 부른다): 놀이 뒤의 첫 창이면 지금부터 다시 읽을 틈을 막는다. 한 번만 막는다. */
+  shown(now: number): void {
+    if (!this.played) return;
+    this.played = false;
+    this.hold(now, READ_GAP_MS);
   }
 }

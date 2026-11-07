@@ -416,19 +416,43 @@ export function turnBandOf(s: MapSession): TileBox {
   return tilesOver(s.scene.ground, cx - side, cy - side, cx + side, cy + side);
 }
 
+/** 연 뒤 이만큼(초 — world.time) 서 있는 동안에는 ① 화면 둘레 띠와 화면을 돌리면 보일 땅을 함께 가까운 것부터 칠한다(earlyBandOf) */
+export const TURN_EARLY = 1.5;
+
+/**
+ * 연 직후 서 있을 때 먼저 칠할 네모(맵 칸): ① 화면 둘레 띠(서 있을 때 — 보이는 화면 + 사방 BAND_PAD)와, 화면을 돌리면 보일 긴 변의
+ * 네모(보이는 화면의 가운데에서, 둘레 없이 — 돌린 화면은 지금 화면의 긴 변보다 길지 않다)를 함께 두른다. 가까운 것부터 칠하므로 ①과
+ * 돌리면 보일 땅이 번갈아 칠해진다: 가로 화면이면 화면 위아래의 줄이 ①의 옆 줄만큼 가깝다(4-1 ㉠ 고침 바퀴, Review 권고 가 — 연 뒤 1초
+ * 안에 화면을 세로로 돌리면 ①을 다 칠한 뒤에야 ③을 칠해, 새로 보이는 땅을 그리기가 그 자리에서 칠했다).
+ */
+export function earlyBandOf(s: MapSession): TileBox {
+  const { cam, view } = s.world;
+  const half = Math.max(view.w, view.h) / 2;
+  const cx = cam.x + view.w / 2;
+  const cy = cam.y + view.h / 2;
+  return tilesOver(
+    s.scene.ground,
+    Math.min(cam.x - BAND_PAD, cx - half),
+    Math.min(cam.y - BAND_PAD, cy - half),
+    Math.max(cam.x + view.w + BAND_PAD, cx + half),
+    Math.max(cam.y + view.h + BAND_PAD, cy + half),
+  );
+}
+
 /**
  * 맵을 연 뒤에 남은 그림과 땅을 budget 밀리초만 짓고 칠한다(spec 4.7.5의 ㅋ — 한 장의 시간 안에 나눠). 걷는 쪽으로 앞선 자리(ahead, 맵 점)에서
  * 가까운 것부터 해, 화면이 닿기 전에 해 둔다. 차례(4-1 ㉠, Review 권고 A — 연 직후 곧장 걷거나 화면을 돌려도 그리기가 땅을 그 자리에서
  * 칠하지 않게): ① 화면 둘레 띠의 땅(작은 네모로 잘게) ② 뒤로 미룬 그림(땅의 그림자는 그림 없이도 안다) ③ 화면을 돌릴 때 보일 땅
- * ④ 나머지 땅(조각마다). 다 했으면 false.
+ * ④ 나머지 땅(조각마다). 서 있으면 ③을 ②보다 먼저, 연 직후(TURN_EARLY) 서 있으면 ①과 ③의 둘레 없는 몫을 함께 가까운 것부터(earlyBandOf). 다 했으면 false.
  */
 export function paintIdle(s: MapSession, budgetMs: number, ahead: { x: number; y: number } = s.world.player): boolean {
   const t0 = performance.now();
   const g = s.scene.ground;
   const left = (): number => budgetMs - (performance.now() - t0);
-  if (g.left > 0 && !workBand(g, budgetMs, bandOf(s, ahead), ahead.x, ahead.y)) return true;
   // 서 있으면 ③을 ②보다 먼저(서 있는 동안에는 화면을 돌리는 일이 걷기보다 먼저 온다 — 걷기 시작하면 걷는 쪽의 그림이 먼저다)
   const still = Math.round(ahead.x - s.world.player.x) === 0 && Math.round(ahead.y - s.world.player.y) === 0;
+  if (still && s.world.time < TURN_EARLY && g.left > 0 && !workBand(g, budgetMs, [earlyBandOf(s)], ahead.x, ahead.y)) return true;
+  if (g.left > 0 && !workBand(g, left(), bandOf(s, ahead), ahead.x, ahead.y)) return true;
   if (still && g.left > 0 && left() > 0.5 && !workBand(g, left(), [turnBandOf(s)], ahead.x, ahead.y)) return true;
   // 그림의 일감 하나는 나눌 수 없다(4배 느리게에서 30ms 남짓) — 서 있을 때 늘린 몫(MapScreen)은 땅에만 쓰고 그림은 6ms까지만 시작한다
   if (s.later.length > 0 && workLater(s.later, ahead.x, ahead.y, t0, Math.min(budgetMs, LATER_BUDGET))) return true;

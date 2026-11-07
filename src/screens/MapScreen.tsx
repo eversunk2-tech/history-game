@@ -141,6 +141,23 @@ function aheadOf(world: World): { x: number; y: number } {
   return { x: p.x, y: p.y };
 }
 
+/**
+ * 맵의 모습(가을걷이 뒤 등 — mapLook)을 셈한다: 대화 장면이 떠 있는 동안(talking)에는 앞의 모습(held) 그대로, 닫히면 지금의 모습(now).
+ * 1-라 11.8 ②: 가을걷이를 마치면 맵을 다시 짓는데 느린 기기에서 0.9초쯤 걸려, 그동안 쌓인 누름이 놀이 뒤 첫 창을 넘겼다.
+ * 대화가 맵을 다 덮고 있어 그동안 맵은 보이지 않는다.
+ */
+export function heldLook(held: string, now: string, talking: string | null): string {
+  return talking === null ? now : held;
+}
+
+/** 화면의 점(캔버스 왼쪽 위에서 기기 화소)을 맵의 점으로: 그리기(render)와 같은 셈 — 주인공이 찍히는 화소를 먼저 정수로 정한다 */
+function mapPointOf(dx: number, dy: number, shown: { px: number; py: number; cx: number; cy: number; s: number }): { x: number; y: number } {
+  const { px, py, cx, cy, s } = shown;
+  const camX = Math.round(px * s) - Math.round((px - cx) * s);
+  const camY = Math.round(py * s) - Math.round((py - cy) * s);
+  return { x: (dx + camX) / s, y: (dy + camY) / s };
+}
+
 export function MapScreen(): JSX.Element | null {
   const p = pack.value;
   const g = game.value;
@@ -156,6 +173,11 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
   const todoRef = useRef<HTMLElement>(null);
   const miniBoxRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<World | null>(null);
+  // 판을 새로 지어도(대화가 닫힌 뒤 맵의 모습이 바뀌거나) 이어 가는 것(4-1 ㉠ 고침 바퀴, Review 권고 나 — 가을걷이 대화를 닫자마자 누르면
+  // 짓는 0.5초 동안의 누름과 자판이 버려져 걷지 않았다): 눌려 있는 화살표, 새 판에 넘길 누름(맵의 점), 마지막에 그린 화면(누른 자리를 맵의 점으로 옮기는 셈)
+  const heldRef = useRef(new Set<string>());
+  const carryRef = useRef<{ x: number; y: number } | null>(null);
+  const shownRef = useRef<{ px: number; py: number; cx: number; cy: number; s: number } | null>(null);
   const [ready, setReady] = useState(false);
   /** 맵의 판을 몇 번째로 세웠는가. 계절이나 맵의 모습이 바뀌어 판을 새로 지으면 하나 는다(새 판에 표시·사람·빛을 다시 건다). */
   const [worldNo, setWorldNo] = useState(0);
@@ -198,7 +220,7 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
   // 느린 기기에서 0.9초쯤 걸려, 그동안 쌓인 누름이 놀이 뒤 첫 창을 넘겼다. 대화가 맵을 다 덮고 있어 그동안 맵은 보이지 않는다).
   const lookNow = mapLook(role.map, tone, sky, { flags: g.flags, flood });
   const lookRef = useRef(lookNow);
-  if (talking === null) lookRef.current = lookNow;
+  lookRef.current = heldLook(lookRef.current, lookNow, talking);
   const look = lookRef.current;
   const map = useMemo(() => seasonalMap(role.map, tone, sky, { flags: g.flags, flood }) ?? getMap(role.map), [role.map, look]);
   // 판의 번호가 들어 있어, 같은 씨앗·같은 모습으로 새 판을 열어도 앞 판의 자리를 이어받지 않는다.
@@ -261,9 +283,19 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
         snapCamera(session.world);
         // 크기가 바뀌면 캔버스가 비워진다. 바로 다시 그려 한 장이 비어 보이지 않게 한다
         // (대화 장면을 여닫을 때 위쪽 띠의 높이가 바뀌어 무대의 크기가 달라진다).
-        if ((hadW !== w || hadH !== h) && talk.peek() === null) render(view, session.world, session.scene);
+        if ((hadW !== w || hadH !== h) && talk.peek() === null) {
+          render(view, session.world, session.scene);
+          remember(session.world);
+        }
       }
     };
+
+    /** 이 화면에 그린 맵의 자리(누른 자리를 맵의 점으로 옮길 때 — 판을 새로 짓는 동안에도 그 화면이 남아 있다) */
+    const remember = (world: World): void => {
+      shownRef.current = { px: world.player.x, py: world.player.y, cx: world.cam.x, cy: world.cam.y, s: view.scale };
+    };
+    /** 이 판에서 마지막으로 누른 맵의 점(그 길을 걷는 동안 판이 바뀌면 새 판에 넘긴다) */
+    let tapped: { x: number; y: number } | null = null;
 
     /** 화살표가 피해 갈 자리: 할 일 쪽지와 작은 지도가 화면에서 차지한 네모(캔버스의 화소) */
     const measureAvoid = (world: World): void => {
@@ -486,6 +518,7 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       // 대화 장면이 맵을 다 덮고 있는 동안에는 그리지 않는다(돌아올 때는 바로 이어 그린다)
       if (talk.peek() === null) {
         render(view, world, scene);
+        remember(world);
         if (tick % 8 === 0) drawMini(world, session.mini);
         if (tick % 12 === 0) measureAvoid(world);
         if (tick % 20 === 0 && !world.paused) lureNear(world);
@@ -590,12 +623,21 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       }
       world.player.route = [];
       world.arrive = null;
-      setKeys(world, 0, 0);
+      // 자판은 지금 눌려 있는 화살표대로(판을 짓는 동안 누른 것도 — 없으면 선다)
+      applyKeys();
       setMarks(world, marksOf(map, openRef.current));
       resize();
       worldRef.current = world;
       // 새로 세운 판에 지금의 판을 건다: 이야기의 표시에 따라 자리에 없는 사람을 가린다(아래의 효과들도 다시 돈다)
       setHidden(world, new Set(map.dwellers.filter((d) => d.shows && !meets(d.shows, factsOf(now))).map((d) => d.id)));
+      // 판을 짓는 동안(또는 앞 판이 내려가기 바로 앞에) 누른 자리가 있으면 새 판에서 그리로 걷는다 — 누름 하나로 걷는다(Review 권고 나).
+      // 새 판에서 막힌 칸이면 여느 누름과 같이 가까운 칸으로 가거나 무시한다(tapWorld)
+      const carried = carryRef.current;
+      carryRef.current = null;
+      if (carried && !overlaid()) {
+        tapWorld(world, carried.x, carried.y);
+        tapped = carried;
+      }
       setWorldNo((n) => n + 1);
       if (import.meta.env.DEV) {
         dev.__world = world;
@@ -642,23 +684,31 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
 
     const onPointer = (ev: PointerEvent): void => {
       canvas.classList.remove('keyed');
-      if (!session || overlaid()) return;
-      const { world } = session;
+      if (overlaid()) return;
       const rect = canvas.getBoundingClientRect();
       const dpr = canvas.width / rect.width;
+      const dx = (ev.clientX - rect.left) * dpr;
+      const dy = (ev.clientY - rect.top) * dpr;
+      if (!session) {
+        // 판을 새로 짓는 중(대화가 닫힌 뒤 맵의 모습이 바뀔 때 등 — 그동안 화면에는 앞 판이 남아 있다): 그 화면에서 누른 맵의 점을
+        // 적어 두었다가 새 판이 열리면 그리로 걷는다(마지막 누름 하나)
+        const shown = shownRef.current;
+        if (shown) carryRef.current = mapPointOf(dx, dy, shown);
+        setNoteOpen(false);
+        return;
+      }
+      const { world } = session;
       // 그리기와 같은 셈으로 화면의 점을 맵의 점으로 옮긴다
-      const s = view.scale;
-      const camX = Math.round(world.player.x * s) - Math.round((world.player.x - world.cam.x) * s);
-      const camY = Math.round(world.player.y * s) - Math.round((world.player.y - world.cam.y) * s);
-      const wx = ((ev.clientX - rect.left) * dpr + camX) / s;
-      const wy = ((ev.clientY - rect.top) * dpr + camY) / s;
-      tapWorld(world, wx, wy);
+      const p = mapPointOf(dx, dy, { px: world.player.x, py: world.player.y, cx: world.cam.x, cy: world.cam.y, s: view.scale });
+      tapWorld(world, p.x, p.y);
+      tapped = p;
       // 걷기 시작하면 쪽지는 접힌다(길을 가리지 않게)
       setNoteOpen(false);
     };
     canvas.addEventListener('pointerdown', onPointer);
 
-    const held = new Set<string>();
+    // 눌려 있는 화살표는 판을 새로 지어도 이어 간다(heldRef — 새 판을 열 때 applyKeys)
+    const held = heldRef.current;
     const applyKeys = (): void => {
       if (!session) return;
       let x = 0;
@@ -726,6 +776,8 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
       if (session) {
+        // 이 판에서 누른 길을 아직 걷는 중이면(대화를 닫자마자 누르고 곧바로 맵의 모습이 바뀌어 판을 새로 짓는다) 새 판에 넘긴다
+        if (tapped && session.world.player.route.length > 0) carryRef.current = tapped;
         setKeys(session.world, 0, 0);
         session.world.player.route = [];
         tellPlace(session.world);

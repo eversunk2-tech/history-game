@@ -31,7 +31,7 @@ import { SEASONS, type Deed, type GameState, type Line, type Person, type Season
 import { personOf } from '../src/pixel/people';
 import type { Px } from '../src/pixel/px';
 import { choiceViews, doHappening, happeningOf, lastDeed, openHappenings, openingLines } from '../src/engine/game';
-import { poseOf, windowOf, type Step } from '../src/screens/Talk';
+import { poseOf, talkClass, windowOf, type Step } from '../src/screens/Talk';
 import { toSeason, withStats } from './fixtures';
 
 // 코드 그림을 여러 장 그리는 시험이 있다(한 장에 수십 밀리초). 다른 시험들과 함께 돌아 바쁠 때도 넉넉하게(Review 1-라 35번 ㉢).
@@ -880,6 +880,39 @@ describe('대화 장면 — 제삿날 첫 창의 쌀독(1-라 11.8 ⑤)', () => 
     expect(rite.stage.clear).toBe('left');
     expect(rite.lines[0].text).toContain('쌀독');
     expect(p.happenings.filter((h) => h.stage.clear).map((h) => h.id)).toEqual(['s1395-winter-rite']);
+  });
+
+  // 4-1 ㉠ 고침 바퀴(Review 권고 라 M6b): 소스 글자가 아니라 대화 장면이 꼴을 셈하는 함수(talkClass)를 불러 본다
+  it('대화 장면의 꼴 셈(talkClass): 비켜 서는 꼴(clear-)은 stage.clear를 적은 장면에만 모든 단계에서 붙고, 다른 장면에는 어느 단계에서도 붙지 않는다', () => {
+    const KINDS: Step['kind'][] = ['blocked', 'open', 'choose', 'play', 'result', 'change', 'note'];
+    let marked = 0;
+    let plain = 0;
+    for (const p of packs) {
+      for (const h of p.happenings) {
+        for (const kind of KINDS) {
+          for (const figures of [true, false]) {
+            const cls = talkClass(h, 'winter', kind, figures).split(' ');
+            expect(cls.slice(0, 3)).toEqual(['talk', 'season-winter', `step-${kind}`]);
+            const clear = cls.filter((c) => c.startsWith('clear'));
+            if (h.stage.clear) {
+              expect(clear, h.id).toEqual([`clear-${h.stage.clear}`]);
+              marked++;
+            } else {
+              expect(clear, `${h.id} ${kind}`).toEqual([]);
+              plain++;
+            }
+          }
+        }
+      }
+    }
+    expect(marked).toBe(KINDS.length * 2);
+    expect(plain).toBeGreaterThan(100);
+    // 선 사람의 수: 일 놀이와 쪽지(사람을 세우지 않는 단계)에서는 0
+    const rite = getPack('s1395')!.happenings.find((h) => h.id === 's1395-winter-rite')!;
+    const cast = Math.min(2, rite.stage.cast?.length ?? 0);
+    expect(cast).toBeGreaterThan(0);
+    expect(talkClass(rite, 'winter', 'open', true)).toBe(`talk season-winter step-open cast-${cast} clear-left`);
+    expect(talkClass(rite, 'winter', 'note', false)).toBe('talk season-winter step-note cast-0 clear-left');
   });
 
   it('대화 장면은 clear를 꼴(class)로 건다. 대화하는 동안 두 사람 다 오른쪽으로 비켜 서고, 선택지를 고를 때는 그대로다', () => {
