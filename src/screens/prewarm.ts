@@ -32,7 +32,7 @@ export function prewarmGame(p: SituationPack | null | undefined, g: GameState | 
     if (!p || !g || g.phase !== 'season' || !seasonReady(p, g.role, currentSeason(g))) return () => undefined;
     const map = mapOfGame(p, g);
     if (!map) return () => undefined;
-    return prewarm(map, [heroName(g.role, g.look)], parseAt(g.at) ?? map.start[g.role]);
+    return prewarm(map, [heroName(g.role, g.look), 'neuti'], parseAt(g.at) ?? map.start[g.role]);
   } catch {
     return () => undefined;
   }

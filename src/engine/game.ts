@@ -351,6 +351,7 @@ export function seasonLine(pack: SituationPack, state: GameState): string {
 
 // ── 계절 넘기기 ───────────────────────────────────────────────
 
+// 보류한 3판 한 해 길(4-3에서 carries로 옮기며 지운다): 4-1 ㉢부터 앱(src/app·screens·state·ui)은 부르지 않는다. 엔진·자료 시험만 쓴다(spec 11.1 가 "여름·가을·겨울은 4-1 동안 어떻게 두나").
 /**
  * 계절을 보낸다. 꼭 푸는 미션을 다 풀어야 한다.
  * 이때 "나중에 나타나는 결과"(앞선 선택과 뽑기가 만나는 것)가 붙는다.
@@ -394,6 +395,7 @@ export function closeSeason(pack: SituationPack, state: GameState): GameState {
   };
 }
 
+// 보류한 3판 한 해 길(4-3에서 carries로 옮기며 지운다): 4-1 ㉢부터 앱(src/app·screens·state·ui)은 부르지 않는다. 엔진·자료 시험만 쓴다(spec 11.1 가 "여름·가을·겨울은 4-1 동안 어떻게 두나").
 /** 다음 계절로 간다(뽑는 계절이면 뽑는다). 겨울을 보낸 뒤면 한 해가 끝난다. */
 export function nextSeason(pack: SituationPack, state: GameState): GameState {
   if (state.phase !== 'seasonClose') throw new Error('계절을 먼저 보내야 한다');
@@ -410,6 +412,7 @@ export function nextSeason(pack: SituationPack, state: GameState): GameState {
   };
 }
 
+// 보류한 3판 한 해 길(4-3에서 carries로 옮기며 지운다): 4-1 ㉢부터 앱(src/app·screens·state·ui)은 부르지 않는다. 엔진·자료 시험만 쓴다(spec 11.1 가 "여름·가을·겨울은 4-1 동안 어떻게 두나").
 /** 계절을 닫은 기록 가운데 마지막 */
 export function lastClosing(state: GameState): Closing | null {
   return state.closings.length > 0 ? state.closings[state.closings.length - 1] : null;

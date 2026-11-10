@@ -22,7 +22,9 @@ import {
 import { guardKeys, holdKeys, keysAreHeld, swallowIfHeld } from '../src/ui/focus';
 import { OPEN_GAP_MS, READ_GAP_MS, TAP_GAP_MS, TapGate, nowMs, tapTime } from '../src/ui/taps';
 import { mapLook } from '../src/content/maps';
-import { carryTap, carryWalk, heldLook, keysOf, mapPointOf, openingInput, shownOf, takeCarried, type Carried } from '../src/screens/MapScreen';
+import { heldLook } from '../src/screens/MapScreen';
+// 4-1 ㉢: 맵 틀(누름 넘기기 포함)을 MapScreen에서 src/map/stage.ts로 뗐다 — 함수와 그 시험은 그대로다
+import { carryTap, carryWalk, keysOf, mapPointOf, openingInput, shownOf, takeCarried, type Carried } from '../src/map/stage';
 import { neutigol } from '../src/content/maps/neutigol';
 import { tileOf } from '../src/map/path';
 import { createWorld, snapCamera, tapWorld } from '../src/map/world';
@@ -584,6 +586,41 @@ describe('대화 장면 — 놀이 뒤 첫 창의 읽을 틈(1-라 11.8 ②)', (
   });
 });
 
+// 4-1 ㉢: 새 화면(겨루기·문제 창·마을 소개·의뢰 소개)도 대화 장면과 같은 누름 문(TapGate — 누른 때로 잰다)을 쓴다. 처리한 때(Date.now)로 재지 않는다.
+describe('새 화면의 누름 문(4-1 ㉢ — 겨루기·문제 창)', () => {
+  const source = (end: string): string => SOURCES[Object.keys(SOURCES).find((path) => path.endsWith(end)) ?? ''] ?? '';
+  it('겨루기 화면은 누름을 TapGate.passTap(사건) 하나로 가리고, 모습이 바뀔 때마다 문을 다시 막는다', () => {
+    const battle = source('/screens/Battle.tsx');
+    expect(battle).toMatch(/^\s*const pass = \(ev\?: Event \| null\): boolean => Boolean\(gate\.current\?\.passTap\(ev\)\);\s*$/m);
+    for (const call of ['advanceLines = (ev', 'play = (cardId: string, ev', 'combo = (kind: ComboKind, ev']) expect(battle, call).toContain(call);
+    expect(battle).toMatch(/gate\.current\?\.hold\(nowMs\(\)\);/);
+    expect(battle).not.toMatch(/Date\.now\(\)/);
+  });
+  it('문제 창은 TapGate와 누른 때(tapTime)로 막고 Date.now를 쓰지 않는다', () => {
+    const quiz = Object.entries(SOURCES)
+      .filter(([path]) => path.includes('/src/quiz/'))
+      .map(([, text]) => text)
+      .join('\n');
+    expect(quiz).toMatch(/TapGate/);
+    expect(quiz).toMatch(/tapTime\(|passTap\(/);
+    expect(quiz).not.toMatch(/Date\.now\(\)/);
+  });
+  it('마을 소개·의뢰 소개·결과 종이의 정령 말도 같은 문으로 넘긴다(결과 종이는 권고 ㅊ — 겨루기 끝의 누름이 "오늘의 물음이야…"를 건너뛰지 않게)', () => {
+    for (const end of ['/screens/HubIntro.tsx', '/screens/Intro.tsx', '/screens/EpisodeDone.tsx']) {
+      const text = source(end);
+      expect(text, end).toMatch(/new TapGate\(nowMs\(\)\)/);
+      expect(text, end).toMatch(/gate\.current\?\.passTap\(ev\)/);
+      expect(text, end).not.toMatch(/Date\.now\(\)/);
+    }
+    // 결과 종이의 "다음 ▼"는 그 문을 지난 누름만 받는다. 가게도 겨루기 끝 → 결과 종이를 다른 화면처럼 moveTo로 옮겨 0.3초 막음을 세운다
+    expect(source('/screens/EpisodeDone.tsx')).toMatch(/onNext=\{asked \? undefined : askNext\}/);
+    const store = source('/state/store.ts');
+    const finish = store.slice(store.indexOf('export function finishBoss('), store.indexOf('export function paperNow('));
+    expect(finish).toMatch(/moveTo\('result'\);/);
+    expect(finish).not.toMatch(/screen\.value = 'result'/);
+  });
+});
+
 // Review 1-라 37번 ㉠: 같은 일을 하는 함수가 따로 있지 않다 — 수를 우리말로 세는 countWord는 src/ui/words.ts의 하나뿐이다.
 describe('코드 — 하나만 있어야 하는 것', () => {
   it('countWord는 src/ui/words.ts에만 있다(다른 곳은 불러 쓴다)', () => {
@@ -742,8 +779,16 @@ describe('맵을 새로 지을 때 넘기는 누름과 자판(권고 ㄴ)', () =
     expect(openingInput(new Set(['ArrowDown']), holder, 'neutigol', false).keys).toEqual({ x: 0, y: 1 });
   });
 
-  it('맵 화면은 이 함수들을 이렇게 부른다(부르는 줄을 통째로, 주석을 지운 소스로)', () => {
-    const screen = SOURCES[Object.keys(SOURCES).find((path) => path.endsWith('/screens/MapScreen.tsx')) ?? ''] ?? '';
+  it('맵 틀(src/map/stage.ts — 4-1 ㉢에서 MapScreen에서 뗐다)은 이 함수들을 이렇게 부른다(부르는 줄을 통째로, 주석을 지운 소스로)', () => {
+    const screen = SOURCES[Object.keys(SOURCES).find((path) => path.endsWith('/map/stage.ts')) ?? ''] ?? '';
+    expect(screen.length).toBeGreaterThan(1000);
+    // 맵 화면(현장)은 그 틀을 연다(맵 틀을 따로 갖지 않는다)
+    const field = SOURCES[Object.keys(SOURCES).find((path) => path.endsWith('/screens/MapScreen.tsx')) ?? ''] ?? '';
+    expect(field).toMatch(/const stop = openStage\(/);
+    expect(field).not.toMatch(/openSession\(|tapWorld\(world, p\.x|carryRef\.current =/);
+    // TDZ(㉡ Review 기록 5): 눌린 화살표(held)는 판을 여는 함수(openNow)보다 먼저 정한다 — 판을 바로 열어도 오류가 나지 않게
+    expect(screen.indexOf('const held = keep.heldRef.current;')).toBeGreaterThan(0);
+    expect(screen.indexOf('const held = keep.heldRef.current;')).toBeLessThan(screen.indexOf('const openNow = '));
     const lines = (re: RegExp): number => (screen.match(re) ?? []).length;
     // 그린 화면을 적고, 지금 판을 누르면 그 화면으로 셈한다
     expect(lines(/^\s*shownRef\.current = shownOf\(world, view\.scale\);\s*$/gm)).toBe(1);

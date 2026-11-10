@@ -7,6 +7,7 @@ import {
   EXT_ORDER,
   backgroundNameIn,
   buildIndex,
+  episodeOrder,
   figureNameIn,
   picturePlan,
   preloadOrder,
@@ -19,6 +20,7 @@ import {
   PRELOAD_AT_ONCE,
   RETRY_FIRST_MS,
   backgroundName,
+  battlePictures,
   createPictureLoader,
   figureName,
   hasPicture,
@@ -34,6 +36,9 @@ import { choiceViews, doHappening, happeningOf, lastDeed, openHappenings, openin
 import { poseOf, talkClass, windowOf, type Step } from '../src/screens/Talk';
 import { toSeason, withStats } from './fixtures';
 import { stripComments } from './sourceText';
+const SOURCE_APP = Object.values(import.meta.glob<string>('../src/app/App.tsx', { eager: true, query: '?raw', import: 'default' }))[0] ?? '';
+import { s1395_1 } from '../src/content/episodes/s1395';
+import { fieldPack } from '../src/engine/episode';
 
 // 코드 그림을 여러 장 그리는 시험이 있다(한 장에 수십 밀리초). 다른 시험들과 함께 돌아 바쁠 때도 넉넉하게(Review 1-라 35번 ㉢).
 vi.setConfig({ testTimeout: 60_000 });
@@ -649,6 +654,62 @@ describe('그림 자리 — 실제 그림 폴더의 미리 받는 차례(①)', 
     const winter = preloadOrder(all, 's1395', plan, 'winter');
     const firstWinter = p.happenings.find((h) => h.id === mustOf('winter').parts[0])!;
     expect(winter[0]).toBe(backgroundName('s1395', firstWinter.stage.place, 'winter'));
+  });
+});
+
+// 4-1 ㉢(spec 11.1 나 "art/pictures의 미리 받기 계획 — 계절 → 에피소드"): 의뢰 소개가 떠 있는 동안 그 에피소드의 그림부터 받는다
+describe('그림 자리 — 에피소드 단위로 미리 받는 차례(①-1)', () => {
+  const p = getPack('s1395')!;
+  const role = 'farmer';
+  const picOf = (who: string) => p.situation.people[who]?.pic ?? who;
+  const fp = fieldPack(p, s1395_1);
+  const epPlan = picturePlan(fp.happenings, fp.missions, picOf, role);
+  const storyPlan = picturePlan(p.happenings, p.missions, picOf, role);
+  const all = pictureNames();
+  const order = episodeOrder(all, 's1395', epPlan, storyPlan, 'spring', battlePictures(s1395_1));
+
+  it('이 이야기의 그림이 모두 한 번씩 든다(에피소드 것 먼저, 나머지도 받아 둔다 — 끊겨도 이야기가 그림과 함께 끝까지)', () => {
+    expect(order.length).toBe(all.filter((name) => name.includes('/s1395/')).length + all.filter((name) => name.startsWith('char/hub/')).length);
+    expect(new Set(order).size).toBe(order.length);
+  });
+
+  it('첫 꼭 할 일의 배경이 맨 앞, 바로 다음이 그 일에 서는 사람이다', () => {
+    const first = p.happenings.find((h) => h.id === s1395_1.missions.map((id) => p.missions.find((m) => m.id === id)!)[0].parts[0])!;
+    expect(order[0]).toBe(backgroundName('s1395', first.stage.place, 'spring'));
+    const people = [...new Set((first.stage.cast ?? []).map((c) => figureName('s1395', picOf(c.who), 'plain')).filter((n): n is string => n !== null))];
+    expect(order.slice(1, 1 + people.length)).toEqual(people);
+  });
+
+  it('에피소드의 일(꼭 할 일·덤)과 겨루기의 그림을 다 넣은 뒤에야 에피소드 밖(여름 이후)의 그림', () => {
+    const epNames = new Set<string>();
+    for (const job of epPlan.find((one) => one.season === 'spring')!.jobs) {
+      const bg = backgroundName('s1395', job.place, 'spring');
+      if (bg) epNames.add(bg);
+      for (const pic of job.people) for (const pose of ['plain', 'glad', 'worried'] as const) if (hasPicture(`char/s1395/${pic}-${pose}`)) epNames.add(`char/s1395/${pic}-${pose}`);
+    }
+    for (const spot of battlePictures(s1395_1)) {
+      const [kind, owner, place] = spot.split('/');
+      if (kind === 'bg') {
+        const bg = backgroundName(owner, place, 'spring');
+        if (bg) epNames.add(bg);
+      } else for (const pose of ['plain', 'glad', 'worried'] as const) if (hasPicture(`${spot}-${pose}`)) epNames.add(`${spot}-${pose}`);
+    }
+    const lastEp = Math.max(...[...epNames].map((name) => order.indexOf(name)));
+    expect(lastEp).toBe(epNames.size - 1);
+    // 에피소드가 고르지 않은 일(여름의 첫 꼭 할 일)의 배경은 그 뒤
+    const summerMust = p.missions.find((m) => m.must && m.season === 'summer' && (!m.roles || m.roles.includes(role)))!;
+    const summerBg = backgroundName('s1395', p.happenings.find((h) => h.id === summerMust.parts[0])!.stage.place, 'summer');
+    if (summerBg && !epNames.has(summerBg)) expect(order.indexOf(summerBg)).toBeGreaterThan(lastEp);
+  });
+
+  it('겨루기의 그림 자리: 작은 고비의 논, 큰 고비의 마을 어귀(해거름 빛은 코드)와 도깨비, 정령', () => {
+    expect(battlePictures(s1395_1)).toEqual(['bg/s1395/paddy', 'char/s1395/dokkaebi', 'bg/s1395/entrance', 'char/hub/neuti']);
+  });
+
+  it('앱은 에피소드를 열 때 이 차례로 받는다(이야기 단위의 preloadStory는 지웠다)', () => {
+    const app = stripComments(SOURCE_APP);
+    expect(app).toMatch(/if \(ep\) preloadEpisode\(ep\);/);
+    expect(app).not.toMatch(/preloadStory/);
   });
 });
 

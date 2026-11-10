@@ -14,7 +14,7 @@
 //   pickSeodang(questions, log, seed)              → 서당 한 판 20문제(쉬움 6·보통 10·어려움 4, 안 푼 것 → 다시 볼 것 → 오래전에 맞힌 것)
 //   reviewList(questions, log)                     → 다시 볼 문제(틀린 차례대로)
 //   battleReady(q)                                 → 겨루기에 낼 수 있는 꼴인가(고르기·OX·순서 셋까지·짝 두 쌍까지·지도에서 찍기)
-//   battleAsk({ questions, logs, episode, earlier, seed }) → BattleAsk(겨루기 엔진에 넘기는 문제 고르개 — card·wisdom)
+//   battleAsk({ questions, logs, episode, earlier, done, seed }) → BattleAsk(겨루기 엔진에 넘기는 문제 고르개 — card·wisdom)
 //   hintChoice(q, seed, gone)                      → 귀띔이 지울 고를 것의 자리(0부터, 틀린 것 하나) — 지울 수 없으면 null
 
 import { BALANCE } from './balance';
@@ -230,7 +230,19 @@ export interface BattleAskInput {
   episode: Pick<Episode, 'id' | 'storyTopic' | 'topics' | 'core'>;
   /** 같은 이야기의 앞 에피소드의 이야기 문제 주제('ep-s1395-1' …) */
   earlier?: readonly string[];
+  /**
+   * 이 판에서 한 일(Happening id — 현장의 game.history). 'at:<일 id>' 꼬리표를 단 문제(그 사실을 한 길·한 덤에서만 듣는다)는
+   * 그 일을 했을 때만 "겪은 것"이다 — 겪은 것을 먼저 낸다(4-1 ㉢, ㉡ Review 권고 ㅊ). 주지 않으면 꼬리표를 보지 않는다.
+   */
+  done?: readonly string[];
   seed: number;
+}
+
+/** 이 판에서 겪지 않은 문제인가: 'at:' 꼬리표가 있고 그 가운데 어느 일도 하지 않았다(done이 없으면 늘 거짓) */
+export function unheard(q: Pick<Question, 'tags'>, done: readonly string[] | undefined): boolean {
+  if (!done) return false;
+  const at = (q.tags ?? []).filter((t) => t.startsWith('at:')).map((t) => t.slice(3));
+  return at.length > 0 && !at.some((id) => done.includes(id));
 }
 
 /** 그 겨루기에서 맞힌 수로 먼저 낼 어려움(쉬움 먼저 — 8.1의 "하위권 아이를 위한 것") */
@@ -286,8 +298,8 @@ function tie(seed: number, id: string): number {
 
 /**
  * 겨루기 엔진에 넘기는 문제 고르개. 한 겨루기 안에서 낸 문제(exclude)는 다시 내지 않는다(틀려서 다시 내는 것은 겨루기 엔진이 한다).
- * card: 찾는 곳(sourceRank) → 그 카드 표시('card:<id>') → 형편(안 푼 것 → 다시 볼 것 → 오래전에 맞힌 것) → 어려움(맞힌 수가 늘면 보통·어려움) 차례.
- * wisdom: 에피소드의 핵심 물음(core — 비었으면 이야기 문제 가운데 'core' 꼬리표)에서 안 푼 것·다시 볼 것 먼저.
+ * card: 찾는 곳(sourceRank) → 이 판에서 겪은 것('at:' — unheard) → 그 카드 표시('card:<id>') → 형편(안 푼 것 → 다시 볼 것 → 오래전에 맞힌 것) → 어려움(맞힌 수가 늘면 보통·어려움) 차례.
+ * wisdom: 에피소드의 핵심 물음(core — 비었으면 이야기 문제 가운데 'core' 꼬리표)에서 겪은 것 → 안 푼 것·다시 볼 것 먼저.
  */
 export function battleAsk(input: BattleAskInput): BattleAsk {
   const ready = input.questions.filter((q) => battleReady(q));
@@ -312,6 +324,7 @@ export function battleAsk(input: BattleAskInput): BattleAsk {
         const s = status(q);
         const key = [
           rank,
+          unheard(q, input.done) ? 1 : 0,
           (q.tags ?? []).includes(`card:${card.id}`) ? 0 : 1,
           s.group,
           Math.abs(q.level - target),
@@ -330,7 +343,7 @@ export function battleAsk(input: BattleAskInput): BattleAsk {
         (q) => !exclude.has(q.id) && (core ? core.has(q.id) : q.topic === input.episode.storyTopic && (q.tags ?? []).includes('core')),
       );
       return pool
-        .map((q) => ({ q, key: [status(q).group, status(q).order, tie(input.seed, `wisdom:${q.id}`)] }))
+        .map((q) => ({ q, key: [unheard(q, input.done) ? 1 : 0, status(q).group, status(q).order, tie(input.seed, `wisdom:${q.id}`)] }))
         .sort((a, b) => (less(a.key, b.key) ? -1 : less(b.key, a.key) ? 1 : 0))
         .slice(0, Math.max(0, n))
         .map((row) => row.q.id);

@@ -1,12 +1,14 @@
-// 위쪽 띠 — 맵 화면과 대화 장면이 함께 쓴다.
-// 계절 · 해와 곳과 역할 · 수치 셋(이름·숫자·칸) · 해 ☀(남은 것/계절의 해) · 지난 이야기 · 봇짐 · "봄을 보낸다" · 처음으로.
+// 위쪽 띠 — 현장(맵 화면과 대화 장면)이 함께 쓴다(4판 — spec 4.3, 11.1 가 8·12).
+// 에피소드 이름과 때 · 해와 곳과 역할 · 수치 셋(이름·숫자·칸) · 해 ☀(남은 것/에피소드의 해) · 지난 이야기 · 봇짐 · "큰 고비로" · 처음으로.
+// "큰 고비로"는 3판 "봄을 보낸다"의 자리다. 꼭 할 일을 다 했을 때 해가 남았으면 "해가 남았어요. 지금 갈까요?"를 한 번 묻는다.
+// (개발 판의 보류한 계절 보기 — ?field= — 에서는 계절 이름을 보이고 "큰 고비로"를 두지 않는다.)
 // 넓은 화면에서는 한 줄, 좁으면(1024 너비) 두 줄이 된다. 높이는 내용이 정한다.
 // 뜻은 색만으로 전하지 않는다: 수치는 이름과 숫자와 칸, 해는 숫자와 모양(찬 해 · 빈 동그라미), 잠긴 단추는 자물쇠와 점선.
 //
 // 세 가지 모습이 있다.
 //   1. 맵(꼭 할 일이 남았다)      — 위에 적은 그대로. 한 줄 안내는 자리가 넉넉할 때만 보인다.
-//   2. 맵(꼭 할 일을 다 했다)     — "꼭 할 일을 다 했어요. 덤을 더 하거나 봄을 보낼 수 있어요"가 어느 너비에서도 보인다
-//                                   (자리가 모자라면 띠가 한 줄 늘어난다). "봄을 보낸다"는 찬 바탕과 "▶"로 바뀌고 잠깐 두근거린다.
+//   2. 맵(꼭 할 일을 다 했다)     — "꼭 할 일을 다 했어요. 덤을 더 하거나 큰 고비로 갈 수 있어요"가 어느 너비에서도 보인다
+//                                   (자리가 모자라면 띠가 한 줄 늘어난다). "큰 고비로"는 찬 바탕과 "▶"로 바뀌고 잠깐 두근거린다.
 //   3. 대화 장면·일 놀이가 떠 있다 — 한 줄로 줄인다. 계절·곳·수치·해만 남기고, 그때 쓸 수 없는 단추와 안내는 감춘다(무대가 넓어진다).
 // 알림 줄(기록을 남기지 못했어요, 인터넷이 끊겼어요)은 어느 모습에서도 보인다.
 
@@ -14,13 +16,13 @@ import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { pictureNotice } from '../art/pictures';
 import { seasonLabels, statLabels } from '../content/labels';
+import { notices } from '../content/hub';
 import { canCloseSeason, currentSeason, deedsOfSeason, openHappenings, roleOf } from '../engine/game';
-import { SEASONS, STATS, STAT_MAX, type Stat } from '../engine/types';
-import { askHome, closeSeasonNow, game, mapBusy, openPanel, pack, panel, saveFailed, talk } from '../state/store';
+import { STATS, STAT_MAX, type Stat } from '../engine/types';
+import { askHome, devField, episode, game, goBoss, mapBusy, openPanel, pack, panel, saveFailed, talk } from '../state/store';
 import { Ask } from './Ask';
 import { LockIcon, StatIcon, SunIcon } from './icons';
 import { yearAndPlace } from './where';
-import { josa } from './words';
 
 function BandStat({ stat, value }: { stat: Stat; value: number }): JSX.Element {
   const info = statLabels[stat];
@@ -99,18 +101,21 @@ export function TopBand(): JSX.Element | null {
   const role = roleOf(p, g.role);
   const used = deedsOfSeason(g, season).reduce((sum, deed) => sum + deed.sun, 0);
   const sunsAll = g.sunsLeft + used;
-  const canClose = canCloseSeason(p, g);
-  const sending = josa(seasonName, '을', '를');
-  const sendLabel = `${sending} 보낸다`;
-  const reason = `꼭 할 일을 마치면 ${sending} 보낼 수 있어요`;
-  // 꼭 할 일을 다 한 뒤: 해가 남았고 덤으로 할 일도 남았으면 "더 하거나 보낼 수 있다", 아니면 "이제 보낸다"
+  const ep = episode.value;
+  const dev = devField.value !== null;
+  const canClose = !dev && canCloseSeason(p, g);
+  const sendLabel = '큰 고비로';
+  const reason = '꼭 할 일을 마치면 큰 고비로 갈 수 있어요';
+  // 꼭 할 일을 다 한 뒤: 해가 남았고 덤으로 할 일도 남았으면 "더 하거나 갈 수 있다", 아니면 "이제 간다"
   const moreToDo = canClose && openHappenings(p, g).some((view) => !view.must && !view.noSun);
-  const doneLine = moreToDo ? `꼭 할 일을 다 했어요. 덤을 더 하거나 ${sending} 보낼 수 있어요.` : `꼭 할 일을 다 했어요. 이제 ${sending} 보내요.`;
+  const doneLine = moreToDo ? '꼭 할 일을 다 했어요. 덤을 더 하거나 큰 고비로 갈 수 있어요.' : '꼭 할 일을 다 했어요. 이제 큰 고비로 가요.';
 
   const onSend = (): void => {
     if (busy) return;
     if (canClose) {
-      setAsking(true);
+      // 해가 남았고 덤으로 할 일도 남았으면 한 번 묻는다(11.1 가 12). 아니면 바로 간다
+      if (moreToDo) setAsking(true);
+      else goBoss();
       return;
     }
     // 띠의 한 줄 안내가 보이고 있으면 그것으로 넉넉하다. 가려져 있을 때만 풍선으로 띄운다.
@@ -129,12 +134,19 @@ export function TopBand(): JSX.Element | null {
     <header class={`band season-${season}${compact ? ' compact' : canClose ? ' open' : ''}`}>
       <div class="band-row">
         <div class="band-info">
-          <span class={`season-chip season-${season} now`}>
-            <span class="season-mark" aria-hidden="true">
-              ●
+          {ep ? (
+            <span class={`season-chip episode-chip season-${season} now`}>
+              <span class="episode-name">「{ep.title}」</span>
+              <span class="episode-when">{ep.when}</span>
             </span>
-            {seasonName}
-          </span>
+          ) : (
+            <span class={`season-chip season-${season} now`}>
+              <span class="season-mark" aria-hidden="true">
+                ●
+              </span>
+              {seasonName}
+            </span>
+          )}
           <div class="band-where">
             <span class="band-year">{yearAndPlace(p, g.role)}</span>
             <span class="band-role">{role.label}</span>
@@ -144,7 +156,7 @@ export function TopBand(): JSX.Element | null {
               <BandStat key={stat} stat={stat} value={g.stats[stat]} />
             ))}
           </div>
-          <div class="band-suns" role="img" aria-label={`남은 해 ${g.sunsLeft}, 이 계절의 해 ${sunsAll}`}>
+          <div class="band-suns" role="img" aria-label={`남은 해 ${g.sunsLeft}, 이번의 해 ${sunsAll}`}>
             <div class="band-stat-top">
               <span class="band-stat-name">해</span>
               <span class="band-stat-num">
@@ -191,6 +203,7 @@ export function TopBand(): JSX.Element | null {
               <button type="button" class="band-btn" aria-pressed={panel.value === 'bag'} disabled={busy && panel.value !== 'bag'} onClick={() => openPanel('bag')}>
                 봇짐
               </button>
+              {!dev && (
               <button
                 type="button"
                 class={`band-btn send${canClose ? ' open' : ' locked'}`}
@@ -207,6 +220,7 @@ export function TopBand(): JSX.Element | null {
                   </span>
                 )}
               </button>
+              )}
               <button type="button" class="band-btn quiet" disabled={busy} onClick={askHome}>
                 처음으로
               </button>
@@ -237,15 +251,14 @@ export function TopBand(): JSX.Element | null {
 
       {asking && (
         <Ask
-          ask={g.sunsLeft > 0 ? `아직 해가 남았어요. ${sending} 보낼까요?` : `${sending} 보낼까요?`}
-          // 겨울은 한 해의 마지막 계절이다: 보내면 한 해 돌아보기로 간다
-          note={g.seasonIndex >= SEASONS.length - 1 ? `${sending} 보내면 한 해가 끝나요. 이어서 한 해를 돌아봐요.` : `${sending} 보내면 이 계절로는 돌아올 수 없어요.`}
-          yes={sendLabel}
-          no="더 있을래요"
+          ask={notices.sunsLeft}
+          note="큰 고비로 가면 이번 봄 일로는 돌아올 수 없어요. 남은 덤은 다시 하기에서 해 볼 수 있어요."
+          yes="큰 고비로 가기"
+          no="더 둘러볼래요"
           onNo={() => setAsking(false)}
           onYes={() => {
             setAsking(false);
-            closeSeasonNow();
+            goBoss();
           }}
         />
       )}

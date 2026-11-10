@@ -11,12 +11,13 @@
 import { anchorOf, thingKey } from '../pixel/catalog';
 import { MASK_CELL, WATER_TILE, critterImg, footBox, groundCanvas, paintAround, personCanvas, shadesOf, thingImg, thingMetaOf, type Atlas, type GroundCanvas, type Img } from '../pixel/atlas';
 import { GROUND_TILE } from '../pixel/ground';
-import { COL, DIRS, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W } from '../pixel/people';
+import { COL, DIRS, FOOT_SHIFT, PERSON_AX, PERSON_AY, PERSON_H, PERSON_W } from '../pixel/people';
 import { ART, clamp, hash2, mix } from '../pixel/px';
+import { SPIRIT_DIRS, SPIRIT_FRAMES, SPIRIT_SHADOW } from '../pixel/spirit';
 import { closedGates } from './gates';
 import { thing } from './things';
 import { T, TILE, type MapData } from './types';
-import { spotPoint, type Actor, type World } from './world';
+import { spotPoint, type Actor, type Companion, type World } from './world';
 
 interface Static {
   /** 그림(아직 짓지 않았으면 null — 보이게 되면 짓는다. 맵을 연 뒤 쉬는 틈에 걷는 쪽부터 미리 짓는다) */
@@ -112,7 +113,7 @@ export interface Scene {
   /** 가끔 화면을 가로질러 날아가는 새 떼 */
   flock: { x: number; y: number; vx: number; vy: number; n: number } | null;
   flockWait: number;
-  shown: (Static | Actor)[];
+  shown: (Static | Actor | Companion)[];
   /** 그리면서 그 자리에서 지은 세운 것의 수(미리 짓기가 모자랐는가) */
   late: number;
 }
@@ -233,7 +234,8 @@ export interface View {
   scale: number;
 }
 
-const isActor = (it: Static | Actor): it is Actor => 'sprite' in it;
+const isActor = (it: Static | Actor | Companion): it is Actor => 'sprite' in it && !('follow' in it);
+const isCompanion = (it: Static | Actor | Companion): it is Companion => 'follow' in it;
 
 /** 가을에 잎이 지는 나무 */
 const LEAF_TREES = new Set(['oak', 'young', 'blossom', 'willow', 'zelkova', 'bigtree']);
@@ -573,11 +575,15 @@ export function render(view: View, world: World, scene: Scene): void {
     shown.push(a);
   }
   shown.push(world.player);
+  // 곁에 떠 있는 동료(정령): 떠 있는 자리 밑의 땅 줄로 차례를 정한다
+  const mate = world.companion;
+  if (mate && mate.x > vx0 - 50 && mate.x < vx1 + 50 && mate.y > vy0 - 20 && mate.y < vy1 + 60) shown.push(mate);
   // 앉은 사람은 깔고 앉은 돌보다 나중에 그린다
-  const keyOf = (it: Static | Actor): number => (isActor(it) ? it.y + (it.act === 'sit' ? 8 : 0) : it.sortY);
+  const keyOf = (it: Static | Actor | Companion): number => (isCompanion(it) ? it.y : isActor(it) ? it.y + (it.act === 'sit' ? 8 : 0) : it.sortY);
   shown.sort((a, b) => keyOf(a) - keyOf(b));
   for (const it of shown) {
-    if (isActor(it)) drawActor(view, world, scene, it, camX, camY);
+    if (isCompanion(it)) drawCompanion(view, scene, it, camX, camY);
+    else if (isActor(it)) drawActor(view, world, scene, it, camX, camY);
     else {
       const img = staticImg(scene, it);
       if (!img) continue;
@@ -777,6 +783,32 @@ function drawFoot(ctx: CanvasRenderingContext2D, f: Img, x: number, y: number, w
   ctx.globalCompositeOperation = 'multiply';
   ctx.drawImage(f.canvas, 0, 0, f.w, f.h, x, y, w, h);
   ctx.globalCompositeOperation = 'source-over';
+}
+
+/** 떠 있기의 한 장이 머무는 시간(초) */
+const COMPANION_BOB = 0.45;
+
+/**
+ * 곁에 떠 있는 동료(정령 — spec 6.2). 발이 땅에 닿지 않는다: 작고 엷은 발밑 그림자(SPIRIT_SHADOW)를 바닥에 곱해 얹고,
+ * 그 위에 떠 있기 두 장을 번갈아 그린다(시트의 줄은 방향, 칸은 떠 있기 — spirit.ts). 논에 들어서도 잠기지 않는다.
+ */
+function drawCompanion(view: View, scene: Scene, c: Companion, camX: number, camY: number): void {
+  const { ctx, scale: s } = view;
+  const m = s / ART;
+  const { atlas } = scene;
+  const sheet = atlas.people.get(c.sprite) ?? personCanvas(atlas, c.sprite);
+  if (!sheet) return;
+  const x = Math.round(c.x * s) - camX;
+  const y = Math.round(c.y * s) - camY;
+  const f = atlas.foot;
+  const w = Math.round(f.w * SPIRIT_SHADOW.size);
+  const h = Math.round(f.h * SPIRIT_SHADOW.size);
+  ctx.globalAlpha = SPIRIT_SHADOW.alpha;
+  drawFoot(ctx, f, x + (FOOT_SHIFT.x - (w >> 1)) * m, y + (FOOT_SHIFT.y - (h >> 1)) * m, w * m, h * m);
+  ctx.globalAlpha = 1;
+  const row = Math.max(0, SPIRIT_DIRS.indexOf(c.dir));
+  const col = Math.floor(c.t / COMPANION_BOB) % SPIRIT_FRAMES;
+  ctx.drawImage(sheet, col * PERSON_W, row * PERSON_H, PERSON_W, PERSON_H, x - PERSON_AX * m, y - PERSON_AY * m, PERSON_W * m, PERSON_H * m);
 }
 
 function drawActor(view: View, world: World, scene: Scene, a: Actor, camX: number, camY: number): void {

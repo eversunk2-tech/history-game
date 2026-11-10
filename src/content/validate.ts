@@ -82,7 +82,7 @@ export interface MapRef {
   canReach(spot: string, who: { role: RoleId; look: Look }): boolean;
   /**
    * [더함, 4-1 ㉡ — 1-라 Review 43번] 그 계절에 맵이 지어질 수 있는 모습(이야기의 때·날씨·큰물)마다 걸어, 자리에 닿지 못하는 모습의 이름들.
-   * 없으면 봄의 맵(canReach)만 본다(3판 묶음). 4판 묶음(content/four.ts의 bundle4)이 채운다.
+   * 없으면 봄의 맵(canReach)만 본다(3판 묶음). 4판 묶음(content/index.ts의 bundle4)이 채운다.
    */
   canReachIn?(spot: string, who: { role: RoleId; look: Look }, season: Season): string[];
 }

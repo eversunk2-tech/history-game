@@ -49,9 +49,10 @@ export function countWord(n: number): string {
 }
 
 /**
- * 아직 풀리지 않은 미션을 어디까지 했는지 한 줄로: "셋 가운데 하나를 했어요. 나머지는 다른 계절에 해요."
+ * 아직 풀리지 않은 미션을 어디까지 했는지 한 줄로: "셋 가운데 하나를 했어요. 나머지는 다음 에피소드에서 해요."
  * 한 것이 없거나, 셀 수 없는 미션이거나, 이미 다 한 미션이면 null이다("해낸 일"은 풀린 미션에만 쓴다).
- * moreSeasons: 이 해에 계절이 더 남았는가(한 해 내내 푸는 미션의 꼬리말을 붙일지 가른다).
+ * moreSeasons: 뒤에 이어지는 때(그 이야기의 다음 에피소드 — 4판)가 남았는가(한 이야기 내내 푸는 미션의 꼬리말을 붙일지 가른다).
+ * 4-1 ㉢: 3판의 "나머지는 다른 계절에 해요"를 에피소드에 맞게 바꿨다(한 해 = 이야기 하나, 계절 = 에피소드의 때).
  */
 export function progressLine(mission: Mission, state: GameState, moreSeasons: boolean): string | null {
   if (state.solved.includes(mission.id)) return null;
@@ -59,7 +60,7 @@ export function progressLine(mission: Mission, state: GameState, moreSeasons: bo
   if (!progress || progress.have <= 0 || progress.have >= progress.need) return null;
   // 카드를 모으는 미션은 장수로 말한다("열 가운데 일곱을 했어요"가 아니라)
   if (mission.done.cardCount !== undefined && !mission.done.flags) return `생활 카드 ${progress.need}장 가운데 ${progress.have}장을 모았어요.`;
-  const tail = mission.season === 'year' && moreSeasons ? ' 나머지는 다른 계절에 해요.' : '';
+  const tail = mission.season === 'year' && moreSeasons ? ' 나머지는 다음 에피소드에서 해요.' : '';
   return `${countWord(progress.need)} 가운데 ${josa(countWord(progress.have), '을', '를')} 했어요.${tail}`;
 }
 

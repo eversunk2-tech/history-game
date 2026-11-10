@@ -169,3 +169,44 @@ export function preloadOrder(names: readonly string[], story: string, plan: read
   }
   return out;
 }
+
+/**
+ * 에피소드 단위로 미리 받는 차례(4-1 ㉢ — spec 11.1 나 "계절 → 에피소드"). 의뢰 소개가 떠 있는 동안 받기 시작한다.
+ *   1. 그 에피소드의 일(episodePlan — 에피소드의 일만 담은 묶음으로 짠 picturePlan) 차례로: 그 일의 배경 → 그 일에 서는 사람
+ *   2. 겨루기의 그림(extra — 작은 고비·큰 고비의 배경과 고비의 그림, 정령): 배경 자리 이름('bg/<이야기>/<자리>')이면 그 계절의 파일,
+ *      사람 자리('char/<누구 자리>')면 표정 셋
+ *   3. 그 밖에 이 이야기의 그림(preloadOrder — 그 에피소드의 계절부터 돌아서. 다른 에피소드의 일·쓰이지 않는 것까지)
+ * names에 없는 이름은 넣지 않는다. 같은 이름은 한 번만.
+ */
+export function episodeOrder(
+  names: readonly string[],
+  story: string,
+  episodePlan: readonly SeasonPictures[],
+  storyPlan: readonly SeasonPictures[],
+  season: Season,
+  extra: readonly string[] = [],
+): string[] {
+  const have = new Set(names);
+  const has = (name: string): boolean => have.has(name);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (name: string | null): void => {
+    if (name && has(name) && !seen.has(name)) {
+      seen.add(name);
+      out.push(name);
+    }
+  };
+  for (const one of episodePlan.filter((p) => p.season === season)) {
+    for (const job of one.jobs) {
+      add(backgroundNameIn(has, story, job.place, season));
+      for (const pic of job.people) for (const pose of POSES) add(`char/${story}/${pic}-${pose}`);
+    }
+  }
+  for (const spot of extra) {
+    const [kind, owner, place] = spot.split('/');
+    if (kind === 'bg' && owner && place) add(backgroundNameIn(has, owner, place, season));
+    else if (kind === 'char') for (const pose of POSES) add(`${spot}-${pose}`);
+  }
+  for (const name of preloadOrder(names, story, storyPlan, season)) add(name);
+  return out;
+}

@@ -1,13 +1,21 @@
-// 화면 차례(store) 시험: 제목 → 이야기책 → 누가 될까 → 나를 소개합니다 → 맵 → 계절 닫기 → "다음에 만들어요",
-// 저절로 저장하는 때, 끄고 켰을 때 이어지는 자리, 저장이 안 되는 창, 모두 지우기, 엔진이 던졌을 때.
-// 브라우저 없이 돈다: 가짜 저장소와 가짜 창을 걸어 두고, "끄고 켜기"는 가게 모듈을 새로 불러와서 흉내 낸다.
-// 실제 이야기(① 1395년 농민 집 아이의 봄)로 돌린다.
+// 화면 차례(store) 시험 — 4판의 출전 고리(spec 11.1 가): 제목 → 모습 → 마을 소개 → 거점 → 알림판·시간의 문 → 출전 준비 → 의뢰 소개 → 현장(①-1)
+// → 작은 고비(굳은 논흙) → "큰 고비로" → 큰 고비(도깨비의 내기) → 결과 종이 → 자람 → 거점, 다시 하기. 저장은 꼴 5(save5.ts).
+// 3판 store.test.ts의 대화·종이·저장 실패·엔진 오류 묶음은 새 흐름의 시작으로 옮겨 살렸다(11.1 사의 "지금 시험 가운데 지우거나 바꿔야 하는 것").
+// 3판의 이야기책·계절 닫기·한 해 끝맺기·옛 저장으로 한 해 이어 가기의 시험은 그 화면과 길을 지워서 지웠다(옛 저장은 이제 "알림 + 한 벌 + 처음부터").
+// 브라우저 없이 돈다: 가짜 저장소와 가짜 창을 걸어 두고, "끄고 켜기"는 가게 모듈을 새로 불러와서 흉내 낸다. 겨루기는 화면 대신 엔진으로 넘긴다
+// (화면이 하는 그대로 — 가게의 battleKit이 준 준비와 문제 고르개로 카드를 고르고 답한다).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPack } from '../src/content';
-import { canCloseSeason, currentSeason, doHappening, openChoiceIds, openHappenings, seasonReady, type DoInput } from '../src/engine/game';
-import { SEASONS, type GameState, type Look, type SituationPack } from '../src/engine/types';
-import { BACKUP_KEY, SAVE_KEY, SCHEMA, packBits, parseSave } from '../src/state/storage';
+import { s1395_1 } from '../src/content/episodes/s1395';
+import { answer, battleResult, canCombo, chooseCard, startBattle, useCombo, affinityOf, type Battle } from '../src/engine/battle';
+import { finishEpisode } from '../src/engine/episode';
+import { openChoiceIds, openHappenings, type DoInput } from '../src/engine/game';
+import { LEVEL_CAP_41 } from '../src/engine/growth';
+import { unheard } from '../src/engine/quiz';
+import type { GameState, Look, SituationPack } from '../src/engine/types';
+import type { Save5 } from '../src/engine/types4';
+import { BACKUP5_KEY, BACKUP_KEY, SAVE_KEY } from '../src/state/save5';
 
 const env = vi.hoisted(() => {
   const data = new Map<string, string>();
@@ -72,23 +80,34 @@ function later(): void {
   vi.advanceTimersByTime(400);
 }
 
-function saved(): { schema: number; build: string; cards: string[]; current?: GameState; walked?: string; papers?: string[]; cleared: object } | null {
+function saved(): Save5 | null {
   const raw = env.data.get(SAVE_KEY);
-  return raw ? JSON.parse(raw) : null;
+  return raw ? (JSON.parse(raw) as Save5) : null;
 }
 
 const PACK = getPack('s1395') as SituationPack;
+type Mode = 'right' | 'wrong' | 'mix';
 
-/** 제목에서 봄의 맵까지 */
-function startSpring(s: Store, look: Look = 'girl'): void {
+/** 제목에서 거점까지(처음부터 → 모습 → 마을 소개를 마침) */
+function toHub(s: Store, look: Look = 'girl'): void {
   later();
-  s.goBook();
+  s.startFresh();
   later();
-  s.openStory('s1395');
+  s.pickLook(look);
   later();
-  s.settleRole('farmer', look);
+  s.finishHubIntro();
+}
+
+/** 거점에서 현장까지(시간의 문 → ①-1 출전 준비 → 의뢰 소개 → 현장) */
+function toField(s: Store, look: Look = 'girl', replay = false): void {
   later();
-  s.beginYear();
+  s.openFacility('gate');
+  later();
+  s.openPrep('s1395-1', replay);
+  later();
+  s.settleRun('farmer', look, undefined);
+  later();
+  s.beginField();
 }
 
 /** 그 일을 처음 열린 선택지와 놀이의 첫 모습으로 넘길 값 */
@@ -98,7 +117,6 @@ function inputFor(game: GameState, id: string, pick = 0): DoInput {
   return { id, choiceId: open.length > 0 ? open[Math.min(pick, open.length - 1)] : undefined, play: h.play ? Object.keys(h.play.flags)[0] : undefined };
 }
 
-/** "미션이 풀림" 종이를 다 넘긴다. 종이가 닫히지 않으면(판이 나아가지 않으면) 멈추지 않고 실패한다. */
 function closePapers(s: Store): void {
   for (let n = 0; s.missionQueue.value.length > 0; n++) {
     if (n > 20) throw new Error('"미션이 풀림" 종이가 닫히지 않는다');
@@ -107,55 +125,60 @@ function closePapers(s: Store): void {
   }
 }
 
-/** 맵에서 일 하나를 한다: 자리에 닿아 대화 장면이 열리고, 고르고, 닫고, "미션이 풀림" 종이를 넘긴다 */
-function doOne(s: Store, id: string, pick = 0): void {
+/** 겨루기 하나를 엔진으로 끝까지(화면이 하는 그대로: 센 카드 먼저, 기세가 차면 그늘). mix는 다섯에 셋을 맞힌다 */
+function fight(kit: NonNullable<ReturnType<Store['battleKit']>>, mode: Mode): Battle {
+  let b = startBattle(kit.setup);
+  let k = 0;
+  const right = (): boolean => (mode === 'right' ? true : mode === 'wrong' ? false : k++ % 5 < 3);
+  for (let guard = 0; guard < 100 && !b.end; guard++) {
+    if (b.pending) b = answer(b, right(), kit.ask);
+    else if (canCombo(b)) b = useCombo(b, 'shade', kit.ask);
+    else {
+      const card = b.hand.find((id) => affinityOf(b, id) === 'strong' && id !== b.frozen) ?? b.hand.find((id) => id !== b.frozen)!;
+      b = chooseCard(b, card, kit.ask);
+      b = answer(b, b.pending?.q ? right() : false, kit.ask);
+    }
+  }
+  expect(b.end, '겨루기가 16차례 안에 끝난다').toBeDefined();
+  return b;
+}
+
+/** 맵에서 일 하나를 한다: 대화 장면을 열고, (작은 고비가 있으면 넘기고) 고르고, 닫고, 종이를 넘긴다 */
+function doOne(s: Store, id: string, pick = 0, mode: Mode = 'right'): void {
   later();
   s.openTalk(id);
   expect(s.talk.value).toBe(id);
+  const minor = s.minorPending(id);
+  if (minor) {
+    const kit = s.battleKit(minor)!;
+    s.finishMinor(minor, fight(kit, mode));
+  }
   const deed = s.commitTalk(inputFor(s.game.value!, id, pick));
   expect(deed?.happeningId).toBe(id);
   s.closeTalk();
   closePapers(s);
 }
 
-/** 꼭 할 일을 다 한다(덤은 하지 않는다). 한 일의 수를 돌려준다. */
-function doMusts(s: Store, limit = 99): number {
-  let n = 0;
-  for (; n < limit; n++) {
-    const g = s.game.value!;
-    if (canCloseSeason(PACK, g)) break;
-    const next = openHappenings(PACK, g).find((v) => v.must && !v.noSun);
-    if (!next) throw new Error('꼭 할 일이 남았는데 할 수 있는 일이 없다');
-    doOne(s, next.happening.id);
-  }
-  return n;
+const ROUTES = ['s1395-spring-return-help', 's1395-spring-return-ours', 's1395-spring-return-monks'];
+
+/** ①-1의 꼭 할 일(미션 ①의 길 pick → 볍씨 뿌리기)과 덤 extras */
+function playField(s: Store, pick = 0, extras: string[] = [], mode: Mode = 'right'): void {
+  doOne(s, 's1395-spring-return', pick, mode);
+  doOne(s, ROUTES[pick], 0, mode);
+  doOne(s, 's1395-spring-sow', 0, mode);
+  for (const id of extras) doOne(s, id, 0, mode);
 }
 
-/** 지금 계절의 꼭 할 일을 다 하고 계절을 보낸 뒤 다음으로 넘긴다. 넘어간 화면을 돌려준다. */
-function passSeason(s: Store): string {
-  doMusts(s);
+/** "큰 고비로" → 큰 고비를 엔진으로 → 결과 종이 */
+function playBoss(s: Store, mode: Mode = 'right'): Battle {
   later();
-  s.closeSeasonNow();
-  expect(s.screen.value).toBe('seasonClose');
-  later();
-  s.goNextSeason();
-  return s.screen.value;
+  s.goBoss();
+  expect(s.screen.value).toBe('battle');
+  const b = fight(s.battleKit('boss')!, mode);
+  s.finishBoss(b);
+  expect(s.screen.value).toBe('result');
+  return b;
 }
-
-/** 만들어진 계절을 차례로 보낸다. 한 해가 다 만들어졌으면 한 해 돌아보기에서 멈춘다. 보낸 계절의 수를 돌려준다. */
-function passBuiltSeasons(s: Store): number {
-  for (let n = 1; n <= SEASONS.length; n++) {
-    const to = passSeason(s);
-    if (to !== 'map') return n;
-  }
-  throw new Error('한 해가 끝나지 않는다');
-}
-
-/** 농민 집의 네 계절이 모두 만들어졌는가(1-라부터) */
-const YEAR_BUILT = SEASONS.every((season) => seasonReady(PACK, 'farmer', season));
-
-// 견본 저장(글자 그대로)
-const SAVE_FILES = import.meta.glob<string>('./fixtures/saves/*.json', { eager: true, query: '?raw', import: 'default' });
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -172,168 +195,477 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('화면 차례', () => {
-  it('제목 → 이야기책 → 누가 될까 → 나를 소개합니다 → 맵', async () => {
+describe('화면 차례(출전 고리)', () => {
+  it('제목 → 모습 → 마을 소개 → 거점: 첫 선물(쌀 3되·베 2자, 창고의 도리깨)과 "시험 판" 알림을 본 것으로 적는다', async () => {
     const s = await boot();
     expect(s.screen.value).toBe('title');
-    expect(s.loadStatus.value).toBe('empty');
     expect(s.canContinue.value).toBe(false);
     later();
-    s.goBook();
-    expect(s.screen.value).toBe('book');
+    s.startFresh();
+    expect(s.screen.value).toBe('look');
+    expect(s.save.value.hub.seen).not.toContain('trial');
     later();
-    s.openStory('s1395');
-    expect(s.screen.value).toBe('rolePick');
-    expect(s.pack.value?.situation.id).toBe('s1395');
+    s.pickLook('boy');
+    expect(s.screen.value).toBe('hubIntro');
+    expect(saved()!.hub.seen).toContain('trial');
     later();
-    s.settleRole('farmer', 'girl');
-    expect(s.screen.value).toBe('intro');
-    expect(s.game.value?.look).toBe('girl');
-    // 맵에 들어서기 전에는 아무것도 적지 않는다
-    expect(saved()).toBeNull();
+    s.finishHubIntro();
+    expect(s.screen.value).toBe('hub');
+    const sv = saved()!;
+    expect(sv.hero.look).toBe('boy');
+    expect(sv.purse).toEqual({ rice: 3, cloth: 2, coin: 0 });
+    expect(sv.items).toEqual(['gear-flail']);
+    expect(sv.hub.intro).toBe(true);
+    // 다시 켜면 "이어 하기"는 거점으로(첫 선물을 두 번 받지 않는다)
+    const again = await boot();
+    expect(again.canContinue.value).toBe(true);
     later();
-    s.beginYear();
-    expect(s.screen.value).toBe('map');
-    expect(saved()?.current?.role).toBe('farmer');
-    expect(saved()?.schema).toBe(SCHEMA);
+    again.continueGame();
+    expect(again.screen.value).toBe('hub');
+    later();
+    again.finishHubIntro();
+    expect(saved()!.purse).toEqual({ rice: 3, cloth: 2, coin: 0 });
   });
 
-  it('준비 중인 이야기와 집은 열리지 않는다', async () => {
+  it('거점 → 시간의 문 → 출전 준비 → 의뢰 소개 → 현장: 현장은 ①-1의 일만 연다(여름의 일이 하나도 열리지 않는다 — 11.1 가 ②)', async () => {
     const s = await boot();
+    toHub(s);
     later();
-    s.goBook();
+    s.openFacility('gate');
+    expect(s.screen.value).toBe('gate');
     later();
-    s.openStory('s1592');
-    expect(s.screen.value).toBe('book');
+    s.openPrep('s1395-1', true); // 깨지 않은 에피소드는 다시 하기로 열지 않는다
+    expect(s.screen.value).toBe('gate');
     later();
-    s.openStory('없는 이야기');
-    expect(s.screen.value).toBe('book');
+    s.openPrep('s1395-1', false);
+    expect(s.screen.value).toBe('prep');
     later();
-    s.openStory('s1395');
-    for (const role of ['son', 'daughter', 'nobi', '없는 집']) {
-      later();
-      s.settleRole(role, 'boy');
-      expect(s.screen.value, role).toBe('rolePick');
-      expect(s.game.value, role).toBeNull();
-    }
+    // 도리깨는 가졌지만 ①(1395)에는 잠긴다(5.5 — 출전 준비에서 고를 수 없다)
+    s.settleRun('farmer', 'girl', 'gear-flail');
+    expect(s.screen.value).toBe('prep');
+    later();
+    s.settleRun('farmer', 'girl', undefined);
+    expect(s.screen.value).toBe('intro');
+    expect(saved()!.current!.phase).toBe('field');
+    expect(saved()!.hero.gear.hand).toBeUndefined();
+    later();
+    s.beginField();
+    expect(s.screen.value).toBe('map');
+    const g = s.game.value!;
+    expect(g.sunsLeft).toBe(2);
+    const open = openHappenings(s.pack.value!, g).map((v) => v.happening.id);
+    expect(open.every((id) => id.startsWith('s1395-spring-'))).toBe(true);
+    for (const id of open) expect([...s1395_1.extras, 's1395-spring-return', 's1395-spring-sow'], id).toContain(id);
   });
 
   it('연달아 두 번 누르면 한 번만 먹는다', async () => {
     const s = await boot();
     later();
-    s.goBook();
-    s.openStory('s1395'); // 0.3초가 지나지 않았다
-    expect(s.screen.value).toBe('book');
-    later();
-    s.openStory('s1395');
-    expect(s.screen.value).toBe('rolePick');
+    s.startFresh();
+    s.pickLook('girl'); // 0.3초 안
+    expect(s.screen.value).toBe('look');
   });
 
-  it('남자아이·여자아이 모습 모두: 꼭 할 일을 다 해야 봄을 보낼 수 있고, 보내면 계절 닫기 → 여름의 맵', async () => {
-    for (const look of ['boy', 'girl'] as const) {
-      env.data.clear();
-      const s = await boot();
-      startSpring(s, look);
-      // 꼭 할 일이 남았으면 넘어가지 않는다
+  for (const look of ['boy', 'girl'] as const) {
+    for (const mode of ['right', 'wrong', 'mix'] as const) {
+      it(`${look} × ${mode}: 현장(작은 고비 포함) → 큰 고비 → 결과 종이 → (자람) → 거점. 모두 틀려도 막다른 판이 없다`, async () => {
+        const s = await boot();
+        toHub(s, look);
+        toField(s, look);
+        playField(s, look === 'boy' ? 0 : 2, ['s1395-spring-well'], mode);
+        expect(s.run.value!.minors).toEqual(['s1395-1-hardsoil', 's1395-1-sowing']);
+        expect(s.bossReady.value).toBe(true);
+        const b = playBoss(s, mode);
+        const res = battleResult(b)!;
+        const paper = s.paperNow()!;
+        expect(paper.stars).toEqual(res.stars);
+        expect(paper.stars[0]).toBe(true);
+        if (mode === 'wrong') {
+          expect(res.rescued).toBe(true);
+          expect(paper.stars).toEqual([true, false, false]);
+        }
+        if (mode === 'right') expect(paper.stars[2]).toBe(true);
+        const sv = saved()!;
+        expect(sv.current!.phase).toBe('result');
+        expect(sv.stories.s1395.episodes['s1395-1'].cleared).toBe(true);
+        expect(sv.items).toContain('relic-seed-sack');
+        expect(sv.purse).toEqual({ rice: 9, cloth: 5, coin: 0 });
+        // 겨루기에서 낸 문제가 서당 기록(이야기 문제 주제)에 적혔다
+        expect(sv.quiz['ep-s1395-1']).toBeDefined();
+        later();
+        s.closeResult();
+        if (sv.hero.points > 0) {
+          expect(s.screen.value).toBe('growth');
+          later();
+          s.placeStat('heart');
+          expect(saved()!.hero.stats.heart).toBe(4);
+          s.leaveEpisode();
+        }
+        expect(s.screen.value).toBe('hub');
+        expect(saved()!.current).toBeUndefined();
+      });
+    }
+  }
+
+  it('작은 고비를 넘기지 않고는 볍씨 뿌리기를 마칠 수 없다(대화 장면이 놀이 앞에서 연다). 넘기면 놀이의 작은 고비도 일로 적힌다', async () => {
+    const s = await boot();
+    toHub(s);
+    toField(s);
+    doOne(s, 's1395-spring-return', 0);
+    doOne(s, 's1395-spring-return-help', 0);
+    later();
+    s.openTalk('s1395-spring-sow');
+    expect(s.minorPending('s1395-spring-sow')?.id).toBe('s1395-1-hardsoil');
+    // 엔진의 약속(작은 고비가 먼저)이 깨지면 가게가 받아 '이어 갈 수 없어요'로
+    expect(s.commitTalk(inputFor(s.game.value!, 's1395-spring-sow'))).toBeNull();
+    expect(s.screen.value).toBe('trouble');
+  });
+
+  it('"큰 고비로"는 꼭 할 일을 다 해야 뜬다', async () => {
+    const s = await boot();
+    toHub(s);
+    toField(s);
+    doOne(s, 's1395-spring-return', 0);
+    later();
+    s.goBoss();
+    expect(s.screen.value).toBe('map');
+    expect(s.bossReady.value).toBe(false);
+  });
+
+  it('다시 하기: 깬 ①-1을 연표에서 다시 한다 — 집을 다시 뽑지 않고, 돈은 주지 않고, 별과 최고 기록은 좋은 것이 남는다', async () => {
+    const s = await boot();
+    toHub(s);
+    toField(s);
+    playField(s, 0, [], 'wrong');
+    playBoss(s, 'wrong');
+    later();
+    s.closeResult();
+    if (s.screen.value === 'growth') {
       later();
-      s.closeSeasonNow();
-      expect(s.screen.value).toBe('map');
-      expect(s.game.value?.phase).toBe('season');
-      const did = doMusts(s);
-      expect(did).toBeGreaterThanOrEqual(2);
-      expect(canCloseSeason(PACK, s.game.value!)).toBe(true);
-      later();
-      s.closeSeasonNow();
-      expect(s.screen.value).toBe('seasonClose');
-      expect(s.game.value?.phase).toBe('seasonClose');
-      expect(saved()?.current?.phase).toBe('seasonClose');
-      expect(s.nextSeasonReady()).toBe(true); // 여름이 만들어져 있다(1-라부터)
-      later();
-      s.goNextSeason();
-      expect(s.screen.value).toBe('map');
-      expect(s.game.value?.seasonIndex).toBe(1);
-      expect(s.game.value?.phase).toBe('season');
-      expect(saved()?.current?.seasonIndex).toBe(1);
-      later();
-      s.backToTitle();
-      expect(s.screen.value).toBe('title');
-      expect(s.game.value).toBeNull();
+      s.placeStat('power');
+      s.leaveEpisode();
+    }
+    const before = saved()!;
+    later();
+    s.openFacility('gate');
+    later();
+    s.openPrep('s1395-1', true);
+    later();
+    s.settleRun('farmer', 'boy', undefined); // 이 이야기는 여자아이로 시작했다 — 다시 하기는 이야기의 모습으로(화면이 고정해 보인다)
+    expect(s.run.value!.replay).toBe(true);
+    expect(s.game.value!.look).toBe('girl');
+    later();
+    s.beginField();
+    playField(s, 1, [], 'right');
+    playBoss(s, 'right');
+    const after = saved()!;
+    expect(after.purse).toEqual(before.purse);
+    expect(after.stories.s1395.episodes['s1395-1'].plays).toBe(2);
+    expect(after.stories.s1395.firstRun).toEqual(before.stories.s1395.firstRun);
+    expect(after.stories.s1395.episodes['s1395-1'].best).toBeGreaterThanOrEqual(before.stories.s1395.episodes['s1395-1'].best);
+    expect(after.stories.s1395.episodes['s1395-1'].stars.filter(Boolean).length).toBeGreaterThan(1);
+  });
+});
+
+describe('결과 종이의 값 = 엔진(11.1 사의 ㉢ 칸)', () => {
+  it('결과 종이는 엔진 finishEpisode의 종이 그대로이고, 다 보기 전에 끄면 저장된 칸으로 같은 종이를 다시 그린다', async () => {
+    const s = await boot();
+    toHub(s);
+    toField(s);
+    playField(s, 2, ['s1395-spring-woods'], 'mix');
+    later();
+    s.goBoss();
+    const kit = s.battleKit('boss')!;
+    const b = fight(kit, 'mix');
+    const pre = { save: s.save.value, game: s.game.value!, run: s.run.value! };
+    s.finishBoss(b);
+    const expected = finishEpisode({
+      episode: s1395_1,
+      replay: false,
+      game: pre.game,
+      minors: pre.run.minors,
+      boss: battleResult(b)!,
+      hero: pre.save.hero,
+      purse: pre.save.purse,
+      items: pre.save.items,
+      story: pre.save.stories.s1395,
+      met: s.metOf(PACK, pre.game),
+      today: pre.save.today,
+      date: s.todayDate(),
+      cap: LEVEL_CAP_41,
+    });
+    const paper = s.paperNow()!;
+    for (const key of ['first', 'stars', 'newStars', 'score', 'best', 'bestNew', 'levels', 'banked', 'purse', 'cards', 'stepped', 'relics', 'rescued'] as const) {
+      expect(paper[key], key).toEqual(expected.paper[key]);
+    }
+    expect(saved()!.purse).toEqual(expected.purse);
+    expect(saved()!.hero.level).toBe(expected.hero.level);
+    // 다시 켜면 결과 종이에서 이어지고, 같은 종이다
+    const again = await boot();
+    later();
+    again.continueGame();
+    expect(again.screen.value).toBe('result');
+    const reborn = again.paperNow()!;
+    for (const key of ['stars', 'newStars', 'score', 'best', 'bestNew', 'xp', 'levels', 'banked', 'purse', 'cards', 'stepped', 'relics', 'rescued', 'first'] as const) {
+      expect(reborn[key], key).toEqual(paper[key]);
     }
   });
 });
 
-describe('대화 장면과 미션이 풀림', () => {
-  it('자리에 닿으면 대화 장면이 얹히고, 그동안 맵은 멈춘다', async () => {
-    const s = await boot();
-    startSpring(s);
-    expect(s.mapBusy.value).toBe(false);
-    const first = openHappenings(PACK, s.game.value!).find((v) => v.must)!.happening.id;
-    s.openTalk(first);
-    expect(s.talk.value).toBe(first);
-    expect(s.mapBusy.value).toBe(true);
-    // 대화가 떠 있는 동안에는 다른 일이 열리지 않는다
-    s.openTalk('다른 일');
-    expect(s.talk.value).toBe(first);
+describe('끄고 켜도 이어진다(5.8 — 꼴 5 견본 넷의 자리)', () => {
+  it('거점에서 끄면 거점, 현장 도중이면 그 판 그대로 서 있던 칸에서, 겨루기 도중이면 그 겨루기의 처음부터, 결과 종이 도중이면 결과 종이', async () => {
+    let s = await boot();
+    toHub(s);
+    s = await boot();
+    later();
+    s.continueGame();
+    expect(s.screen.value).toBe('hub');
+    toField(s);
+    doOne(s, 's1395-spring-return', 0);
+    s.markPlace('40,38', ['village'], 'ff00');
+    env.state.visibility = 'hidden';
+    env.fire('visibilitychange');
+    const mid = s.game.value!;
+    s = await boot();
+    later();
+    s.continueGame();
+    expect(s.screen.value).toBe('map');
+    expect(s.game.value!.at).toBe('40,38');
+    expect(s.game.value!.done).toEqual(mid.done);
+    expect(s.walkedText()).toBe('ff00');
+    doOne(s, 's1395-spring-return-help');
+    doOne(s, 's1395-spring-sow');
+    later();
+    s.goBoss();
+    const kit1 = s.battleKit('boss')!;
+    s = await boot();
+    later();
+    s.continueGame();
+    expect(s.screen.value).toBe('battle');
+    const kit2 = s.battleKit('boss')!;
+    expect(kit2.setup.seed).toBe(kit1.setup.seed);
+    expect(startBattle(kit2.setup).hand).toEqual(startBattle(kit1.setup).hand);
+    s.finishBoss(fight(kit2, 'right'));
+    s = await boot();
+    later();
+    s.continueGame();
+    expect(s.screen.value).toBe('result');
   });
 
-  it('"나중에 할게요": 고르기 전에 닫으면 아무 일도 일어나지 않은 것이다', async () => {
-    const s = await boot();
-    startSpring(s);
-    const before = s.game.value;
-    const first = openHappenings(PACK, before!).find((v) => v.must)!.happening.id;
-    s.openTalk(first);
-    s.closeTalk();
-    expect(s.talk.value).toBeNull();
-    expect(s.game.value).toEqual(before);
-    expect(s.missionQueue.value).toEqual([]);
-    expect(s.mapBusy.value).toBe(false);
-  });
-
-  it('일을 마치면 바로 저장되고, 미션이 풀리면 대화가 닫힌 뒤에 종이가 뜬다', async () => {
-    const s = await boot();
-    startSpring(s);
-    let solvedSeen = false;
-    for (let step = 0; step < 12 && !canCloseSeason(PACK, s.game.value!); step++) {
-      const g = s.game.value!;
-      const next = openHappenings(PACK, g).find((v) => v.must && !v.noSun)!.happening.id;
+  it('꼴 5 견본(tests/fixtures/saves/v5)으로 켜면 그 자리에서 이어진다', async () => {
+    const FIX = import.meta.glob<string>('./fixtures/saves/v5/*.json', { eager: true, query: '?raw', import: 'default' });
+    const want: Record<string, string> = {
+      'schema5-hub': 'hub',
+      'schema5-field-mid': 'map',
+      'schema5-battle-mid': 'battle',
+      'schema5-result-mid': 'result',
+      'schema5-cleared': 'hub',
+      'schema5-seodang-mid': 'hub',
+    };
+    for (const [path, raw] of Object.entries(FIX)) {
+      const name = path.replace(/^.*\/(.*)\.json$/, '$1');
+      env.data.clear();
+      env.data.set(SAVE_KEY, raw);
+      const s = await boot();
+      expect(s.loadStatus.value, name).toBe('ok');
+      expect(s.canContinue.value, name).toBe(true);
       later();
-      s.openTalk(next);
-      const deed = s.commitTalk(inputFor(g, next));
-      expect(deed).not.toBeNull();
-      // 대화 장면이 결과를 보여 주는 동안 이미 적혀 있다(여기서 꺼도 한 일은 남는다)
-      expect(saved()?.current?.done).toContain(next);
-      expect(s.talk.value).toBe(next);
-      expect(s.missionQueue.value).toEqual([]);
-      s.closeTalk();
-      expect(s.talk.value).toBeNull();
-      expect(s.missionQueue.value).toEqual(deed!.solved);
-      if (deed!.solved.length > 0) {
-        solvedSeen = true;
-        expect(s.mapBusy.value).toBe(true);
-        expect(saved()?.current?.solved).toEqual(expect.arrayContaining(deed!.solved));
-      }
-      closePapers(s);
-      expect(s.mapBusy.value).toBe(false);
+      s.continueGame();
+      expect(s.screen.value, name).toBe(want[name]);
+      if (name === 'schema5-result-mid') expect(s.paperNow()!.stars, name).toEqual([true, false, false]);
+      if (name === 'schema5-field-mid') expect(s.game.value!.at).toBe('41,39');
     }
-    expect(solvedSeen).toBe(true);
   });
 
-  it('대화 장면을 닫을 때도 저장한다: 그때 서 있던 자리가 적힌다("나중에 할게요"로 닫아도)', async () => {
+  it('대화 도중에 끄면 그 일의 처음부터다(고르기 전의 것은 적히지 않는다)', async () => {
+    let s = await boot();
+    toHub(s);
+    toField(s);
+    later();
+    s.openTalk('s1395-spring-return');
+    env.fire('pagehide');
+    s = await boot();
+    later();
+    s.continueGame();
+    expect(s.talk.value).toBeNull();
+    expect(s.game.value!.done).toEqual([]);
+  });
+
+  it('"미션이 풀림" 종이를 닫기 전에 끄면 다음에 이어 할 때 뜨고, 닫으면 다시 뜨지 않는다', async () => {
+    let s = await boot();
+    toHub(s);
+    toField(s);
+    doOne(s, 's1395-spring-return', 0);
+    later();
+    s.openTalk('s1395-spring-return-help');
+    s.commitTalk(inputFor(s.game.value!, 's1395-spring-return-help'));
+    expect(saved()!.current!.papers).toEqual(['s1395-m-return']);
+    s = await boot();
+    later();
+    s.continueGame();
+    expect(s.missionQueue.value).toEqual(['s1395-m-return']);
+    closePapers(s);
+    s = await boot();
+    later();
+    s.continueGame();
+    expect(s.missionQueue.value).toEqual([]);
+  });
+});
+
+describe('옛 저장과 저장이 안 될 때', () => {
+  it('옛 꼴(3판의 한 해 저장)이면 "게임이 새로워져서 처음부터 해요"를 한 번, 옛 글자는 joseon-year/backup에 한 벌, 저장은 처음부터', async () => {
+    const OLD = import.meta.glob<string>('./fixtures/saves/schema4-year-autumn-mid.json', { eager: true, query: '?raw', import: 'default' });
+    const raw = Object.values(OLD)[0];
+    env.data.set(SAVE_KEY, raw);
+    let s = await boot();
+    expect(s.loadStatus.value).toBe('old');
+    expect(env.data.get(BACKUP_KEY)).toBe(raw);
+    expect(JSON.parse(env.data.get(SAVE_KEY)!).schema).toBe(5);
+    expect(s.canContinue.value).toBe(false);
+    // 다음에 켜면 알림이 다시 뜨지 않는다(한 번)
+    s = await boot();
+    expect(s.loadStatus.value).toBe('ok');
+    expect(env.data.get(BACKUP_KEY)).toBe(raw);
+    // 처음부터 해도 옛 꼴의 한 벌은 남는다
+    toHub(s);
+    expect(env.data.get(BACKUP_KEY)).toBe(raw);
+  });
+
+  it('저장이 안 되는 창: 알리고, 게임은 끝까지 된다', async () => {
+    env.state.noStorage = true;
     const s = await boot();
-    startSpring(s);
-    const first = openHappenings(PACK, s.game.value!).find((v) => v.must)!.happening.id;
-    s.markPlace('29,36', ['village'], 'ff');
-    expect(saved()?.current?.at).toBeUndefined();
-    s.openTalk(first);
-    s.closeTalk();
-    expect(saved()?.current?.at).toBe('29,36');
-    expect(saved()?.walked).toBe('ff');
-    expect(saved()?.current?.done).toEqual([]);
+    expect(s.loadStatus.value).toBe('noStorage');
+    toHub(s);
+    expect(s.saveFailed.value).toBe(true);
+    toField(s);
+    playField(s, 0);
+    playBoss(s);
+    expect(s.screen.value).toBe('result');
   });
 
+  it('쓰다가 실패하면 알리고 게임은 이어진다. 다시 써지면 알림이 꺼진다', async () => {
+    const s = await boot();
+    toHub(s);
+    env.state.failWrites = true;
+    toField(s);
+    expect(s.saveFailed.value).toBe(true);
+    env.state.failWrites = false;
+    doOne(s, 's1395-spring-return', 0);
+    expect(s.saveFailed.value).toBe(false);
+  });
+
+  it('글자가 깨진 저장: 처음부터 하되 깨진 글자를 꼴 5의 한 벌(joseon-year/backup5)에 남긴다', async () => {
+    env.data.set(SAVE_KEY, '{깨짐');
+    const s = await boot();
+    expect(s.loadStatus.value).toBe('unreadable');
+    expect(env.data.get(BACKUP5_KEY)).toBe('{깨짐');
+    expect(s.canContinue.value).toBe(false);
+  });
+
+  it('하던 에피소드만 망가진 저장: 주인공·돈·깬 기록은 남고 거점에서 이어 한다', async () => {
+    let s = await boot();
+    toHub(s);
+    toField(s);
+    const sv = saved()!;
+    (sv.current as unknown as Record<string, unknown>).phase = 'nowhere';
+    env.data.set(SAVE_KEY, JSON.stringify(sv));
+    s = await boot();
+    expect(s.loadStatus.value).toBe('trimmed');
+    expect(s.save.value.purse).toEqual(sv.purse);
+    later();
+    s.continueGame();
+    expect(s.screen.value).toBe('hub');
+  });
+
+  it('없는 에피소드의 저장(다른 판의 것)은 이어 가다 그 에피소드만 내려놓고 제목에서 알린다', async () => {
+    let s = await boot();
+    toHub(s);
+    toField(s);
+    const sv = saved()!;
+    sv.current!.episode = 's1395-9';
+    env.data.set(SAVE_KEY, JSON.stringify(sv));
+    s = await boot();
+    expect(s.canContinue.value).toBe(false);
+    sv.current!.episode = 's1395-1';
+    sv.current!.game = { ...sv.current!.game, role: 'king' as never };
+    env.data.set(SAVE_KEY, JSON.stringify(sv));
+    s = await boot();
+    later();
+    s.continueGame();
+    expect(s.screen.value).toBe('title');
+    expect(s.loadStatus.value).toBe('trimmed');
+    expect(saved()!.current).toBeUndefined();
+    expect(saved()!.purse).toEqual(sv.purse);
+    expect(env.data.get(BACKUP5_KEY)).toBeDefined();
+  });
+
+  it('코드보다 새 꼴의 저장은 건드리지 않는다(화면이 가려져도·창을 닫아도 — 한 벌 칸도 그대로)', async () => {
+    const raw = JSON.stringify({ schema: 6, hero: {} });
+    env.data.set(SAVE_KEY, raw);
+    env.data.set(BACKUP_KEY, '옛 꼴의 한 벌');
+    env.data.set(BACKUP5_KEY, '꼴 5의 한 벌');
+    const s = await boot();
+    expect(s.loadStatus.value).toBe('newer');
+    expect(env.data.get(SAVE_KEY)).toBe(raw);
+    // 태블릿을 덮거나(가려짐) 새로 고침·창 닫기(pagehide)에도 빈 꼴 5로 덮지 않는다(4-1 ㉢ Review 고쳐야 함 가)
+    env.state.visibility = 'hidden';
+    env.fire('visibilitychange');
+    env.fire('pagehide');
+    s.saveNow();
+    expect(env.data.get(SAVE_KEY)).toBe(raw);
+    expect(env.data.get(BACKUP_KEY)).toBe('옛 꼴의 한 벌');
+    expect(env.data.get(BACKUP5_KEY)).toBe('꼴 5의 한 벌');
+    // 다시 켜도 알림이 그대로 뜬다(저장이 사라지지 않았다)
+    const again = await boot();
+    expect(again.loadStatus.value).toBe('newer');
+  });
+
+  it('"처음부터"(두 번 물은 뒤): 저장이 사라지고 모습 고르기부터', async () => {
+    const s = await boot();
+    toHub(s);
+    toField(s);
+    later();
+    s.goHome();
+    later();
+    s.startFresh();
+    expect(s.screen.value).toBe('look');
+    expect(env.data.has(SAVE_KEY)).toBe(false);
+    expect(s.save.value.hub.intro).toBe(false);
+    expect(s.game.value).toBeNull();
+  });
+});
+
+describe('엔진이 던져도 빈 화면에서 멈추지 않는다', () => {
+  it('할 수 없는 일을 마치려 하면 "이어 갈 수 없어요"로 가고, 처음으로 갈 수 있다. 같은 저장으로 거듭 멈추면 하던 에피소드를 내려놓는다', async () => {
+    const s = await boot();
+    toHub(s);
+    toField(s);
+    expect(s.commitTalk({ id: 's1395-summer-weed' })).toBeNull();
+    expect(s.screen.value).toBe('trouble');
+    s.noteTrouble();
+    s.goHome();
+    expect(s.screen.value).toBe('title');
+    expect(saved()!.current).toBeUndefined();
+    expect(saved()!.hub.intro).toBe(true);
+  });
+
+  it('잠긴 선택지를 넘겨도 판은 바뀌지 않는다', async () => {
+    const s = await boot();
+    toHub(s);
+    toField(s);
+    const before = s.game.value;
+    expect(s.commitTalk({ id: 's1395-spring-return', choiceId: 'nothing' })).toBeNull();
+    expect(s.game.value).toBe(before);
+  });
+});
+
+// 3판 store.test.ts(e539062)에 있던 다섯을 새 흐름(toHub·toField)으로 옮겨 살렸다(4-1 ㉢ Review 고쳐야 함 다 — 망가뜨려 보기 R38·R40~R43).
+// 막던 탈은 그대로다: 대화 중에 창이 겹침, 맵이 앞 판의 자리를 들고 있음(review 14번), 앞 판의 가 본 칸이 딸려 옴, 거듭 멈춤의 셈, 띠의 "3/2".
+describe('3판에서 옮겨 살린 것 — 창·판의 번호·가 본 칸·멈춘 횟수·해 ☀ 울타리', () => {
   it('봇짐과 지난 이야기는 맵 위에 뜨고, 대화 중에는 열리지 않는다', async () => {
     const s = await boot();
-    startSpring(s);
+    toHub(s);
+    toField(s);
     s.openPanel('bag');
     expect(s.panel.value).toBe('bag');
     expect(s.mapBusy.value).toBe(true);
@@ -342,1057 +674,173 @@ describe('대화 장면과 미션이 풀림', () => {
     s.openPanel('past');
     expect(s.panel.value).toBeNull();
     s.openPanel('bag');
-    const first = openHappenings(PACK, s.game.value!)[0].happening.id;
+    const first = openHappenings(s.pack.value!, s.game.value!)[0].happening.id;
     s.openTalk(first);
     expect(s.panel.value).toBeNull();
     s.openPanel('bag');
     expect(s.panel.value).toBeNull();
+    s.openPanel('past');
+    expect(s.panel.value).toBeNull();
   });
 
-  it('해 ☀가 다 지면 덤으로 하는 일은 더 할 수 없다(가게가 엔진의 약속을 지킨다)', async () => {
+  it('출전해 새 판을 만들 때마다 판의 번호가 는다(맵이 앞 판의 자리를 버린다 — review 14번)', async () => {
+    env.state.search = '?seed=7';
     const s = await boot();
-    startSpring(s);
-    let extras = 0;
-    for (let step = 0; step < 10; step++) {
-      const next = openHappenings(PACK, s.game.value!).find((v) => !v.must && !v.noSun);
-      if (!next) break;
-      doOne(s, next.happening.id);
-      extras++;
-    }
-    expect(extras).toBe(PACK.situation.roles.find((r) => r.id === 'farmer')!.suns);
-    expect(s.game.value!.sunsLeft).toBe(0);
-    // 남은 덤은 맵에 보이지만 할 수 없다
-    const left = openHappenings(PACK, s.game.value!).filter((v) => !v.must);
-    expect(left.length).toBeGreaterThan(0);
-    expect(left.every((v) => v.noSun)).toBe(true);
-    // 꼭 할 일은 해가 없어도 할 수 있다
-    doMusts(s);
-    expect(canCloseSeason(PACK, s.game.value!)).toBe(true);
-  });
-});
-
-describe('끄고 켜도 이어진다', () => {
-  it('봄의 어느 때에 꺼도 그 판 그대로, 그 계절의 맵에서 이어진다', async () => {
-    // 꼭 할 일을 0개, 1개, 2개 … 한 뒤에 끄고 켠다
-    for (let cut = 0; cut < 8; cut++) {
-      env.data.clear();
-      let s = await boot();
-      startSpring(s, cut % 2 === 0 ? 'girl' : 'boy');
-      const did = doMusts(s, cut);
-      const before = s.game.value!;
-      s = await boot();
-      expect(s.loadStatus.value, `${cut}`).toBe('ok');
-      expect(s.screen.value).toBe('title');
-      expect(s.canContinue.value).toBe(true);
-      later();
-      s.continueGame();
-      expect(s.screen.value, `${cut}`).toBe('map');
-      expect(s.game.value, `${cut}`).toEqual(before);
-      expect(s.talk.value).toBeNull();
-      // 이어서 끝까지 갈 수 있다
-      doMusts(s);
-      later();
-      s.closeSeasonNow();
-      expect(s.screen.value, `${cut}`).toBe('seasonClose');
-      if (did < cut) break; // 꼭 할 일을 다 했다
-    }
-  });
-
-  it('대화나 놀이 도중에 끄면 그 일의 처음부터다(고르기 전의 것은 적히지 않는다)', async () => {
-    let s = await boot();
-    startSpring(s);
-    const before = s.game.value!;
-    const first = openHappenings(PACK, before).find((v) => v.must)!.happening.id;
-    s.openTalk(first);
-    // 여는 대화를 읽는 중에 화면이 가려지고 꺼졌다
-    env.state.visibility = 'hidden';
-    env.fire('visibilitychange');
-    s = await boot();
-    later();
-    s.continueGame();
-    expect(s.screen.value).toBe('map');
-    expect(s.talk.value).toBeNull();
-    expect(s.game.value).toEqual(before);
-    expect(openHappenings(PACK, s.game.value!).some((v) => v.happening.id === first)).toBe(true);
-  });
-
-  it('마지막에 서 있던 자리와 가 본 곳이 남는다: 화면이 가려질 때 적는다', async () => {
-    let s = await boot();
-    startSpring(s);
-    const walked = packBits(Uint8Array.from({ length: 96 * 72 }, (_, i) => (i % 3 === 0 ? 1 : 0)));
-    s.markPlace('46,34', ['village', 'fields'], walked);
-    // markPlace는 적지 않는다(걸을 때마다 저장소를 건드리지 않는다)
-    expect(saved()?.current?.at).toBeUndefined();
-    env.state.visibility = 'hidden';
-    env.fire('visibilitychange');
-    expect(saved()?.current?.at).toBe('46,34');
-    expect(saved()?.current?.seen).toEqual(['village', 'fields']);
-    expect(saved()?.walked).toBe(walked);
-    s = await boot();
-    later();
-    s.continueGame();
-    expect(s.game.value?.at).toBe('46,34');
-    expect(s.game.value?.seen).toEqual(['village', 'fields']);
-    expect(s.walkedText()).toBe(walked);
-  });
-
-  it('창을 닫을 때(pagehide)도, 일을 마칠 때도, 처음으로 갈 때도 서 있던 자리가 적힌다', async () => {
-    const s = await boot();
-    startSpring(s);
-    s.markPlace('30,36', ['village']);
-    env.fire('pagehide');
-    expect(saved()?.current?.at).toBe('30,36');
-    s.markPlace('29,36', ['village']);
-    const first = openHappenings(PACK, s.game.value!).find((v) => v.must)!.happening.id;
-    doOne(s, first);
-    expect(saved()?.current?.at).toBe('29,36');
-    s.markPlace('44,54', ['village', 'fields']);
-    s.askHome();
-    expect(s.askingHome.value).toBe(true);
-    expect(s.mapBusy.value).toBe(true);
+    toHub(s);
+    const before = s.gameNo.value;
+    toField(s);
+    const first = s.gameNo.value;
+    expect(first).toBeGreaterThan(before);
+    expect(s.game.value!.seed).toBe(7);
+    s.markPlace('46,34', ['village'], 'ff');
     s.goHome();
-    expect(s.askingHome.value).toBe(false);
-    expect(s.screen.value).toBe('title');
-    expect(saved()?.current?.at).toBe('44,54');
-    expect(s.canContinue.value).toBe(true);
+    // 이어 하기는 같은 판이다(서 있던 칸 그대로 — 판의 번호는 맵을 새로 열려고 다시 는다)
     later();
     s.continueGame();
-    expect(s.screen.value).toBe('map');
-    expect(s.game.value?.at).toBe('44,54');
-  });
-
-  it('계절 닫기 화면에서 끄면 계절 닫기에서, 봄을 넘긴 뒤에 끄면 여름의 맵에서 이어진다', async () => {
-    let s = await boot();
-    startSpring(s);
-    doMusts(s);
+    expect(s.game.value!.at).toBe('46,34');
+    const resumed = s.gameNo.value;
+    // 같은 씨앗·같은 모습으로 다시 출전해도 다른 판이다(앞 판의 자리를 이어받지 않는다)
     later();
-    s.closeSeasonNow();
-    const closed = s.game.value;
-    s = await boot();
+    s.openPrep('s1395-1', false);
     later();
-    s.continueGame();
-    expect(s.screen.value).toBe('seasonClose');
-    expect(s.game.value).toEqual(closed);
-    later();
-    s.goNextSeason();
-    expect(s.screen.value).toBe('map');
-    const summer = s.game.value;
-    s = await boot();
-    expect(s.canContinue.value).toBe(true);
-    later();
-    s.continueGame();
-    expect(s.screen.value).toBe('map');
-    expect(s.game.value).toEqual(summer);
-    expect(s.game.value?.seasonIndex).toBe(1);
-    expect(s.game.value?.at).toBeUndefined();
-  });
-
-  it('새 계절로 넘어가면 가 본 칸은 비운다(계절마다 새로 걷는다)', async () => {
-    const s = await boot();
-    startSpring(s);
-    s.markPlace('30,36', ['village'], 'ff00');
-    doMusts(s);
-    expect(saved()?.walked).toBe('ff00');
-    later();
-    s.closeSeasonNow();
-    later();
-    s.goNextSeason();
-    expect(s.walkedText()).toBe('');
-    expect(saved()?.walked).toBe('');
+    s.settleRun('farmer', 'girl', undefined);
+    expect(s.game.value!.seed).toBe(7);
+    expect(s.gameNo.value).toBeGreaterThan(resumed);
+    expect(s.game.value!.at).toBeUndefined();
   });
 
   it('새 판을 시작하면 앞 판의 가 본 칸이 딸려 오지 않는다', async () => {
     const s = await boot();
-    startSpring(s);
+    toHub(s);
+    toField(s);
     s.markPlace('30,36', ['village'], 'ff00');
     s.goHome();
-    expect(saved()?.walked).toBe('ff00');
+    expect(saved()!.current!.walked).toBe('ff00');
+    // 하던 판을 두고 다시 출전한다(가게의 길 — 출전 준비가 새 판을 만든다)
     later();
-    s.dropCurrent();
-    startSpring(s, 'boy');
+    s.openPrep('s1395-1', false);
+    later();
+    s.settleRun('farmer', 'boy', undefined);
     expect(s.walkedText()).toBe('');
-    expect(saved()?.walked).toBe('');
-    expect(saved()?.current?.at).toBeUndefined();
+    later();
+    s.beginField();
+    expect(saved()!.current!.walked).toBeUndefined();
+    expect(saved()!.current!.game.at).toBeUndefined();
   });
 
-  it('모은 카드는 판 밖에도 적힌다(수첩)', async () => {
+  it('멈춘 뒤에라도 일을 하나 마치면 다시 처음부터 센다(거듭 멈춤으로 치지 않는다)', async () => {
     const s = await boot();
-    startSpring(s);
-    doMusts(s);
-    const cards = s.game.value!.cards;
-    expect(saved()?.cards).toEqual(expect.arrayContaining(cards));
-    // 진행 중인 해를 지워도 카드는 남는다
-    s.goHome();
-    s.dropCurrent();
-    expect(saved()?.current).toBeUndefined();
-    expect(saved()?.cards).toEqual(expect.arrayContaining(cards));
-    expect(s.canContinue.value).toBe(false);
-  });
-});
-
-describe('"미션이 풀림" 종이를 보기 전에 꺼도 다음에 뜬다(review 4번)', () => {
-  /** 미션을 푸는 일 바로 앞까지 간 뒤, 그 일의 id를 돌려준다 */
-  function untilSolving(s: Store): string {
-    for (let step = 0; step < 12; step++) {
-      const g = s.game.value!;
-      const next = openHappenings(PACK, g).find((v) => v.must && !v.noSun)!.happening.id;
-      // 이 일을 하면 미션이 풀리는가(엔진으로 미리 해 본다)
-      const tried = doHappening(PACK, g, inputFor(g, next));
-      if (tried.solved.length > g.solved.length) return next;
-      doOne(s, next);
-    }
-    throw new Error('미션을 푸는 일에 이르지 못했다');
-  }
-
-  it('결과 대화를 보다가 끄면: 이어 할 때 맵에 들어서자마자 종이가 뜨고, 닫으면 다시 뜨지 않는다', async () => {
-    let s = await boot();
-    startSpring(s);
-    const id = untilSolving(s);
-    later();
-    s.openTalk(id);
-    const deed = s.commitTalk(inputFor(s.game.value!, id))!;
-    expect(deed.solved.length).toBe(1);
-    // 대화 장면이 결과를 보여 주는 중이다. 종이는 아직 뜨지 않았지만 저장에는 빚으로 적혀 있다.
-    expect(s.missionQueue.value).toEqual([]);
-    expect(saved()?.papers).toEqual(deed.solved);
-    s = await boot();
-    later();
-    s.continueGame();
-    expect(s.screen.value).toBe('map');
-    expect(s.talk.value).toBeNull();
-    expect(s.missionQueue.value).toEqual(deed.solved);
-    expect(s.mapBusy.value).toBe(true);
-    later();
-    s.closeMissionDone();
-    expect(s.missionQueue.value).toEqual([]);
-    expect(saved()?.papers).toBeUndefined();
-    s = await boot();
-    later();
-    s.continueGame();
-    expect(s.missionQueue.value).toEqual([]);
-  });
-
-  it('종이가 떠 있을 때 끄거나 처음으로 가도 다음에 다시 뜬다', async () => {
-    let s = await boot();
-    startSpring(s);
-    const id = untilSolving(s);
-    later();
-    s.openTalk(id);
-    const deed = s.commitTalk(inputFor(s.game.value!, id))!;
-    s.closeTalk();
-    expect(s.missionQueue.value).toEqual(deed.solved);
-    s.goHome();
-    expect(s.missionQueue.value).toEqual([]);
-    later();
-    s.continueGame();
-    expect(s.missionQueue.value).toEqual(deed.solved);
-    s = await boot();
-    later();
-    s.continueGame();
-    expect(s.missionQueue.value).toEqual(deed.solved);
-  });
-
-  it('새 판을 시작하면 앞 판의 종이가 딸려 오지 않는다', async () => {
-    const s = await boot();
-    startSpring(s);
-    const id = untilSolving(s);
-    later();
-    s.openTalk(id);
-    s.commitTalk(inputFor(s.game.value!, id));
-    s.closeTalk();
-    s.goHome();
-    later();
-    s.dropCurrent();
-    startSpring(s, 'boy');
-    expect(s.missionQueue.value).toEqual([]);
-    expect(saved()?.papers).toBeUndefined();
-  });
-
-  it('계절을 넘기면 남은 종이는 지워진다', async () => {
-    const s = await boot();
-    startSpring(s);
-    doMusts(s);
-    later();
-    s.closeSeasonNow();
-    expect(saved()?.papers).toBeUndefined();
-    expect(s.missionQueue.value).toEqual([]);
-  });
-});
-
-describe('한 해를 끝맺는다(1-라)', () => {
-  it.runIf(YEAR_BUILT)('두 모습 모두: 계절 넷을 보내면 한 해 돌아보기, 남길 것을 고르면 이야기를 깬다 — 깬 기록이 진행 중인 해와 따로 남는다', async () => {
-    for (const look of ['girl', 'boy'] as const) {
-      env.data.clear();
-      const s = await boot();
-      startSpring(s, look);
-      // 계절이 바뀔 때마다: 그 계절의 맵, 서 있던 칸은 비워져 집 앞에서 시작한다, 해 ☀가 다시 찬다
-      for (let index = 1; index < SEASONS.length; index++) {
-        s.markPlace('46,34', ['village'], 'ff00');
-        expect(passSeason(s)).toBe('map');
-        const g = s.game.value!;
-        expect(g.seasonIndex).toBe(index);
-        expect(g.phase).toBe('season');
-        expect(g.at).toBeUndefined();
-        expect(s.walkedText()).toBe('');
-        expect(g.sunsLeft).toBeGreaterThan(0);
-        // 날씨는 여름에 들어설 때 뽑혀 저장에 적힌다
-        expect(g.draw).not.toBeNull();
-        expect(saved()?.current?.draw).toBe(g.draw);
-        expect(saved()?.current?.seasonIndex).toBe(index);
-      }
-      // 겨울을 보내면 한 해가 끝난다
-      expect(passSeason(s)).toBe('review');
-      expect(s.game.value?.phase).toBe('done');
-      expect(saved()?.current?.phase).toBe('done');
-      const cards = s.game.value!.cards;
-      const ended = s.game.value!;
-      const legacy = PACK.situation.legacy[1].id;
-      later();
-      s.finishYear(legacy);
-      expect(s.screen.value).toBe('book');
-      expect(s.game.value).toBeNull();
-      // 깬 기록: 역할, 모습, 한 해 이름, 남긴 것. 진행 중인 해는 내려놓는다.
-      const record = (saved()?.cleared as Record<string, { role: string; look: string; ending: string; legacy: string }[]>).s1395;
-      expect(record).toHaveLength(1);
-      expect(record[0].role).toBe('farmer');
-      expect(record[0].look).toBe(look);
-      expect(record[0].legacy).toBe(legacy);
-      expect(PACK.situation.endings.some((e) => e.id === record[0].ending)).toBe(true);
-      // 꼴 4: 그 해의 줄거리(날씨, 처음과 계절마다의 수치, 한 일마다 고른 것, 놀이의 끝, 푼 미션, 카드)가 id와 수로 남는다(review 41번)
-      const story = record[0] as unknown as { draw: string | null; flow: number[][]; picks: Record<string, string>; plays: Record<string, string>; solved: string[]; cards: string[] };
-      expect(story.draw).toBe(ended.draw);
-      expect(story.flow).toEqual(ended.flow.map((st) => [st.living, st.body, st.trust]));
-      expect(story.flow).toHaveLength(SEASONS.length + 1);
-      expect(Object.keys(story.picks)).toEqual(ended.history.map((d) => d.happeningId));
-      for (const deed of ended.history) {
-        expect(story.picks[deed.happeningId]).toBe(deed.choiceId ?? '');
-        if (deed.play) expect(story.plays[deed.happeningId]).toBe(deed.play);
-      }
-      expect(Object.keys(story.plays).length).toBeGreaterThan(0);
-      expect(story.solved).toEqual(ended.solved);
-      expect(story.cards).toEqual(ended.cards);
-      // 한 줄이 작다(학생 기기의 저장 한 칸이 커지지 않게)
-      expect(JSON.stringify(record[0]).length).toBeLessThan(2000);
-      expect(saved()?.current).toBeUndefined();
-      expect(saved()?.cards).toEqual(expect.arrayContaining(cards));
-      expect(s.canContinue.value).toBe(false);
-    }
-  });
-
-  it.runIf(YEAR_BUILT)('깬 이야기를 다른 모습으로 다시 한다: 깬 기록은 남고, 다시 깨면 줄이 는다', async () => {
-    let s = await boot();
-    startSpring(s, 'girl');
-    passBuiltSeasons(s);
-    later();
-    s.finishYear(PACK.situation.legacy[0].id);
-    // 끄고 켜도 깬 기록이 남아 있다
-    s = await boot();
-    expect(s.save.value.cleared.s1395).toHaveLength(1);
-    expect(s.canContinue.value).toBe(false);
-    // 같은 이야기를 남자아이 모습으로 다시
-    later();
-    s.goBook();
-    later();
-    s.openStory('s1395');
-    later();
-    s.settleRole('farmer', 'boy');
-    later();
-    s.beginYear();
-    expect(s.screen.value).toBe('map');
-    // 하는 도중에도 앞의 깬 기록은 그대로다
-    expect((saved()?.cleared as Record<string, unknown[]>).s1395).toHaveLength(1);
-    passBuiltSeasons(s);
-    later();
-    s.finishYear(PACK.situation.legacy[2].id);
-    const records = (saved()?.cleared as Record<string, { look: string; legacy: string }[]>).s1395;
-    expect(records.map((r) => r.look)).toEqual(['girl', 'boy']);
-    expect(records[1].legacy).toBe(PACK.situation.legacy[2].id);
-  });
-
-  it.runIf(YEAR_BUILT)('한 해 돌아보기에서 끄면 이어 하기로 돌아보기가 다시 열린다', async () => {
-    let s = await boot();
-    startSpring(s);
-    passBuiltSeasons(s);
-    expect(s.screen.value).toBe('review');
-    const before = s.game.value;
-    s = await boot();
-    expect(s.canContinue.value).toBe(true);
-    later();
-    s.continueGame();
-    expect(s.screen.value).toBe('review');
-    expect(s.game.value).toEqual(before);
-    later();
-    s.finishYear(PACK.situation.legacy[0].id);
-    expect(s.screen.value).toBe('book');
-  });
-
-  it.runIf(YEAR_BUILT)('계절마다 도중에 끄고 켜도 그 계절의 맵에서 그 판 그대로 이어진다', async () => {
-    let s = await boot();
-    startSpring(s);
-    for (let index = 0; index < SEASONS.length; index++) {
-      // 그 계절의 꼭 할 일을 하나 한 뒤에 끈다
-      const first = openHappenings(PACK, s.game.value!).find((v) => v.must && !v.noSun);
-      if (first) doOne(s, first.happening.id);
-      s.markPlace('40,36', ['village'], 'f0f0');
-      env.state.visibility = 'hidden';
-      env.fire('visibilitychange');
-      const before = s.game.value!;
-      s = await boot();
-      later();
-      s.continueGame();
-      expect(s.screen.value, SEASONS[index]).toBe('map');
-      expect(s.game.value, SEASONS[index]).toEqual(before);
-      expect(currentSeason(s.game.value!)).toBe(SEASONS[index]);
-      expect(s.walkedText()).toBe('f0f0');
-      passSeason(s);
-    }
-    expect(s.screen.value).toBe('review');
-  });
-
-  it('닫지 않은 "미션이 풀림" 종이는 계절을 보내면 버려진다: 다음 계절의 맵에 지난 계절의 종이가 뜨지 않고 저장에도 남지 않는다', async () => {
-    let s = await boot();
-    startSpring(s);
-    // 꼭 할 일을 하되 종이는 하나도 넘기지 않는다(대화 장면만 닫는다)
-    for (let n = 0; n < 40 && !canCloseSeason(PACK, s.game.value!); n++) {
-      const g = s.game.value!;
-      const next = openHappenings(PACK, g).find((v) => v.must && !v.noSun)!.happening.id;
-      later();
-      s.openTalk(next);
-      s.commitTalk(inputFor(g, next));
-      s.closeTalk();
-      // 종이가 떠 있어도 엔진의 판은 이미 나아가 있다 — 화면에서는 종이가 맵을 덮지만, 가게는 그와 상관없이 버틴다
-      if (s.missionQueue.value.length > 0) s.missionQueue.value = [];
-    }
-    expect(saved()?.papers?.length).toBeGreaterThan(0);
-    later();
-    s.closeSeasonNow();
-    expect(s.screen.value).toBe('seasonClose');
-    expect(s.missionQueue.value).toEqual([]);
-    expect(saved()?.papers).toBeUndefined();
-    // 계절 닫기에서 끄고 켜도 종이가 되살아나지 않는다
-    s = await boot();
-    later();
-    s.continueGame();
-    expect(s.screen.value).toBe('seasonClose');
-    expect(s.missionQueue.value).toEqual([]);
-    later();
-    s.goNextSeason();
-    expect(s.missionQueue.value).toEqual([]);
-    expect(saved()?.papers).toBeUndefined();
-    if (s.screen.value !== 'map') return; // 여름이 아직 만들어지지 않았다
-    // 여름에 푼 미션의 종이만 뜬다
-    const springSolved = [...s.game.value!.solved];
-    doMusts(s);
-    expect(s.game.value!.solved.length).toBeGreaterThan(springSolved.length);
-    expect(saved()?.papers).toBeUndefined();
-  });
-
-  it.runIf(YEAR_BUILT)('여름·가을·겨울에도 종이를 보기 전에 끄면 다음에 뜬다', async () => {
-    let s = await boot();
-    startSpring(s);
-    for (let index = 1; index < SEASONS.length; index++) {
-      expect(passSeason(s)).toBe('map');
-      // 미션이 풀리는 일까지 가서, 종이를 넘기지 않고 끈다
-      let owedIds: string[] = [];
-      for (let n = 0; n < 40 && owedIds.length === 0; n++) {
-        const g = s.game.value!;
-        const next = openHappenings(PACK, g).find((v) => v.must && !v.noSun)!.happening.id;
-        later();
-        s.openTalk(next);
-        const deed = s.commitTalk(inputFor(g, next))!;
-        s.closeTalk();
-        if (deed.solved.length > 0) owedIds = deed.solved;
-        else closePapers(s);
-      }
-      expect(owedIds.length, SEASONS[index]).toBeGreaterThan(0);
-      expect(saved()?.papers).toEqual(owedIds);
-      s = await boot();
-      later();
-      s.continueGame();
-      expect(s.screen.value).toBe('map');
-      expect(s.missionQueue.value, SEASONS[index]).toEqual(owedIds);
-      closePapers(s);
-      expect(saved()?.papers).toBeUndefined();
-    }
-  });
-
-  it('한 해가 끝나기 전에는 이야기를 깰 수 없다', async () => {
-    const s = await boot();
-    startSpring(s);
-    later();
-    s.finishYear(PACK.situation.legacy[0].id);
-    expect(s.screen.value).toBe('map');
-    expect(saved()?.cleared).toEqual({});
-    doMusts(s);
-    later();
-    s.closeSeasonNow();
-    later();
-    s.finishYear(PACK.situation.legacy[0].id);
-    expect(s.screen.value).toBe('seasonClose');
-    expect(saved()?.cleared).toEqual({});
-  });
-
-  it('모르는 남길 것을 넘겨도 멈추지 않는다(빈 것으로 적힌다)', async () => {
-    const s = await boot();
-    startSpring(s);
-    passBuiltSeasons(s);
-    if (s.screen.value !== 'review') return; // 한 해가 아직 다 만들어지지 않았다
-    later();
-    s.finishYear('없는 것');
-    expect(s.screen.value).toBe('book');
-    expect((saved()?.cleared as Record<string, { legacy: string }[]>).s1395[0].legacy).toBe('');
-  });
-});
-
-describe('실제 옛 판(4a1d0a6 — 운영 주소의 판)을 눌러 뜬 저장(review 34번 ㉠)', () => {
-  const file = (name: string): string => SAVE_FILES[`./fixtures/saves/${name}.json`];
-
-  it.runIf(YEAR_BUILT)('"다음에 만들어요" 화면의 저장: 여름의 맵, 집 앞에서(서 있던 칸 없음, 가 본 칸 비움) 계절 첫 줄이 뜰 형편으로, 그때 뽑힌 날씨 그대로', async () => {
-    const raw = file('schema3-old-spring-over');
-    const old = JSON.parse(raw).current as GameState;
-    env.data.set(SAVE_KEY, raw);
-    const s = await boot();
-    expect(s.loadStatus.value).toBe('migrated');
-    expect(s.canContinue.value).toBe(true);
-    later();
-    s.continueGame();
-    expect(s.screen.value).toBe('map');
-    const g = s.game.value!;
-    expect(currentSeason(g)).toBe('summer');
-    expect(g.at).toBeUndefined();
-    expect(s.walkedText()).toBe('');
-    // 맵은 서 있던 칸이 없고 이 계절에 한 일이 없을 때 계절의 첫 줄을 띄운다(MapScreen)
-    expect(g.history.filter((d) => d.season === 'summer')).toHaveLength(0);
-    expect(g.draw).toBe(old.draw);
-    expect(g.done).toEqual(old.done);
-    // 한 번 저장하면 꼴 4로 적힌다
-    s.saveNow();
-    expect(saved()?.schema).toBe(4);
-    passBuiltSeasons(s);
-    expect(s.screen.value).toBe('review');
-  });
-
-  it.runIf(YEAR_BUILT)('봄 도중 · 봄을 다 하고 안 보냄 · 봄을 닫은 직후의 저장이 제자리에서 이어져 한 해 끝까지 간다', async () => {
-    for (const [name, first] of [
-      ['schema3-old-spring-mid', 'map'],
-      ['schema3-old-spring-done', 'map'],
-      ['schema3-old-spring-closed', 'seasonClose'],
-    ] as const) {
-      env.data.clear();
-      const raw = file(name);
-      const old = JSON.parse(raw).current as GameState;
-      env.data.set(SAVE_KEY, raw);
-      const s = await boot();
-      later();
-      s.continueGame();
-      expect(s.screen.value, name).toBe(first);
-      expect(s.game.value!.at, name).toBe(old.at);
-      expect(s.game.value!.done, name).toEqual(old.done);
-      if (first === 'seasonClose') {
-        later();
-        s.goNextSeason();
-        expect(s.screen.value).toBe('map');
-        // 봄을 다 하고 안 보낸 판은 보내는 순간(여름에 들어서며) 날씨가 적힌다
-        expect(s.game.value!.draw).not.toBeNull();
-        expect(s.game.value!.at).toBeUndefined();
-      }
-      passBuiltSeasons(s);
-      expect(s.screen.value, name).toBe('review');
-    }
-  });
-});
-
-describe('봄까지 한 옛 저장(1-다와 태블릿 바퀴의 판이 만든 것)', () => {
-  const overs = Object.keys(SAVE_FILES).filter((path) => path.includes('-spring-over'));
-
-  it('견본이 있다: 꼴 2와 꼴 3의 "봄을 보내고 여름으로 넘어간" 저장', () => {
-    expect(overs.map((path) => path.split('/').pop()).sort()).toEqual(expect.arrayContaining(['schema2-spring-over.json', 'schema3-spring-over.json']));
-  });
-
-  it.runIf(YEAR_BUILT)('여름이 생긴 이 판에서 "이어 하기"를 누르면 여름의 맵에서 이어진다(집 앞에서, 그때 뽑힌 날씨 그대로)', async () => {
-    for (const path of overs) {
-      env.data.clear();
-      env.data.set(SAVE_KEY, SAVE_FILES[path]);
-      const old = JSON.parse(SAVE_FILES[path]).current as GameState;
-      const s = await boot();
-      expect(['ok', 'migrated'], path).toContain(s.loadStatus.value);
-      expect(s.canContinue.value, path).toBe(true);
-      later();
-      s.continueGame();
-      expect(s.screen.value, path).toBe('map');
-      const g = s.game.value!;
-      expect(g.seasonIndex).toBe(1);
-      expect(currentSeason(g)).toBe('summer');
-      // 봄에 한 일과 정한 것이 그대로 넘어온다
-      expect(g.done).toEqual(old.done);
-      expect(g.flags).toEqual(old.flags);
-      expect(g.solved).toEqual(old.solved);
-      expect(g.stats).toEqual(old.stats);
-      // 날씨는 봄을 닫고 넘어갈 때 이미 뽑혀 저장에 적혀 있었다 — 그대로 쓴다
-      expect(g.draw).toBe(old.draw);
-      expect(g.draw).not.toBeNull();
-      // 그 판으로 한 해를 끝까지 간다
-      passBuiltSeasons(s);
-      expect(s.screen.value, path).toBe('review');
-      later();
-      s.finishYear(PACK.situation.legacy[0].id);
-      expect(s.screen.value).toBe('book');
-    }
-  });
-
-  it.runIf(YEAR_BUILT)('봄의 한가운데·봄을 보낸 바로 뒤의 옛 저장도 한 해를 끝까지 간다', async () => {
-    const olds = Object.keys(SAVE_FILES).filter((path) => /-spring-(mid|paper|closed)\.json$/.test(path));
-    expect(olds.length).toBeGreaterThanOrEqual(5);
-    for (const path of olds) {
-      env.data.clear();
-      env.data.set(SAVE_KEY, SAVE_FILES[path]);
-      const s = await boot();
-      later();
-      s.continueGame();
-      expect(['map', 'seasonClose'], path).toContain(s.screen.value);
-      closePapers(s);
-      if (s.screen.value === 'seasonClose') {
-        later();
-        s.goNextSeason();
-        expect(s.screen.value, path).toBe('map');
-      }
-      passBuiltSeasons(s);
-      expect(s.screen.value, path).toBe('review');
-    }
-  });
-});
-
-describe('새 판', () => {
-  it('새 판을 만들 때마다 판의 번호가 는다(맵이 앞 판의 자리를 버린다 — review 14번)', async () => {
-    env.state.search = '?seed=7';
-    const s = await boot();
-    const before = s.gameNo.value;
-    startSpring(s);
-    const first = s.gameNo.value;
-    expect(first).toBe(before + 1);
-    expect(s.game.value!.seed).toBe(7);
-    s.markPlace('46,34', ['village'], 'ff');
-    s.goHome();
-    // 이어 하기는 같은 판이다
-    later();
-    s.continueGame();
-    expect(s.gameNo.value).toBe(first);
-    s.goHome();
-    // 처음부터: 같은 씨앗, 같은 모습이어도 다른 판이다
-    later();
-    s.dropCurrent();
-    startSpring(s);
-    expect(s.game.value!.seed).toBe(7);
-    expect(s.gameNo.value).toBeGreaterThan(first);
-    expect(s.game.value!.at).toBeUndefined();
-  });
-});
-
-describe('저장이 안 되거나 읽을 수 없을 때', () => {
-  it('저장이 안 되는 창: 알리고, 게임은 끝까지 된다', async () => {
-    env.state.noStorage = true;
-    const s = await boot();
-    expect(s.loadStatus.value).toBe('noStorage');
-    startSpring(s);
-    expect(s.screen.value).toBe('map');
-    expect(s.saveFailed.value).toBe(true);
-    doMusts(s);
-    later();
-    s.closeSeasonNow();
-    expect(s.screen.value).toBe('seasonClose');
-    later();
-    s.goNextSeason();
-    expect(s.screen.value).toBe('map');
-    // 저장이 안 되어도 한 해를 끝까지 하고 이야기책으로 돌아간다(깬 기록은 이 창에만 남는다)
-    for (let n = 0; n < SEASONS.length && s.screen.value === 'map'; n++) passSeason(s);
-    expect(s.screen.value).toBe('review');
-    later();
-    s.finishYear(PACK.situation.legacy[0].id);
-    expect(s.screen.value).toBe('book');
-    expect(s.save.value.cleared.s1395).toHaveLength(1);
-    expect(env.data.size).toBe(0);
-  });
-
-  it('쓰다가 실패하면(공간 없음) 알리고 게임은 이어진다. 다시 써지면 알림이 꺼진다', async () => {
-    const s = await boot();
-    startSpring(s);
-    expect(s.saveFailed.value).toBe(false);
-    env.state.failWrites = true;
-    const first = openHappenings(PACK, s.game.value!).find((v) => v.must)!.happening.id;
-    doOne(s, first);
-    expect(s.saveFailed.value).toBe(true);
-    expect(s.game.value!.done).toContain(first);
-    expect(saved()?.current?.done).toEqual([]);
-    env.state.failWrites = false;
-    s.saveNow();
-    expect(s.saveFailed.value).toBe(false);
-    expect(saved()?.current?.done).toContain(first);
-  });
-
-  it('글자가 깨진 저장: 처음부터 하되 깨진 글자를 한 벌 남긴다', async () => {
-    env.data.set(SAVE_KEY, '{"schema":2,"cards":[');
-    const s = await boot();
-    expect(s.loadStatus.value).toBe('unreadable');
-    expect(s.canContinue.value).toBe(false);
-    expect(env.data.get(BACKUP_KEY)).toBe('{"schema":2,"cards":[');
-    startSpring(s);
-    expect(s.screen.value).toBe('map');
-    expect(saved()?.current?.role).toBe('farmer');
-  });
-
-  it('진행 중인 해만 망가진 저장: 깬 기록과 카드는 남고 그 해만 봄부터 다시 한다', async () => {
-    let s = await boot();
-    startSpring(s);
-    doMusts(s);
-    const raw = saved()!;
-    const cards = raw.cards;
-    expect(cards.length).toBeGreaterThan(0);
-    env.data.set(SAVE_KEY, JSON.stringify({ ...raw, cleared: { s1395: [{ role: 'farmer', look: 'girl', ending: 'e', legacy: 'l' }] }, current: { ...raw.current, stats: 'x' } }));
-    s = await boot();
-    expect(s.loadStatus.value).toBe('yearLost');
-    expect(s.canContinue.value).toBe(false);
-    expect(s.save.value.cards).toEqual(cards);
-    expect(s.save.value.cleared.s1395).toHaveLength(1);
-    // 새로 시작해도 깬 기록과 카드가 저장에 그대로 있다
-    startSpring(s);
-    expect(saved()?.cards).toEqual(cards);
-    expect((saved()?.cleared as Record<string, unknown[]>).s1395).toHaveLength(1);
-  });
-
-  it('저장에 없어진 일·카드가 섞여 있으면 그 항목만 버리고 이어 한다', async () => {
-    let s = await boot();
-    startSpring(s);
-    const first = openHappenings(PACK, s.game.value!).find((v) => v.must)!.happening.id;
-    doOne(s, first);
-    const raw = saved()!;
-    const cur = raw.current!;
-    env.data.set(
-      SAVE_KEY,
-      JSON.stringify({
-        ...raw,
-        current: {
-          ...cur,
-          done: [...cur.done, 's1395-없어진-일'],
-          solved: ['s1395-없어진-미션'],
-          cards: [...cur.cards, '없어진 카드'],
-          items: ['없어진 물건'],
-          history: [...cur.history, { ...cur.history[0], happeningId: 's1395-없어진-일' }],
-        },
-      }),
-    );
-    s = await boot();
-    expect(s.loadStatus.value).toBe('ok');
-    later();
-    s.continueGame();
-    expect(s.screen.value).toBe('map');
-    expect(s.game.value!.done).toEqual(cur.done);
-    expect(s.game.value!.solved).toEqual([]);
-    expect(s.game.value!.cards).toEqual(cur.cards);
-    expect(s.game.value!.items).toEqual([]);
-    expect(s.game.value!.history).toHaveLength(cur.history.length);
-    expect(s.game.value!.stats).toEqual(cur.stats);
-    // 그 판으로 끝까지 간다
-    doMusts(s);
-    later();
-    s.closeSeasonNow();
-    expect(s.screen.value).toBe('seasonClose');
-  });
-
-  it('남겨 둔 한 벌(backup)은 계절을 하나 넘기면 지운다', async () => {
-    env.data.set(SAVE_KEY, '{"깨진');
-    const s = await boot();
-    expect(env.data.has(BACKUP_KEY)).toBe(true);
-    startSpring(s);
-    doMusts(s);
-    expect(env.data.has(BACKUP_KEY)).toBe(true);
-    later();
-    s.closeSeasonNow();
-    expect(env.data.has(BACKUP_KEY)).toBe(false);
-    expect(saved()?.current?.phase).toBe('seasonClose');
-  });
-
-  it('없는 역할이나 될 수 없는 모습의 저장: 열자마자 그 해만 내려놓고 제목에서 알린다("이어 하기"가 보이지 않는다)', async () => {
-    for (const hurt of [{ role: '없는 집' }, { role: 'son', look: 'girl' }]) {
-      env.data.clear();
-      let s = await boot();
-      startSpring(s);
-      doMusts(s);
-      const raw = saved()!;
-      const text = JSON.stringify({ ...raw, current: { ...raw.current, ...hurt } });
-      env.data.set(SAVE_KEY, text);
-      s = await boot();
-      // "이어 하기"를 내놓기 전에(열자마자) 그 해를 내려놓고 알린다 — 눌러야 알게 되지 않는다
-      expect(s.screen.value).toBe('title');
-      expect(s.loadStatus.value).toBe('yearLost');
-      expect(s.canContinue.value).toBe(false);
-      later();
-      s.continueGame();
-      expect(s.screen.value).toBe('title');
-      expect(s.game.value).toBeNull();
-      // 카드는 남고, 내려놓기 전의 글자가 한 벌 남는다
-      expect(saved()?.current).toBeUndefined();
-      expect(saved()?.cards).toEqual(raw.cards);
-      expect(env.data.get(BACKUP_KEY)).toBe(text);
-      // 새로 시작할 수 있다
-      startSpring(s);
-      expect(s.screen.value).toBe('map');
-    }
-  });
-
-  it('한 일의 기록이 망가진 저장: 읽을 때 그 해만 버린다("이어 하기"가 먹통이 되지 않는다)', async () => {
-    let s = await boot();
-    startSpring(s);
-    doMusts(s);
-    const raw = saved()!;
-    for (const history of [[...raw.current!.history, 'x'], [{ happeningId: 3 }], [null]]) {
-      env.data.set(SAVE_KEY, JSON.stringify({ ...raw, current: { ...raw.current, history } }));
-      s = await boot();
-      expect(s.loadStatus.value).toBe('yearLost');
-      expect(s.canContinue.value).toBe(false);
-      expect(s.save.value.cards).toEqual(raw.cards);
-    }
-  });
-
-  it('남은 해 ☀가 터무니없는 저장: 그 역할의 해로 묶어 이어 한다', async () => {
-    let s = await boot();
-    startSpring(s);
-    const raw = saved()!;
-    env.data.set(SAVE_KEY, JSON.stringify({ ...raw, current: { ...raw.current, sunsLeft: 999 } }));
-    s = await boot();
-    later();
-    s.continueGame();
-    expect(s.screen.value).toBe('map');
-    expect(s.game.value!.sunsLeft).toBe(PACK.situation.roles.find((r) => r.id === 'farmer')!.suns);
-  });
-
-  it('덤을 하나 한 뒤의 저장에 해 ☀가 터무니없이 적혀 있으면: 역할의 해에서 쓴 해를 뺀 만큼으로 묶는다("3/4"로 뜨지 않게)', async () => {
-    let s = await boot();
-    startSpring(s);
-    const extra = openHappenings(PACK, s.game.value!).find((v) => !v.must && !v.noSun)!.happening.id;
-    doOne(s, extra);
-    const suns = PACK.situation.roles.find((r) => r.id === 'farmer')!.suns;
-    expect(s.game.value!.sunsLeft).toBe(suns - 1);
-    const raw = saved()!;
-    env.data.set(SAVE_KEY, JSON.stringify({ ...raw, current: { ...raw.current, sunsLeft: 999 } }));
-    s = await boot();
-    later();
-    s.continueGame();
-    expect(s.game.value!.sunsLeft).toBe(suns - 1);
-  });
-
-  it('같은 저장으로 거듭 멈추면 그 해를 내려놓는다(이어 하기 → 멈춤 → 처음으로가 되풀이되지 않게)', async () => {
-    const s = await boot();
-    startSpring(s);
-    // 첫 번째 멈춤: 처음으로 가도 하던 해는 남아 있다
-    s.openTalk('없는 일');
-    s.commitTalk({ id: '없는 일' });
-    expect(s.screen.value).toBe('trouble');
-    s.goHome();
-    expect(s.canContinue.value).toBe(true);
-    later();
-    s.continueGame();
-    expect(s.screen.value).toBe('map');
-    // 일을 하나도 마치지 못하고 또 멈춘다(화면을 그리다 멈춘 것도 같은 셈이다)
-    s.noteTrouble();
-    s.goHome();
-    expect(s.screen.value).toBe('title');
-    expect(s.loadStatus.value).toBe('yearLost');
-    expect(s.canContinue.value).toBe(false);
-    expect(env.data.has(BACKUP_KEY)).toBe(true);
-  });
-
-  it('멈춘 뒤에라도 일을 하나 마치면 다시 처음부터 센다', async () => {
-    const s = await boot();
-    startSpring(s);
-    s.openTalk('없는 일');
-    s.commitTalk({ id: '없는 일' });
-    s.goHome();
-    later();
-    s.continueGame();
-    const first = openHappenings(PACK, s.game.value!).find((v) => v.must)!.happening.id;
-    doOne(s, first);
-    s.noteTrouble();
-    s.goHome();
-    expect(s.canContinue.value).toBe(true);
-    expect(s.loadStatus.value).not.toBe('yearLost');
-  });
-
-  it('이야기가 없어진 저장(다른 판의 것)은 이어 하기를 내놓지 않는다', async () => {
-    let s = await boot();
-    startSpring(s);
-    const raw = saved()!;
-    env.data.set(SAVE_KEY, JSON.stringify({ ...raw, current: { ...raw.current, situationId: 's0000' } }));
-    s = await boot();
-    expect(s.canContinue.value).toBe(false);
-    later();
-    s.continueGame();
-    expect(s.screen.value).toBe('title');
-  });
-
-  it('코드보다 새 꼴의 저장은 건드리지 않는다', async () => {
-    const raw = JSON.stringify({ schema: SCHEMA + 1, cards: ['미래'] });
-    env.data.set(SAVE_KEY, raw);
-    const s = await boot();
-    expect(s.loadStatus.value).toBe('newer');
-    expect(s.canContinue.value).toBe(false);
-    expect(env.data.get(SAVE_KEY)).toBe(raw);
-  });
-
-  it('"모두 지우고 처음부터": 저장이 사라지고 이어 하기도 사라진다', async () => {
-    let s = await boot();
-    startSpring(s);
-    doMusts(s);
-    s.goHome();
-    expect(s.canContinue.value).toBe(true);
-    s.wipeAll();
-    expect(env.data.size).toBe(0);
-    expect(s.canContinue.value).toBe(false);
-    expect(s.save.value.cards).toEqual([]);
-    expect(s.screen.value).toBe('title');
-    s = await boot();
-    expect(s.loadStatus.value).toBe('empty');
-    expect(s.canContinue.value).toBe(false);
-  });
-});
-
-describe('엔진이 던져도 빈 화면에서 멈추지 않는다', () => {
-  it('할 수 없는 일을 마치려 하면 "이어 갈 수 없어요"로 가고, 거기서 처음으로 갈 수 있다', async () => {
-    const s = await boot();
-    startSpring(s);
-    const before = s.game.value;
+    toHub(s);
+    toField(s);
     s.openTalk('없는 일');
     expect(s.commitTalk({ id: '없는 일' })).toBeNull();
     expect(s.screen.value).toBe('trouble');
-    expect(s.talk.value).toBeNull();
-    expect(s.game.value).toEqual(before);
+    s.goHome();
+    expect(s.canContinue.value).toBe(true);
+    later();
+    s.continueGame();
+    expect(s.screen.value).toBe('map');
+    doOne(s, 's1395-spring-return', 0);
+    s.noteTrouble();
     s.goHome();
     expect(s.screen.value).toBe('title');
-    // 하던 해는 그대로 적혀 있어 이어 할 수 있다
+    expect(s.loadStatus.value).not.toBe('trimmed');
     expect(s.canContinue.value).toBe(true);
+    expect(saved()!.current).toBeDefined();
   });
 
-  it('잠긴 선택지를 넘겨도 판은 바뀌지 않는다', async () => {
+  it('남은 해 ☀가 터무니없는 저장: 에피소드의 해(①-1은 둘)로 묶어 이어 한다', async () => {
+    let s = await boot();
+    toHub(s);
+    toField(s);
+    expect(s1395_1.suns).toBe(2);
+    const raw = saved()!;
+    env.data.set(SAVE_KEY, JSON.stringify({ ...raw, current: { ...raw.current!, game: { ...raw.current!.game, sunsLeft: 999 } } }));
+    s = await boot();
+    later();
+    s.continueGame();
+    expect(s.screen.value).toBe('map');
+    expect(s.game.value!.sunsLeft).toBe(s1395_1.suns);
+  });
+
+  it('덤을 하나 한 뒤의 저장에 해 ☀가 터무니없이 적혀 있으면: 에피소드의 해에서 쓴 해를 뺀 만큼으로 묶는다("3/2"로 뜨지 않게)', async () => {
+    let s = await boot();
+    toHub(s);
+    toField(s);
+    const extra = openHappenings(s.pack.value!, s.game.value!).find((v) => !v.must && !v.noSun)!.happening.id;
+    doOne(s, extra);
+    expect(s.game.value!.sunsLeft).toBe(s1395_1.suns - 1);
+    const raw = saved()!;
+    env.data.set(SAVE_KEY, JSON.stringify({ ...raw, current: { ...raw.current!, game: { ...raw.current!.game, sunsLeft: 999 } } }));
+    s = await boot();
+    later();
+    s.continueGame();
+    expect(s.game.value!.sunsLeft).toBe(s1395_1.suns - 1);
+  });
+});
+
+describe('가게가 문제 고르개에 그 판의 일을 넘긴다(겪은 것 먼저 — 4-1 ㉢ Review 권고 ㅁ, R08)', () => {
+  it("큰 고비의 battleKit: 카드 문제와 지혜 겨루기 모두 그 판에서 겪은 것('at:' 꼬리표의 일을 한 것)을 겪지 않은 것보다 먼저 낸다", async () => {
     const s = await boot();
-    startSpring(s);
-    const view = openHappenings(PACK, s.game.value!).find((v) => v.must)!;
-    const before = s.game.value;
-    s.openTalk(view.happening.id);
-    expect(s.commitTalk({ id: view.happening.id, choiceId: '없는 선택지' })).toBeNull();
-    expect(s.screen.value).toBe('trouble');
-    expect(s.game.value).toEqual(before);
-    expect(saved()?.current?.done).toEqual([]);
+    toHub(s);
+    toField(s);
+    // ㉠ 이웃집 논 길, 덤 없이: 절(스님들)·뒷산 절·나무하기·우물가의 꼬리표를 단 문제는 겪지 않은 것이다
+    playField(s, 0, [], 'right');
+    later();
+    s.goBoss();
+    const kit = s.battleKit('boss')!;
+    const done = s.game.value!.history.map((d) => d.happeningId);
+    const story = new Map(kit.questions.filter((q) => q.topic === s1395_1.storyTopic).map((q) => [q.id, q]));
+    const notHeard = (id: string): boolean => unheard(story.get(id)!, done);
+    expect([...story.keys()].filter(notHeard).length).toBeGreaterThan(2);
+    // 카드마다 낼 차례를 끝까지 뽑아 이야기 문제만 본다: 겪지 않은 것 뒤에 겪은 것이 오지 않는다
+    for (const id of s1395_1.starter!) {
+      const card = startBattle(kit.setup).ctx.cards[id];
+      expect(card, id).toBeDefined();
+      const order: string[] = [];
+      for (let n = 0; n < 400; n++) {
+        const next = kit.ask.card(card, { exclude: order, right: 0, turn: 1 });
+        if (!next) break;
+        order.push(next);
+      }
+      const told = order.filter((q) => story.has(q));
+      expect(told.length, id).toBe(story.size);
+      const firstUnheard = told.findIndex(notHeard);
+      expect(firstUnheard, id).toBeGreaterThan(0);
+      expect(told.slice(firstUnheard).every(notHeard), `${id}: ${told.join(' ')}`).toBe(true);
+    }
+    // 지혜 겨루기(핵심 물음 일곱)도 겪은 것 먼저
+    const wise = kit.ask.wisdom(7, { exclude: [] });
+    const cut = wise.findIndex(notHeard);
+    expect(cut).toBeGreaterThan(0);
+    expect(wise.slice(cut).every(notHeard), wise.join(' ')).toBe(true);
+  });
+});
+
+describe('개발 판의 보류한 계절 보기(?field= — 저장하지 않는다)', () => {
+  it('?field=summer는 여름의 꼭 할 일·덤만 연 맵을 열고, 해 보아도 저장하지 않는다', async () => {
+    env.state.search = '?field=summer&who=farmer-girl';
+    const s = await boot();
+    s.openFromUrl();
+    expect(s.screen.value).toBe('map');
+    expect(s.devField.value).toBe('summer');
+    const open = openHappenings(s.pack.value!, s.game.value!).map((v) => v.happening.id);
+    expect(open.length).toBeGreaterThan(0);
+    expect(open.every((id) => id.startsWith('s1395-summer-'))).toBe(true);
+    const id = open[0];
+    later();
+    s.openTalk(id);
+    s.commitTalk(inputFor(s.game.value!, id));
+    expect(env.data.has(SAVE_KEY)).toBe(false);
   });
 });
 
 describe('주인공 그림의 이름', () => {
   it('농민·노비 집 아이는 모습이 붙고, 양반 집 아들·딸은 역할이 곧 모습이다', async () => {
     const s = await boot();
-    expect(s.heroName('farmer', 'boy')).toBe('farmer-boy');
     expect(s.heroName('farmer', 'girl')).toBe('farmer-girl');
-    expect(s.heroName('nobi', 'girl')).toBe('nobi-girl');
-    expect(s.heroName('son', 'girl')).toBe('son');
-    expect(s.heroName('daughter', 'boy')).toBe('daughter');
-  });
-});
-
-// ── 저장 견본 만들기 ─────────────────────────────────────────────
-// 저장의 꼴(schema)을 올릴 때는 옛 견본을 지우지 말고 새 번호의 견본을 더한다(옛 견본이 계속 읽히는지 tests/storage.test.ts가 본다).
-//   VITE_MAKE_SAVES=spring npx vitest run tests/store.test.ts  … 봄의 견본(schemaN-spring-*.json)을 적는다.
-//       꼴 2·3의 봄 견본은 봄만 있던 판(1-다, 태블릿 바퀴)이 만든 것이다 — 꼴을 올리기 전에는 다시 적지 않는다.
-//   VITE_MAKE_SAVES=1 npx vitest run tests/store.test.ts       … 한 해가 다 있는 판(1-라부터)의 견본(schemaN-year-*.json)을 적는다.
-
-const MAKE_SAVES = import.meta.env.VITE_MAKE_SAVES as string | undefined;
-
-describe.runIf(MAKE_SAVES === '1' || MAKE_SAVES === 'spring')('저장 견본 만들기', () => {
-  // 파일을 쓰는 것은 이 시험뿐이다. 이름을 이어 붙여 불러온다(이 프로젝트에는 Node의 형 정의를 두지 않는다).
-  async function writer(): Promise<(name: string) => void> {
-    const fs = (await import(/* @vite-ignore */ ['node', 'fs'].join(':'))) as {
-      mkdirSync(path: string, options: { recursive: boolean }): void;
-      writeFileSync(path: string, text: string): void;
-    };
-    const dir = decodeURIComponent(new URL('./fixtures/saves/', import.meta.url).pathname);
-    fs.mkdirSync(dir, { recursive: true });
-    return (name: string): void => {
-      const raw = env.data.get(SAVE_KEY)!;
-      expect(parseSave(raw).status).toBe('ok');
-      fs.writeFileSync(`${dir}${name}`, `${JSON.stringify(JSON.parse(raw), null, 1)}\n`);
-    };
-  }
-  const walked = (n: number): string => packBits(Uint8Array.from({ length: 96 * 72 }, (_, i) => (i % 96 > 24 && i % 96 < 24 + n && Math.floor(i / 96) > 28 && Math.floor(i / 96) < 60 ? 1 : 0)));
-
-  /** 그 계절의 한가운데: 꼭 할 일 하나와 덤 하나를 하고 맵에 서 있다 */
-  function midSeason(s: Store, at: string, n: number): void {
-    const must = openHappenings(PACK, s.game.value!).find((v) => v.must && !v.noSun)!.happening.id;
-    doOne(s, must);
-    const extra = openHappenings(PACK, s.game.value!).find((v) => !v.must && !v.noSun);
-    if (extra) doOne(s, extra.happening.id);
-    s.markPlace(at, ['village', 'fields'], walked(n));
-    s.saveNow();
-  }
-
-  it.runIf(MAKE_SAVES === 'spring')(`꼴 ${SCHEMA}의 봄 견본을 적는다`, async () => {
-    const write = await writer();
-    const s = await boot();
-    env.state.search = '?seed=1395';
-    startSpring(s, 'girl');
-    // 봄의 한가운데: 꼭 할 일 하나와 덤 하나를 하고, 우물가에 서 있다
-    midSeason(s, '46,34', 20);
-    write(`schema${SCHEMA}-spring-mid.json`);
-    // 미션을 푸는 일의 결과를 보는 중(종이가 아직 뜨지 않았다)
-    for (let step = 0; step < 12; step++) {
-      const g = s.game.value!;
-      const next = openHappenings(PACK, g).find((v) => v.must && !v.noSun)!.happening.id;
-      later();
-      s.openTalk(next);
-      const deed = s.commitTalk(inputFor(g, next))!;
-      if (deed.solved.length > 0) {
-        s.markPlace('44,57', ['village', 'fields'], walked(26));
-        s.saveNow();
-        write(`schema${SCHEMA}-spring-paper.json`);
-        s.closeTalk();
-        closePapers(s);
-        break;
-      }
-      s.closeTalk();
-    }
-    // 봄을 보낸 바로 뒤(계절 닫기 화면)
-    doMusts(s);
-    s.markPlace('44,54', ['village', 'fields'], walked(30));
-    later();
-    s.closeSeasonNow();
-    write(`schema${SCHEMA}-spring-closed.json`);
-    // 여름으로 넘어간 뒤
-    later();
-    s.goNextSeason();
-    s.markPlace('44,54', ['village', 'fields'], walked(30));
-    s.saveNow();
-    write(`schema${SCHEMA}-spring-over.json`);
-  });
-
-  it.runIf(MAKE_SAVES === '1' && YEAR_BUILT)(`꼴 ${SCHEMA}의 한 해 견본을 적는다(여름·가을·겨울의 한가운데, 한 해 돌아보기, 깬 뒤, 깨고 다시 하는 중)`, async () => {
-    const write = await writer();
-    let s = await boot();
-    env.state.search = '?seed=1395';
-    startSpring(s, 'girl');
-    const spots = ['44,54', '40,36', '46,34'];
-    for (let index = 1; index < SEASONS.length; index++) {
-      expect(passSeason(s)).toBe('map');
-      midSeason(s, spots[index - 1], 18 + index * 4);
-      write(`schema${SCHEMA}-year-${SEASONS[index]}-mid.json`);
-    }
-    // 겨울을 보내고 한 해 돌아보기에 서 있다
-    expect(passSeason(s)).toBe('review');
-    s.saveNow();
-    write(`schema${SCHEMA}-year-review.json`);
-    // 남길 것을 골라 이야기를 깬 뒤(진행 중인 해가 없다)
-    later();
-    s.finishYear(PACK.situation.legacy[0].id);
-    write(`schema${SCHEMA}-year-cleared.json`);
-    // 깬 이야기를 다른 모습으로 다시 하는 중(깬 기록과 진행 중인 해가 함께 있다)
-    s = await boot();
-    env.state.search = '?seed=2';
-    startSpring(s, 'boy');
-    midSeason(s, '46,34', 20);
-    write(`schema${SCHEMA}-year-again-mid.json`);
+    expect(s.heroName('nobi', 'boy')).toBe('nobi-boy');
+    expect(s.heroName('son', 'boy')).toBe('son');
+    expect(s.heroName('daughter', 'girl')).toBe('daughter');
   });
 });

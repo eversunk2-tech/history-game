@@ -447,11 +447,26 @@ export function finishEpisode(input: FinishInput): EpisodeOutcome {
   };
 }
 
-/** 결과 종이(phase 'result') — 다 보기 전에 끈 때 current.result로 다시 보인다 */
+/** 결과 종이(phase 'result') — 다 보기 전에 끈 때 current.result로 다시 보인다(종이의 칸을 모두 담는다 — 4-1 ㉢) */
 export function toResult(current: Current, paper: EpisodePaper): Current {
   return {
     ...current,
     phase: 'result',
-    result: { stars: paper.stars, score: paper.score, xp: paper.xp, purse: paper.purse, cards: [...paper.cards, ...paper.stepped] },
+    result: {
+      stars: paper.stars,
+      score: paper.score,
+      xp: paper.xp,
+      purse: paper.purse,
+      cards: [...paper.cards, ...paper.stepped],
+      first: paper.first,
+      newStars: paper.newStars,
+      best: paper.best,
+      bestNew: paper.bestNew,
+      levels: paper.levels,
+      banked: paper.banked,
+      stepped: [...paper.stepped],
+      relics: [...paper.relics],
+      rescued: paper.rescued,
+    },
   };
 }

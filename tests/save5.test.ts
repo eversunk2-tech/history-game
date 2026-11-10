@@ -1,10 +1,11 @@
-// 저장 꼴 5(src/state/save5.ts — spec 5.8, 11.1 다의 Save5). 4-1 ㉡에서는 앱에 잇지 않는다(앱은 storage.ts의 꼴 4 — storage.test.ts가 그대로 본다).
+// 저장 꼴 5(src/state/save5.ts — spec 5.8, 11.1 다의 Save5). 4-1 ㉢부터 앱이 쓰는 저장이다(store.test.ts가 앱의 흐름으로 본다).
 // ① 꼴 5 견본(tests/fixtures/saves/v5/schema5-*)마다 읽고 쓰고 다시 읽어 같다 ② 옛 꼴 2~4의 견본 스물일곱 벌은 옮기지 않고 알림 + 한 벌 + 처음부터
 // ③ 새 꼴·읽을 수 없는 것·잘라 낸 것 ④ 한 칸 100KB ⑤ 반·은행 칸은 따로 ⑥ 겨루기는 저장하지 않는다.
 // 견본은 엔진(episode·battle·quiz·growth)으로 실제 판을 흉내 내어 만들었다(①-1: 거점 → 현장 도중 → 큰 고비 앞 → 결과 종이 도중 → 깬 뒤 → 서당 도중).
 
 import { describe, expect, it } from 'vitest';
 import {
+  BACKUP5_KEY,
   BACKUP_KEY,
   BANK_KEY_PREFIX,
   CLASS_KEY,
@@ -20,15 +21,16 @@ import {
   resumeAt,
   saveBytes,
   serializeSave5,
+  wipeSave5,
   writeSave5,
   writeSlot,
 } from '../src/state/save5';
-import { SCHEMA as SCHEMA4 } from '../src/state/storage';
+import { SCHEMA } from '../src/state/storage';
 import type { StorageLike } from '../src/state/storage';
 import type { QuizLog, Save5 } from '../src/engine/types4';
 import { packBits } from '../src/engine/quiz';
 
-// 꼴 5 견본은 tests/fixtures/saves/v5/에 둔다(앱의 꼴 4 시험 storage.test.ts가 tests/fixtures/saves/*.json을 모두 꼴 4로 읽기 때문 — 그 시험은 ㉢이 다시 쓴다)
+// 꼴 5 견본은 tests/fixtures/saves/v5/에 둔다(tests/fixtures/saves/*.json은 옛 꼴 2~4 스물일곱 벌 — 알림 + 한 벌 + 처음부터의 입력으로만 쓴다)
 const FIXTURES = import.meta.glob<string>(['./fixtures/saves/*.json', './fixtures/saves/v5/*.json'], { eager: true, query: '?raw', import: 'default' });
 const fixture = (name: string): string => FIXTURES[`./fixtures/saves/v5/${name}.json`] ?? FIXTURES[`./fixtures/saves/${name}.json`] ?? '';
 const NEW = Object.keys(FIXTURES).filter((p) => /schema5-/.test(p)).map((p) => p.replace(/^.*\/(.*)\.json$/, '$1')).sort();
@@ -90,6 +92,43 @@ describe('꼴 5 견본: 읽고 쓰고 다시 읽어 같다', () => {
     expect(result.current!.result!.stars[0]).toBe(true);
   });
 
+  it('결과 종이 도중의 칸(4-1 ㉢에서 더함 — 처음 깸·새 별·최고 기록·레벨·유물·구해 줌)은 있으면 꼴을 보고, 없어도(㉡의 꼴) 읽는다', () => {
+    const save = JSON.parse(fixture('schema5-result-mid')) as Save5;
+    const r = save.current!.result!;
+    expect(r.relics).toEqual(['relic-seed-sack']);
+    expect(r.rescued).toBe(true);
+    const bare = JSON.parse(JSON.stringify(save)) as Save5;
+    for (const key of ['first', 'newStars', 'best', 'bestNew', 'levels', 'banked', 'stepped', 'relics', 'rescued']) delete (bare.current!.result as Record<string, unknown>)[key];
+    expect(checkSave5(bare)).toEqual([]);
+    expect(parseSave5(JSON.stringify(bare)).status).toBe('ok');
+    const wrong = JSON.parse(JSON.stringify(save)) as Save5;
+    (wrong.current!.result as Record<string, unknown>).best = -1;
+    expect(checkSave5(wrong)).toContain('current.result');
+    expect(parseSave5(JSON.stringify(wrong)).dropped).toEqual(['current']);
+  });
+
+  it('결과 종이 칸의 뼈대(별 셋·점수·경험치·쌀과 베·카드)가 어긋나면 하던 에피소드만 내려놓는다(4-1 ㉢ Review 권고 ㅁ — R27)', () => {
+    const save = JSON.parse(fixture('schema5-result-mid')) as Save5;
+    const breaks: [string, (r: Record<string, unknown>) => void][] = [
+      ['별이 둘', (r) => (r.stars = [true, false])],
+      ['별이 글자', (r) => (r.stars = ['★', '☆', '☆'])],
+      ['점수가 음수', (r) => (r.score = -5)],
+      ['점수가 없음', (r) => delete r.score],
+      ['경험치가 글자', (r) => (r.xp = '10')],
+      ['돈 주머니가 어긋남', (r) => (r.purse = { rice: 1 })],
+      ['카드가 글자 하나', (r) => (r.cards = 'skill-sow')],
+      ['칸이 비었음', (r) => void Object.keys(r).forEach((k) => delete r[k])],
+    ];
+    for (const [what, hurt] of breaks) {
+      const wrong = JSON.parse(JSON.stringify(save)) as Save5;
+      hurt(wrong.current!.result as unknown as Record<string, unknown>);
+      expect(checkSave5(wrong), what).toContain('current.result');
+      const read = parseSave5(JSON.stringify(wrong));
+      expect(read.dropped, what).toEqual(['current']);
+      expect(read.save.current, what).toBeUndefined();
+    }
+  });
+
   it('겨루기는 저장하지 않는다: 큰 고비 앞 견본에는 phase만 있고 겨루기 안의 것(기운·손패·예고·문제)은 없다', () => {
     const raw = fixture('schema5-battle-mid');
     const cur = JSON.parse(raw).current as Record<string, unknown>;
@@ -119,7 +158,7 @@ describe('꼴 5 견본: 읽고 쓰고 다시 읽어 같다', () => {
 });
 
 describe('옛 꼴(2~4)은 옮기지 않는다 — 알림 + 한 벌 + 처음부터(5.8)', () => {
-  it(`옛 견본 스물일곱 벌(지금 앱의 꼴 ${SCHEMA4}까지)`, () => {
+  it(`옛 견본 스물일곱 벌(꼴 2~4 — 지금 앱의 꼴은 ${SCHEMA})`, () => {
     expect(OLD).toHaveLength(27);
     for (const path of OLD) {
       const raw = FIXTURES[path];
@@ -159,7 +198,9 @@ describe('새 꼴·읽을 수 없는 것·잘라 낸 것', () => {
       const loaded = loadSave5(disk);
       expect(loaded.status, raw).toBe('unreadable');
       expect(loaded.save).toEqual(emptySave5());
-      expect(disk.data[BACKUP_KEY]).toBe(raw);
+      // 꼴 5를 읽을 수 없으면 꼴 5의 한 벌 칸에(옛 꼴의 한 벌 칸은 건드리지 않는다 — 4-1 ㉢, ㉡ Review 기록 3)
+      expect(disk.data[BACKUP5_KEY]).toBe(raw);
+      expect(disk.data[BACKUP_KEY]).toBeUndefined();
     }
   });
 
@@ -174,7 +215,28 @@ describe('새 꼴·읽을 수 없는 것·잘라 낸 것', () => {
     expect(loaded.save.current).toBeUndefined();
     expect(loaded.save.hero).toEqual(save.hero);
     expect(loaded.save.purse).toEqual(save.purse);
-    expect(disk.data[BACKUP_KEY]).toBe(raw);
+    expect(disk.data[BACKUP5_KEY]).toBe(raw);
+  });
+
+  it('옛 꼴의 한 벌은 꼴 5가 나중에 어긋나도 덮이지 않는다(칸을 나눴다 — ㉡ Review 기록 3). "처음부터"도 옛 꼴의 한 벌은 남긴다', () => {
+    const old = OLD.map((path) => FIXTURES[path])[0];
+    const disk = memory({ [SAVE_KEY]: old });
+    expect(loadSave5(disk).status).toBe('old');
+    expect(disk.data[BACKUP_KEY]).toBe(old);
+    // 꼴 5로 놀다가 하던 에피소드가 어긋난 저장이 되었다
+    const broken = JSON.parse(fixture('schema5-field-mid')) as Save5;
+    (broken.current as unknown as Record<string, unknown>).phase = 'nowhere';
+    disk.data[SAVE_KEY] = JSON.stringify(broken);
+    expect(loadSave5(disk).status).toBe('trimmed');
+    expect(disk.data[BACKUP_KEY]).toBe(old);
+    expect(disk.data[BACKUP5_KEY]).toBe(JSON.stringify(broken));
+    // 처음부터(두 번 물은 뒤): 저장과 꼴 5의 한 벌을 지우고, 옛 꼴의 한 벌은 남긴다
+    wipeSave5(disk);
+    expect(disk.data[SAVE_KEY]).toBeUndefined();
+    expect(disk.data[BACKUP5_KEY]).toBeUndefined();
+    expect(disk.data[BACKUP_KEY]).toBe(old);
+    expect(BACKUP5_KEY).toBe('joseon-year/backup5');
+    expect(() => writeSlot(disk, BACKUP5_KEY, {})).toThrow();
   });
 
   it('이야기 하나·서당 한 주제가 어긋나면 그것만 버린다', () => {
@@ -262,6 +324,6 @@ describe('반·은행 칸은 저장과 따로(5.8)', () => {
     expect(SAVE_KEY).toBe('joseon-year/save');
     expect(BACKUP_KEY).toBe('joseon-year/backup');
     expect(JSON.parse(serializeSave5(emptySave5())).schema).toBe(5);
-    expect(SCHEMA4).toBe(4); // 앱은 아직 꼴 4다(㉢에서 바꾼다)
+    expect(SCHEMA).toBe(5); // 앱의 꼴은 5다(4-1 ㉢에서 바꿨다)
   });
 });

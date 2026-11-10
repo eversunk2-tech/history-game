@@ -1,8 +1,8 @@
-// 저장 꼴 5(spec 5.8, 11.1 다의 Save5). 4-1 ㉡에서는 앱에 잇지 않는다 — 지금 앱은 storage.ts(꼴 4)를 쓴다. ㉢이 이 모듈로 바꾼다.
+// 저장 꼴 5(spec 5.8, 11.1 다의 Save5). 4-1 ㉢부터 앱이 쓰는 저장이다(state/store.ts). storage.ts에는 꼴 5와 함께 쓰는 바탕만 남았다.
 // 이 파일은 브라우저 없이도 돈다(저장소를 밖에서 받는다 — storage.ts와 같은 StorageLike).
 //
 // ── 쓰는 법(㉢) ───────────────────────────────────────────────
-//   loadSave5(storage)        → { save, status, notice? }   기기에서 읽는다(옛 꼴·읽을 수 없는 것·잘라 낸 것은 읽기 전 글자를 BACKUP_KEY에 한 벌)
+//   loadSave5(storage)        → { save, status, notice? }   기기에서 읽는다(옛 꼴은 읽기 전 글자를 BACKUP_KEY에, 꼴 5를 읽을 수 없거나 잘라 냈으면 BACKUP5_KEY에 한 벌)
 //   parseSave5(raw)           → { save, status, notice? }   글자를 읽기만 한다(저장소를 건드리지 않는다)
 //   writeSave5(save, storage) → { ok, bytes, why? }         쓴다(꼴 번호·판 번호를 붙여서). 한 칸 100KB를 넘으면 쓰지 않고 'tooBig'
 //   emptySave5(look)          → 처음부터의 저장(주인공 레벨 1·능력치 3·3·3·3)
@@ -10,6 +10,7 @@
 //   saveBytes(save)           → 한 칸의 크기(바이트)
 //   resumeAt(save)            → 이어 하기의 자리: 'hub' | 'field' | 'battle'(그 겨루기의 처음부터) | 'result'
 //   readSlot / writeSlot      → 반(CLASS_KEY)·은행(BANK_KEY_PREFIX + 주제 id) 칸. 저장 한 칸과 따로 둔다(5.8 — 저장을 무겁게 하지 않게)
+//   wipeSave5(storage)        → "처음부터"(두 번 물은 뒤): 저장 칸과 꼴 5의 한 벌을 지운다. 옛 꼴(3판)의 한 벌은 남긴다
 //
 // 규칙(5.8)
 //   - 옛 꼴(2~4 — 3판의 한 해 게임)은 옮기지 않는다. 읽으면 OLD_NOTICE("게임이 새로워져서 처음부터 해요")를 한 번 알리고,
@@ -24,7 +25,14 @@ import { CARD_KINDS, SAVE5_SCHEMA, type EpisodeRecord, type Hero, type Purse, ty
 import { BUILD, parseGame, type StorageLike } from './storage';
 
 export const SAVE_KEY = 'joseon-year/save';
+/** 옛 꼴(2~4 — 3판)의 저장을 읽었을 때 그 글자를 한 벌 남기는 칸(spec 5.8의 joseon-year/backup) */
 export const BACKUP_KEY = 'joseon-year/backup';
+/**
+ * [4-1 ㉢] 꼴 5의 저장을 읽을 수 없거나(unreadable) 칸 일부를 버렸을 때(trimmed) 읽기 전의 글자를 남기는 칸.
+ * 옛 꼴의 한 벌(BACKUP_KEY)과 칸을 나눈다 — 한 칸이면 3판의 한 벌을 남긴 뒤 꼴 5가 한 번 어긋나는 것만으로 그 한 벌이 덮인다(㉡ Review 기록 3).
+ * 3판의 한 벌은 사용자가 3판에서 해 본 기록의 하나뿐인 사본이고, 꼴 5의 한 벌은 4판 시험 판의 것이라 뜻이 다르다. 두 칸 모두 한 벌씩이다.
+ */
+export const BACKUP5_KEY = 'joseon-year/backup5';
 /** 반 코드로 받은 것(진도·공지·문제 묶음의 판 — 4-2) */
 export const CLASS_KEY = 'joseon-year/class';
 /** 받아 둔 다섯 과목 주제(게임을 완성한 뒤 — 9.6). 뒤에 주제 id */
@@ -146,6 +154,19 @@ function currentProblems(v: unknown): string[] {
   if (v.result !== undefined) {
     const r = v.result;
     if (!(isObject(r) && isStars(r.stars) && isCount(r.score) && isCount(r.xp) && isPurse(r.purse) && isStrings(r.cards))) out.push('current.result');
+    // [4-1 ㉢] 결과 종이를 다시 그릴 칸(없어도 된다 — ㉡의 견본에는 없다)
+    else if (
+      !(r.first === undefined || typeof r.first === 'boolean') ||
+      !(r.newStars === undefined || isStars(r.newStars)) ||
+      !(r.best === undefined || isCount(r.best)) ||
+      !(r.bestNew === undefined || typeof r.bestNew === 'boolean') ||
+      !(r.levels === undefined || isCount(r.levels)) ||
+      !(r.banked === undefined || isCount(r.banked)) ||
+      !(r.stepped === undefined || isStrings(r.stepped)) ||
+      !(r.relics === undefined || isStrings(r.relics)) ||
+      !(r.rescued === undefined || typeof r.rescued === 'boolean')
+    )
+      out.push('current.result');
   }
   if (v.phase === 'result' && v.result === undefined) out.push('current.result(결과 종이 도중이면 있다)');
   return out;
@@ -237,7 +258,9 @@ export function parseSave5(raw: string | null): Loaded5 {
   return dropped.length > 0 ? { save, status: 'trimmed', dropped } : { save, status: 'ok' };
 }
 
-/** 기기에서 읽는다. 옛 꼴·읽을 수 없는 것·잘라 낸 것이면 읽기 전의 글자를 BACKUP_KEY에 한 벌 남긴다(다음 저장이 덮어쓰기 전에) */
+/**
+ * 기기에서 읽는다. 다음 저장이 덮어쓰기 전에 읽기 전의 글자를 한 벌 남긴다: 옛 꼴이면 BACKUP_KEY, 꼴 5를 읽을 수 없거나 잘라 냈으면 BACKUP5_KEY.
+ */
 export function loadSave5(storage: StorageLike | null): Loaded5 {
   if (!storage) return { save: emptySave5(), status: 'noStorage' };
   let raw: string | null;
@@ -247,9 +270,10 @@ export function loadSave5(storage: StorageLike | null): Loaded5 {
     return { save: emptySave5(), status: 'noStorage' };
   }
   const loaded = parseSave5(raw);
-  if ((loaded.status === 'old' || loaded.status === 'unreadable' || loaded.status === 'trimmed') && raw !== null) {
+  const slot = loaded.status === 'old' ? BACKUP_KEY : loaded.status === 'unreadable' || loaded.status === 'trimmed' ? BACKUP5_KEY : null;
+  if (slot && raw !== null) {
     try {
-      storage.setItem(BACKUP_KEY, raw);
+      storage.setItem(slot, raw);
     } catch {
       // 한 벌 남기지 못해도 읽은 것은 쓴다
     }
@@ -293,7 +317,7 @@ export function resumeAt(save: Save5): 'hub' | 'field' | 'battle' | 'result' {
 
 /** 따로 둔 칸을 읽는다(없거나 읽을 수 없으면 null) */
 export function readSlot<T = unknown>(storage: StorageLike | null, key: string): T | null {
-  if (key === SAVE_KEY || key === BACKUP_KEY) throw new Error('저장 칸은 loadSave5로 읽는다');
+  if (key === SAVE_KEY || key === BACKUP_KEY || key === BACKUP5_KEY) throw new Error('저장 칸은 loadSave5로 읽는다');
   try {
     const raw = storage?.getItem(key);
     return raw ? (JSON.parse(raw) as T) : null;
@@ -304,7 +328,7 @@ export function readSlot<T = unknown>(storage: StorageLike | null, key: string):
 
 /** 따로 둔 칸에 쓴다(반 코드로 받은 것 — CLASS_KEY, 받아 둔 주제 — BANK_KEY_PREFIX + 주제 id) */
 export function writeSlot(storage: StorageLike | null, key: string, value: unknown): boolean {
-  if (key === SAVE_KEY || key === BACKUP_KEY) throw new Error('저장 칸은 writeSave5로 쓴다');
+  if (key === SAVE_KEY || key === BACKUP_KEY || key === BACKUP5_KEY) throw new Error('저장 칸은 writeSave5로 쓴다');
   if (!(key === CLASS_KEY || key.startsWith(BANK_KEY_PREFIX))) throw new Error(`모르는 칸 "${key}"`);
   try {
     storage?.setItem(key, JSON.stringify(value));
@@ -317,4 +341,14 @@ export function writeSlot(storage: StorageLike | null, key: string, value: unkno
 /** 이야기 하나의 기록 가운데 에피소드 하나(없으면 처음 꼴) */
 export function episodeRecord(save: Save5, story: string, episode: string): EpisodeRecord {
   return save.stories[story]?.episodes[episode] ?? { stars: [false, false, false], best: 0, plays: 0, cleared: false };
+}
+
+/** "처음부터"(화면이 두 번 물은 뒤): 저장 칸과 꼴 5의 한 벌을 지운다. 옛 꼴(3판)의 한 벌(BACKUP_KEY)은 남긴다 — 4판의 기록과 상관없는 3판의 사본이다 */
+export function wipeSave5(storage: StorageLike | null): void {
+  try {
+    storage?.removeItem(SAVE_KEY);
+    storage?.removeItem(BACKUP5_KEY);
+  } catch {
+    // 지우지 못해도 화면은 처음으로 간다
+  }
 }

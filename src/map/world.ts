@@ -83,6 +83,23 @@ export interface Actor {
 
 type Arrive = { kind: 'mark'; mark: Mark } | { kind: 'dweller'; actor: Actor } | null;
 
+/**
+ * 주인공 곁에 작게 떠 다니는 동료(느티나무 정령 — spec 6.2). 그 시대 사람에게는 보이지 않으므로 맵의 셈에 끼지 않는다:
+ * 부딪힘·길 찾기·누르기·문 판정·말 걸기가 이것을 보지 않는다(actors에 넣지 않는다). 주인공을 조금 늦게 따라와
+ * 주인공이 보는 쪽의 뒤·옆(가리지 않는 자리)에 떠 있고, 주인공이 보는 쪽을 따라 방향을 바꾼다.
+ */
+export interface Companion {
+  sprite: string;
+  /** 떠 있는 자리 밑의 땅(맵 점 — 그림의 발치. 그리는 차례도 이 줄로 정한다) */
+  x: number;
+  y: number;
+  dir: Dir;
+  /** 떠 있기의 시간(초) */
+  t: number;
+  /** 따라가는 동료라는 표(그리기가 사람과 가른다) */
+  follow: true;
+}
+
 export interface World {
   map: MapData;
   who: Who;
@@ -126,6 +143,8 @@ export interface World {
   /** 창이 떠 있는 동안에는 걷지 않는다 */
   paused: boolean;
   rnd: () => number;
+  /** 곁에 떠 있는 동료(없으면 null — setCompanion) */
+  companion?: Companion | null;
 }
 
 const OPPOSITE: Record<Dir, Dir> = { up: 'down', down: 'up', left: 'right', right: 'left' };
@@ -264,6 +283,50 @@ export function createWorld(map: MapData, who: Who, heroSprite: string, startAt?
   snapCamera(world);
   reveal(world);
   return world;
+}
+
+/** 동료가 떠 있을 자리: 주인공이 보는 쪽의 뒤·옆(맵 점). 사람 몸과 겹치지 않을 만큼 옆으로 비켜 있다 */
+export const COMPANION_SPOT: Record<Dir, { x: number; y: number }> = {
+  down: { x: -13, y: -6 },
+  up: { x: 13, y: 5 },
+  left: { x: 14, y: -4 },
+  right: { x: -14, y: -4 },
+};
+
+/** 이만큼(맵 점) 넘게 떨어지면 따라가지 않고 곧장 곁으로 옮긴다(이어 하기·문 너머로 옮겨 섰을 때) */
+const COMPANION_JUMP = 96;
+
+/**
+ * 동료를 세우거나(이름) 거둔다(null). 세우면 주인공 곁의 자리에 곧장 선다. 맵의 셈(걷기·부딪힘·길 찾기)은 바뀌지 않는다.
+ */
+export function setCompanion(world: World, name: string | null): void {
+  if (!name) {
+    world.companion = null;
+    return;
+  }
+  const p = world.player;
+  const at = COMPANION_SPOT[p.dir];
+  world.companion = { sprite: name, x: p.x + at.x, y: p.y + at.y, dir: p.dir, t: 0, follow: true };
+}
+
+/** 동료가 주인공을 조금 늦게 따라간다(0.2초쯤 — 지수로 다가간다) */
+function stepCompanion(world: World, dt: number): void {
+  const c = world.companion;
+  if (!c) return;
+  const p = world.player;
+  const at = COMPANION_SPOT[p.dir];
+  const gx = p.x + at.x;
+  const gy = p.y + at.y;
+  if (Math.hypot(gx - c.x, gy - c.y) > COMPANION_JUMP) {
+    c.x = gx;
+    c.y = gy;
+  } else {
+    const k = 1 - Math.exp(-dt * 5);
+    c.x += (gx - c.x) * k;
+    c.y += (gy - c.y) * k;
+  }
+  c.dir = p.dir;
+  c.t += dt;
 }
 
 /**
@@ -809,6 +872,7 @@ export function stepWorld(world: World, dt: number): WorldEvent[] {
     world.player.t += dt;
   }
   for (const a of world.actors) stepActor(world, a, dt);
+  stepCompanion(world, dt);
   if (world.target) {
     world.target.t += dt;
     if (world.player.route.length === 0 || world.target.t > 6) world.target = null;

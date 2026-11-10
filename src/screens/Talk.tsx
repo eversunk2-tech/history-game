@@ -36,7 +36,9 @@ import {
 } from '../engine/game';
 import { STATS, type Deed, type GameState, type Happening, type Line, type Mission, type Person, type Season, type SituationPack } from '../engine/types';
 import { PLAYS } from '../plays';
-import { closeTalk, commitTalk, game, pack } from '../state/store';
+import { s1395_1Lines } from '../content/episodes/s1395-lines';
+import { battleKit, closeTalk, commitTalk, episode, finishMinor, game, minorPending, pack, save } from '../state/store';
+import { BattleView } from './Battle';
 import { focusInto, useModalKeys } from '../ui/focus';
 import { READ_GAP_MS, TapGate, nowMs, tapTime } from '../ui/taps';
 import { LockIcon, SunIcon } from '../ui/icons';
@@ -102,6 +104,8 @@ export type Step =
   | { kind: 'blocked' }
   | { kind: 'open'; i: number }
   | { kind: 'choose' }
+  /** 4판: 그 일의 놀이 앞에서 먼저 넘길 짧은 겨루기(작은 고비 — 「굳은 논흙」) */
+  | { kind: 'minor'; choiceId?: string }
   | { kind: 'play'; choiceId?: string }
   | { kind: 'result'; i: number }
   | { kind: 'change' }
@@ -225,8 +229,12 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
     if (step.kind !== 'play') gate.current?.shown(nowMs());
   }, [step]);
 
-  /** 선택이 끝난 뒤: 일 놀이가 있으면 놀이로, 없으면 바로 마친다 */
-  const afterChoice = (choiceId?: string): void => {
+  /** 선택이 끝난 뒤: 그 일에 짧은 겨루기(작은 고비)가 남았으면 먼저, 그다음 일 놀이가 있으면 놀이로, 없으면 바로 마친다 */
+  const afterChoice = (choiceId?: string, minorDone = false): void => {
+    if (!minorDone && minorPending(happeningId)) {
+      setStep({ kind: 'minor', choiceId });
+      return;
+    }
     const play = snap?.happening.play;
     if (play && PLAYS[play.game]) {
       setStep({ kind: 'play', choiceId });
@@ -317,7 +325,7 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
   const speaker = line?.who;
   const nameOf = (who: string): string => people[who]?.label ?? who;
   // 일 놀이와 쪽지가 뜰 때는 사람을 세우지 않는다(쪽지가 얼굴을 가린다)
-  const showsFigures = step.kind !== 'play' && step.kind !== 'note';
+  const showsFigures = step.kind !== 'play' && step.kind !== 'note' && step.kind !== 'minor';
 
   const rows = deed && step.kind === 'change' ? changeRows(deed) : [];
   const play = happening.play;
@@ -420,6 +428,8 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
           ))}
         </ul>
       )}
+
+      {step.kind === 'minor' && <MinorStep happeningId={happeningId} onDone={() => afterChoice(step.choiceId, true)} />}
 
       {step.kind === 'play' && play && playDef && (
         <div class="talk-play" data-own>
@@ -556,6 +566,39 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * 대화 장면 안의 짧은 겨루기(작은 고비 — spec 11.1 가 9): 「굳은 논흙」은 우리 논에서 볍씨 뿌릴 논을 고른 뒤, 놀이 앞에 열린다.
+ * 정령의 말풍선(soilBefore)이 먼저, 겨루기를 처음 배우는 판이면 여는 말 다음에 세 걸음 안내. 끝나면(넘김·구해 줌·마무리 모두 넘긴 것) 놀이로.
+ * 겨루기 도중에 끄면 그 일의 처음부터다(저장에는 작은 고비를 마쳤는지만 적힌다 — 5.8).
+ */
+function MinorStep({ happeningId, onDone }: { happeningId: string; onDone: () => void }): JSX.Element | null {
+  const [minor] = useState(() => minorPending(happeningId));
+  const [kit] = useState(() => (minor ? battleKit(minor) : null));
+  const ep = episode.value;
+  // 처음 하는 겨루기(그 이야기에서 아직 깬 에피소드가 없다)면 정령이 세 걸음으로 알린다
+  const first = !ep || !Object.values(save.value.stories[ep.story]?.episodes ?? {}).some((one) => one.cleared);
+  useEffect(() => {
+    if (!minor || !kit) onDone();
+  }, [minor, kit]);
+  if (!minor || !kit) return null;
+  const bubbles = ep?.id === 's1395-1' ? s1395_1Lines.bubbles : null;
+  return (
+    <div class="talk-battle" data-own>
+      <BattleView
+        target={minor}
+        kit={kit}
+        guide={first}
+        intro={bubbles ? [{ who: 'neuti', text: bubbles.soilBefore }] : []}
+        outro={bubbles ? [{ who: 'neuti', text: bubbles.soilAfter }] : []}
+        onEnd={(b) => {
+          finishMinor(minor, b);
+          onDone();
+        }}
+      />
     </div>
   );
 }

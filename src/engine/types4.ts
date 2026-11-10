@@ -115,6 +115,8 @@ export interface FoeMove {
   id: string;
   /** 예고 한 줄(30자 — 4.5) */
   line: string;
+  /** 기록 줄: 그 차례에 고비가 한 일을 일어난 일로("도깨비가 씨름을 걸었다" — 겨루기 화면의 "방금 일어난 일". 없으면 고비의 이름) */
+  did?: string;
   /** 그림 표시의 이름 */
   icon: string;
   /** 이 차례에 센 갈래(도깨비의 판: 수수께끼 → wisdom, 씨름 → power, 일 겨루기 → craft) */
@@ -487,8 +489,27 @@ export interface Save5 {
     walked?: string;
     /** 아직 보여 주지 않은 "미션이 풀림" 종이 */
     papers?: string[];
-    /** 결과 종이를 다 보기 전에 끈 때 */
-    result?: { stars: [boolean, boolean, boolean]; score: number; xp: number; purse: Purse; cards: string[] };
+    /**
+     * 결과 종이를 다 보기 전에 끈 때(11.1 다). cards = 새로 얻은 카드(단계가 오른 카드도 함께 — ㉡의 꼴).
+     * [더함 — 4-1 ㉢] 결과 종이를 그대로 다시 그릴 칸: 처음 깬 판인가 · 새로 받은 별 · 내 최고 기록과 이번에 넘었나 · 오른 레벨 수 ·
+     * 상한에 걸려 쌓아 둔 경험치 · 단계가 오른 카드 · 유물 · 구해 줌(해거름 포함). 모두 없어도 된다(㉡의 견본).
+     */
+    result?: {
+      stars: [boolean, boolean, boolean];
+      score: number;
+      xp: number;
+      purse: Purse;
+      cards: string[];
+      first?: boolean;
+      newStars?: [boolean, boolean, boolean];
+      best?: number;
+      bestNew?: boolean;
+      levels?: number;
+      banked?: number;
+      stepped?: string[];
+      relics?: string[];
+      rescued?: boolean;
+    };
   };
   quiz: Record<string, QuizLog>;
   today: { date: string; xp: number; topics: Record<string, number>; replays: Record<string, number> };

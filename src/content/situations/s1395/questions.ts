@@ -9,6 +9,9 @@
 // - 지도서·교과서에 기대는 문제만 facts에 'E9'와 lesson(차시)을 단다. 지도서·교과서의 문장·그림·평가 문항을 옮기지 않고 쪽수도 적지 않는다.
 // 이 폴더의 다른 파일과 이름이 겹치지 않게 storyTopics·storyQuestions로 내보낸다(content/index.ts는 missions·happenings만 읽는다).
 // id는 한 번 정하면 바꾸지 않는다(기기의 "푼 문제"가 id로 적힌다). 고치면 ver를 올린다.
+// 'at:<일 id>' 꼬리표(4-1 ㉢ — ㉡ Review 권고 ㅊ): 그 사실을 한 길이나 한 덤에서만 듣는 문제에 단다(여럿이면 그 가운데 하나만 해도 들은 것).
+//   모든 아이가 듣는 것(미션 ①의 여는 대화·볍씨 뿌리기·정령의 의뢰 소개·거점의 첫 선물)에는 달지 않는다. 겨루기의 고르개(engine/quiz.ts의 battleAsk)가
+//   그 판에서 한 일(done)에 든 문제를 먼저 낸다. 꼬리표는 글·답·풀이가 아니라 고르는 차례만 바꾼다.
 
 import type { Question, Topic } from '../../../engine/types4';
 
@@ -58,7 +61,7 @@ export const storyQuestions: Question[] = [
     explain: '나라는 백성을 괴롭히지 않으려고 스님들을 모아 옷과 먹을 것을 주며 일하게 했어요.',
     level: 2,
     facts: ['F34'],
-    tags: [EP, 'core', 'card:skill-provision', 'theme:duty'],
+    tags: [EP, 'core', 'card:skill-provision', 'theme:duty', 'at:s1395-spring-return-monks'],
   },
   {
     ...base,
@@ -174,7 +177,7 @@ export const storyQuestions: Question[] = [
     explain: '그 글은 스님들이 집 짓는 솜씨가 능숙하다고 했어요.',
     level: 2,
     facts: ['F35'],
-    tags: [EP, 'card:skill-carry', 'theme:duty'],
+    tags: [EP, 'card:skill-carry', 'theme:duty', 'at:s1395-spring-return-monks'],
   },
   {
     // "열에 셋"은 상소문의 말이지 센 숫자가 아니다(대본 8절의 카드 「절과 스님」과 같다)
@@ -188,7 +191,7 @@ export const storyQuestions: Question[] = [
     level: 3,
     facts: ['F35'],
     // 글(상소)은 스님이 많으니 궁궐 일을 스님에게 맡기자는 말이다 — 나라의 일(부역)이라 theme:duty(대본 26.9)
-    tags: [EP, 'theme:duty'],
+    tags: [EP, 'theme:duty', 'at:s1395-spring-temple'],
   },
 
   // ── 돌려보낸 까닭과 불려 간 사람 ──
@@ -254,7 +257,7 @@ export const storyQuestions: Question[] = [
     explain: '이때는 돈이 널리 쓰이지 않아 쌀과 베가 돈처럼 쓰였어요.',
     level: 2,
     facts: ['F08'],
-    tags: [EP, 'card:skill-reckon', 'card:skill-wood', 'theme:paying'],
+    tags: [EP, 'card:skill-reckon', 'card:skill-wood', 'theme:paying', 'at:s1395-spring-woods'],
   },
 
   // ── 절과 스님 ──
@@ -268,7 +271,7 @@ export const storyQuestions: Question[] = [
     explain: '고려 때부터 이어져 조선 초에도 제사나 장례 때 절을 찾는 일이 흔했어요.',
     level: 2,
     facts: ['F37'],
-    tags: [EP, 'theme:inheritance'],
+    tags: [EP, 'theme:inheritance', 'at:s1395-spring-temple'],
   },
 
   // ── 새 도읍 공사의 차례, 맡은 일 ──
@@ -283,7 +286,7 @@ export const storyQuestions: Question[] = [
     explain: '지난해 시월 도읍을 옮기고 십이월에 터를 닦았어요. 올해 이월에 농민을 돌려보냈어요.',
     level: 3,
     facts: ['F34', 'F35'],
-    tags: [EP, 'card:skill-carry', 'theme:duty'],
+    tags: [EP, 'card:skill-carry', 'theme:duty', 'at:s1395-spring-well', 'at:s1395-spring-return-monks'],
   },
   {
     ...base,

@@ -20,9 +20,11 @@ import {
   reviewList,
   sourceRank,
   statusOf,
+  unheard,
   unpackBits,
   withBit,
 } from '../src/engine/quiz';
+import { storyQuestions as realStory } from '../src/content/situations/s1395/questions';
 import { packBits as packBits3, unpackBits as unpackBits3 } from '../src/state/storage';
 import type { Question, QuizLog } from '../src/engine/types4';
 import { allQuestions, bank21, bankTopic, cardById, episode41, makeQuestion, storyQuestions } from './fixtures4';
@@ -339,6 +341,35 @@ describe('겨루기의 문제 차례', () => {
     expect(three[2]).toBe(storyQuestions[4].id);
     const noCore = battleAsk({ questions: allQuestions, logs: {}, episode: { ...episode41, core: [] }, seed: 1 }).wisdom(3, { exclude: [] });
     for (const id of noCore) expect(storyQuestions.slice(0, 7).map((q) => q.id)).toContain(id);
+  });
+
+  // 4-1 ㉢(㉡ Review 권고 ㅊ): 그 사실을 한 길·한 덤에서만 듣는 문제('at:<일 id>')는 그 판에서 그 일을 했을 때 먼저 낸다
+  it("겪은 것을 먼저: 'at:' 꼬리표의 일을 하지 않은 판에서는 그 문제를 뒤로 미룬다(실제 이야기 문제)", () => {
+    const real = realStory;
+    const provision = { ...cardById['skill-provision'], id: 'skill-provision', tags: ['ep:s1395-1'] };
+    const byId = (n: string) => `ep-s1395-1-${n}`;
+    const askWith = (done?: string[]) => battleAsk({ questions: real, logs: {}, episode: { ...episode41, core: real.filter((q) => q.tags?.includes('core')).map((q) => q.id) }, done, seed: 1 });
+    // 004·010을 낸 뒤: 꼬리표를 보지 않으면(done 없음) 그 카드 표시가 있는 002(절 가는 길에서만 듣는다)
+    const out = [byId('004'), byId('010')];
+    expect(askWith().card(provision, info(out))).toBe(byId('002'));
+    // 이웃집 논을 거든 판(절 가는 길을 가지 않음): 002는 뒤로
+    const helped = ['s1395-spring-return', 's1395-spring-return-help', 's1395-spring-sow'];
+    const picked = askWith(helped).card(provision, info(out));
+    expect(picked).not.toBe(byId('002'));
+    expect(unheard(real.find((q) => q.id === picked)!, helped)).toBe(false);
+    // 절 가는 길을 간 판이면 002가 다시 먼저
+    expect(askWith(['s1395-spring-return', 's1395-spring-return-monks', 's1395-spring-sow']).card(provision, info(out))).toBe(byId('002'));
+    // 지혜 겨루기: 핵심 일곱 가운데 겪지 않은 002는 맨 뒤
+    const seven = askWith(helped).wisdom(7, { exclude: [] });
+    expect(seven).toHaveLength(7);
+    expect(seven[6]).toBe(byId('002'));
+    // 겪지 않은 문제만 남으면 그래도 낸다(막히지 않는다)
+    const heardAll = real.filter((q) => !unheard(q, helped)).map((q) => q.id);
+    expect(askWith(helped).card(provision, info(heardAll))).not.toBeNull();
+    // 꼬리표가 없는 문제와 done이 없는 판은 늘 겪은 것으로 본다
+    expect(unheard({ tags: ['ep:s1395-1'] }, [])).toBe(false);
+    expect(unheard({ tags: ['at:s1395-spring-temple'] }, undefined)).toBe(false);
+    expect(unheard({ tags: ['at:s1395-spring-well', 'at:s1395-spring-return-monks'] }, ['s1395-spring-well'])).toBe(false);
   });
 });
 

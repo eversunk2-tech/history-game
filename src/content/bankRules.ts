@@ -29,6 +29,8 @@ export interface BankContext {
   cards?: ReadonlySet<string>;
   /** 'ep:<id>' 꼬리표가 가리킬 수 있는 에피소드 id(없으면 꼴만 본다) */
   episodes?: ReadonlySet<string>;
+  /** 'at:<일 id>' 꼬리표가 가리킬 수 있는 일(Happening id — 없으면 꼴만 본다). 그 문제의 에피소드의 일인지는 검사기(validate4)가 본다 */
+  happenings?: ReadonlySet<string>;
 }
 
 // ── 값과 한도 ────────────────────────────────────────────────
@@ -386,6 +388,10 @@ export function checkQuestion(input: unknown, ctx: BankContext): BankIssue[] {
       if (ctx.cards && !ctx.cards.has(value)) err('tags', `없는 솜씨 카드 "${value}"(꼬리표는 카드 이름이 아니라 id로)`);
     } else if (kind === 'theme') {
       if (!THEME_TAGS.includes(value)) err('tags', `없는 견주기 물음 "${value}"`);
+    } else if (kind === 'at') {
+      // 그 사실을 한 길이나 한 덤에서만 듣는 이야기 문제(4-1 ㉢) — 겨루기가 그 판에서 한 일에 든 것을 먼저 낸다
+      if (typeof q.topic === 'string' && !q.topic.startsWith('ep-')) err('tags', `'at:' 꼬리표는 이야기 문제에만 단다: "${tag}"`);
+      if (ctx.happenings && !ctx.happenings.has(value)) err('tags', `없는 일 "${value}"`);
     } else if (kind !== 'topic') err('tags', `모르는 꼬리표 "${tag}"`);
   }
 

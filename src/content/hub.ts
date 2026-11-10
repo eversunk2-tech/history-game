@@ -8,7 +8,8 @@
 //   board        알림판의 의뢰·작은 의뢰(①-1을 깨기 전과 뒤)
 //   speakers     겨루기·말풍선의 이름표(who 열쇠 → 이름표 6자). 사람의 이름표는 이야기 묶음(situation.people)에 있다
 //   spirit       정령 느티의 말(마을 소개·첫 선물·겨루기 안내·귀띔·기세·합동 기술·정령의 물음 앞의 말·레벨이 오를 때)
-//                과 그 곁의 화면 글(결과 종이의 별의 줄 stars·자람의 한 줄 statLines·상한 capped·출전 준비의 까닭 starterWhy — 정령의 말이 아니다)
+//                과 그 곁의 화면 글(결과 종이의 별의 줄 stars·자람의 한 줄 statLines·상한 capped·출전 준비의 까닭 starterWhy·
+//                합동 기술의 쪽지 joint[].text·결과 종이의 단추 thought — 모두 "~요"이고 정령의 말이 아니다. 말풍선에 띄우지 않는다)
 //   notices      알림 한 줄(곧 열려요·시험 판·옛 저장·해가 남았어요·준비 중 …)
 //   seodangTalk  서당 훈장님의 말과 서당의 알림
 //   shopTalk     도구점·포목점의 말
@@ -69,7 +70,11 @@ export const speakers: Record<string, string> = {
 
 const N = 'neuti';
 
-/** 합동 기술 하나(기세가 차면 고른다 — 문제를 내지 않는다. 8.1) */
+/**
+ * 합동 기술 하나(기세가 차면 고른다 — 문제를 내지 않는다. 8.1).
+ * text는 고를 때 보이는 **화면 글**("~요")이고 정령의 말이 아니다 — 말풍선으로 띄우지 않는다. 정령의 말은 say(who: 'neuti')뿐이다.
+ * 「느티나무 그늘」의 "방패 한 칸"은 고비의 방패다(주인공에게는 방패가 없다 — spec 6.2·8.1, 엔진 battle.ts의 useCombo).
+ */
 export interface JointSkill {
   id: 'shade' | 'lift';
   /** 이름(12자) */
@@ -81,7 +86,8 @@ export interface JointSkill {
 }
 
 /**
- * 정령 느티의 말(반말 — who: 'neuti'가 붙은 줄과 말풍선의 글)과 그 곁의 화면 글("~요" — stars·statLines·capped·starterWhy).
+ * 정령 느티의 말(반말 — who: 'neuti'가 붙은 줄과 말풍선의 글)과 그 곁의 화면 글("~요" — stars·statLines·capped·starterWhy,
+ * 그리고 합동 기술의 쪽지 joint[].text와 단추 thought). 화면 글은 정령의 말풍선으로 띄우지 않는다(4-1 ㉢ — 조정자가 정함).
  * 정령은 꾸민 동료다(선생님 자료에 "꾸민 동료"). 대본: script-hub.md 2절, script-1395.md 26.4·26.6·26.7
  */
 export const spirit = {
@@ -126,7 +132,7 @@ export const spirit = {
     {
       id: 'shade',
       name: '느티나무 그늘',
-      text: '느티가 그늘을 드리워 기운을 채우고, 방패 한 칸을 걷어 내요.',
+      text: '느티가 그늘을 드리워 기운을 채우고, 고비의 방패 한 칸을 걷어 내요.',
       say: { who: N, text: '내 그늘에서 숨 좀 돌려!' },
     },
     {
@@ -144,7 +150,7 @@ export const spirit = {
   },
   /** 결과 종이 — 정령의 물음(에피소드의 ask) 앞의 한 창. 물음은 정답이 하나가 아니다 */
   askLead: { who: N, text: '오늘의 물음이야. 답은 하나가 아니야.' } as Line,
-  /** 결과 종이 — 정령의 물음을 넘기는 단추(글을 쓰지 않는다) */
+  /** 결과 종이 — 정령의 물음을 넘기는 **단추의 글**(화면 글 "~요" — 정령의 말이 아니다. 아이는 글을 쓰지 않는다) */
   thought: '생각해 봤어요',
   /** 자람 — 레벨이 올라 능력치 점 하나를 둘 때(11.1 가 15) */
   levelUp: { who: N, text: '자랐어! 능력치 점 하나를 어디에 둘까?' } as Line,

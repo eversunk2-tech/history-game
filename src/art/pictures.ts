@@ -7,15 +7,20 @@
 // 찾는 차례: 그 이름의 파일 → (배경) 같은 자리의 다른 계절 → 코드 그림.
 //            (인물) 표정 glad·worried의 파일이 없으면 plain → 코드 그림(맵의 도트 인물을 크게).
 //
-// 그림은 코드와 한 덩어리로 묶이지 않는다. 여기에는 주소만 들어오고, 이야기를 열 때 그 이야기의 그림을
+// 그림은 코드와 한 덩어리로 묶이지 않는다. 여기에는 주소만 들어오고, 에피소드를 열 때(4-1 ㉢ — 이야기 단위에서 에피소드 단위로) 그 에피소드부터 이야기의 그림을
 // 뒤에서 모두 미리 받아 메모리에 쥐고 있는다(줄여 둔 파일 그대로). 그래서 대화 장면이 열릴 때 늦게 뜨지 않고,
 // 도중에 인터넷이 끊겨도 받은 그림은 나온다. 아직 못 받았거나 받다가 실패한 자리에는 코드 그림이 나온다.
 
 import { signal, type Signal } from '@preact/signals';
 import { getPack } from '../content';
-import { SEASONS, type Season } from '../engine/types';
+import type { Season } from '../engine/types';
 import { game } from '../state/store';
-import { backgroundNameIn, buildIndex, figureNameIn, picturePlan, preloadOrder, type Pose, type SeasonPictures } from './pictureNames';
+import { foes } from '../content/foes';
+import { plan as s1395Plan } from '../content/episodes/s1395';
+import { fieldPack } from '../engine/episode';
+import type { SituationPack } from '../engine/types';
+import type { Episode } from '../engine/types4';
+import { backgroundNameIn, buildIndex, episodeOrder, figureNameIn, picturePlan, type Pose, type SeasonPictures } from './pictureNames';
 
 export type { Pose };
 
@@ -297,23 +302,38 @@ const loader = createPictureLoader((name) => index.get(name), browserNet());
 /** 위쪽 띠의 그림 알림(끊겨서 놓친 그림 · 다시 받는 중) */
 export const pictureNotice = loader.notice;
 
-/** 그 이야기의 계절마다 대화 장면이 쓰는 배경과 사람(일을 할 차례로 — 콘텐츠에서 읽는다). role을 주면 그 역할의 일만. */
-function planOf(storyId: string, role?: string, past?: { done: readonly string[]; solved: readonly string[] }): SeasonPictures[] {
-  const p = getPack(storyId);
-  if (!p) return [];
+/** 그 묶음의 계절마다 대화 장면이 쓰는 배경과 사람(일을 할 차례로 — 콘텐츠에서 읽는다). role을 주면 그 역할의 일만. */
+function planOf(p: SituationPack, role?: string, past?: { done: readonly string[]; solved: readonly string[] }): SeasonPictures[] {
   return picturePlan(p.happenings, p.missions, (who) => p.situation.people[who]?.pic ?? who, role, past);
 }
 
+/** 겨루기가 쓰는 그림 자리: 작은 고비·큰 고비의 그림(고비의 picture — 배경 자리나 사람 자리)과 무대의 배경, 정령 */
+export function battlePictures(episode: Episode): string[] {
+  const out: string[] = [];
+  for (const id of [...episode.minors.map((m) => m.foe), episode.boss]) {
+    const foe = foes.find((f) => f.id === id);
+    if (!foe) continue;
+    out.push(foe.picture);
+    // 겨루기 무대의 배경(Battle.tsx): 옛이야기 고비는 마을 어귀(해거름 빛을 코드로), 삶의 고비는 그 자리
+    if (foe.kind === 'tale') out.push(`bg/${episode.story}/entrance`);
+  }
+  out.push('char/hub/neuti');
+  return out;
+}
+
 /**
- * 그 이야기의 그림을 뒤에서 모두 미리 받아 둔다(이야기를 열 때 부른다). 기다리게 하지 않는다.
- * 차례는 지금 판의 계절부터(판이 없으면 봄부터 — 새로 시작하는 이야기다), 계절 안에서는 일을 할 차례로(이어 하기면 한 일은 뒤로).
+ * 그 에피소드의 그림을 뒤에서 미리 받아 둔다(의뢰 소개가 떠 있는 동안 — App이 에피소드를 열 때 부른다). 기다리게 하지 않는다.
+ * 차례는 episodeOrder: 그 에피소드의 일 차례(이어 하기면 한 일은 뒤로) → 겨루기의 그림 → 그 밖의 이 이야기의 그림.
  * 이미 받는 줄이 있으면 새 차례로 다시 세운다.
  */
-export function preloadStory(storyId: string): void {
+export function preloadEpisode(episodeId: string): void {
+  const episode = s1395Plan.episodes.find((ep) => ep.id === episodeId);
+  const p = episode ? getPack(episode.story) : undefined;
+  if (!episode || !p) return;
   const g = game.value;
-  const mine = g && g.situationId === storyId ? g : null;
-  const from = mine ? SEASONS[Math.min(mine.seasonIndex, SEASONS.length - 1)] : SEASONS[0];
-  loader.preload(preloadOrder([...index.keys()], storyId, planOf(storyId, mine?.role, mine ?? undefined), from));
+  const mine = g && g.situationId === episode.story ? g : null;
+  const fp = fieldPack(p, episode);
+  loader.preload(episodeOrder([...index.keys()], episode.story, planOf(fp, mine?.role, mine ?? undefined), planOf(p, mine?.role), episode.season, battlePictures(episode)));
 }
 
 /** 미리 받는 줄에 남은 이름(개발용·시험용) */

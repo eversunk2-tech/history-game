@@ -1,5 +1,6 @@
 // 맵의 무대 위에 얹히는 작은 창 둘: 봇짐, 지난 이야기.
 //   봇짐       — 살림·기력·인심·해 ☀가 무엇인지 한 줄씩 풀어 주고(소개 화면에서 한 번 본 뒤로는 여기서 다시 본다),
+//                [4판] 주인공의 것(이번 큰 고비에 가져갈 솜씨 카드 — 정해 준 덱 + 이번 판에 현장에서 얻은 것)을 더하고,
 //                살림을 쌀 자루와 베 필 그림으로 풀어 보이고(①~④에는 엽전이 없다), 얻은 물건과 생활 카드를 보인다.
 //   지난 이야기 — 이 계절에 한 일들의 대화를 다시 읽는다(여는 대화, 고른 것, 결과 대화, 배움 쪽지).
 
@@ -11,13 +12,17 @@ import { itemById } from '../content/items';
 import { seasonLabels, statLabels } from '../content/labels';
 import { currentSeason, deedsOfSeason, happeningOf } from '../engine/game';
 import { linesOf } from '../engine/conditions';
-import { SEASONS, STATS, TIRED_AT, type Deed, type Happening, type Line, type Season, type SituationPack } from '../engine/types';
-import { closePanel, game, pack } from '../state/store';
+import { STATS, type Deed, type Happening, type Line, type SituationPack } from '../engine/types';
+import { PixelIcon } from '../art/PixelArt';
+import { skills } from '../content/skills';
+import { BALANCE } from '../engine/balance';
+import { battleDeck, fieldSkills } from '../engine/episode';
+import { closePanel, episode, game, pack, save } from '../state/store';
 import { ClothIcon, SackIcon, StatIcon, SunIcon } from './icons';
 import { MoreBox } from './More';
 import { Paper } from './Paper';
 import { spotLabel } from './where';
-import { factsBefore } from './year';
+import { factsBefore } from './deeds';
 
 /** 살림(0~10)을 쌀 자루와 베 필로 나누어 그린다(그림일 뿐이다. 수치는 살림 하나다). */
 export function goodsOf(living: number): { sacks: number; cloth: number } {
@@ -39,8 +44,10 @@ export function BagPanel(): JSX.Element | null {
   const g = game.value;
   if (!g) return null;
   const { sacks, cloth } = goodsOf(g.stats.living);
-  // 다음 계절(겨울이면 없다)
-  const upcoming: Season | undefined = SEASONS[SEASONS.indexOf(currentSeason(g)) + 1];
+  const ep = episode.value;
+  // 이번 큰 고비에 가져갈 덱(정해 준 것 + 이번 판에 현장에서 얻은 솜씨 카드 — engine/episode의 battleDeck)
+  const fieldCards = ep ? fieldSkills(ep, g) : [];
+  const deck = ep ? battleDeck(ep, save.value.hero, fieldCards) : [];
   return (
     <Paper label="봇짐" kind="bag" onClose={closePanel}>
       <header class="paper-top">
@@ -68,12 +75,12 @@ export function BagPanel(): JSX.Element | null {
               <span class="bag-about-text">덤 하나에 하나씩 져요</span>
             </li>
           </ul>
-          {/* 기력이 무엇에 쓰이는지: 낮으면 다음 계절에 할 수 있는 덤이 준다(엔진의 규칙 — TIRED_AT). 겨울에는 다음 계절이 없어 적지 않는다. */}
-          {upcoming && (
-            <p class={`paper-small bag-tired${g.stats.body <= TIRED_AT ? ' now' : ''}`}>
-              {g.stats.body <= TIRED_AT
-                ? `기력이 낮아요(${TIRED_AT} 이하). 이대로면 ${seasonLabels[upcoming].label}에는 해 ☀가 하나 줄어요.`
-                : `기력이 ${TIRED_AT} 이하로 떨어지면 ${seasonLabels[upcoming].label}에는 해 ☀가 하나 줄어요.`}
+          {/* 기력이 무엇에 쓰이는지(4판): 낮으면 큰 고비의 기운이 덜 찬 채로 시작한다(엔진의 규칙 — growth.battleHp, BALANCE.hpTiredBelow) */}
+          {ep && (
+            <p class={`paper-small bag-tired${g.stats.body < BALANCE.hpTiredBelow ? ' now' : ''}`}>
+              {g.stats.body < BALANCE.hpTiredBelow
+                ? `기력이 낮아요(${BALANCE.hpTiredBelow}보다 낮음). 이대로면 큰 고비의 기운이 덜 찬 채로 시작해요.`
+                : `기력이 ${BALANCE.hpTiredBelow}보다 낮아지면 큰 고비의 기운이 덜 찬 채로 시작해요.`}
             </p>
           )}
         </section>
@@ -105,6 +112,26 @@ export function BagPanel(): JSX.Element | null {
           )}
           <p class="paper-small">이때는 물건을 살 때 돈 대신 쌀과 베를 냈어요. 살림을 쌀 자루와 베로 그려 보았어요.</p>
         </section>
+        {ep && (
+          <section class="paper-part">
+            <h3 class="paper-head">큰 고비에 가져갈 솜씨 카드 {deck.length}장</h3>
+            <ul class="bag-list">
+              {deck.map((id) => {
+                const card = skills.find((c) => c.id === id);
+                return (
+                  <li key={id}>
+                    <span class="bag-name">
+                      <PixelIcon name={id} size={28} />
+                      {card?.name ?? id}
+                      {fieldCards.includes(id) && <span class="bag-new"> · 이번에 얻음</span>}
+                    </span>
+                    {card && <span class="bag-text">{card.text}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
         <section class="paper-part">
           <h3 class="paper-head">얻은 물건</h3>
           {g.items.length === 0 ? (

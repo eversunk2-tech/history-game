@@ -395,6 +395,18 @@ export function hintSeed(b: Battle): number {
   return subSeed(b.seed, `hint:${b.turn}:${b.asked.length}`);
 }
 
+/**
+ * 지금 답을 기다리는 문제를 틀리면 이 겨루기 안에서 다시 나올 차례가 남았는가(retryAfter 차례 뒤가 차례 한도 안인가).
+ * 화면이 "이 문제는 두 차례 뒤에 다시 나와요"를 참일 때만 말하게 한다(작은 고비는 3차례라 둘째 차례부터는 다시 나오지 않는다).
+ * 그 전에 고비를 넘기면 나오지 않는다 — 그것은 미리 알 수 없다. 아래 answer·answerWisdom의 at과 같은 셈이다.
+ */
+export function comesAgain(b: Battle): boolean {
+  const p = b.pending;
+  if (!p || !p.q) return false;
+  const at = p.kind === 'wisdom' ? b.turn + BALANCE.retryAfter : b.turn + 1 + BALANCE.retryAfter;
+  return at <= b.ctx.limit;
+}
+
 /** 답을 받는다: 카드의 문제면 한 차례가 끝나고, 지혜 겨루기의 문제면 다음 문제로 간다 */
 export function answer(b: Battle, right: boolean, ask: BattleAsk): Battle {
   if (b.end) throw new Error('겨루기가 끝났다');

@@ -384,7 +384,22 @@
       "cards": [
         "skill-help",
         "skill-sow"
-      ]
+      ],
+      "first": true,
+      "newStars": [
+        true,
+        false,
+        false
+      ],
+      "best": 208,
+      "bestNew": true,
+      "levels": 1,
+      "banked": 0,
+      "stepped": [],
+      "relics": [
+        "relic-seed-sack"
+      ],
+      "rescued": true
     }
   }
 }

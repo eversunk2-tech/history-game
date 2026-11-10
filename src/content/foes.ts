@@ -25,8 +25,8 @@ const hardsoil: Foe = {
   weak: [],
   order: 'weighted',
   moves: [
-    { id: 'crust', line: '볕에 흙이 더 단단히 굳어 가요', icon: 'crust', hit: [2, 3], weight: 2 },
-    { id: 'clod', line: '흙덩이가 엉겨 손이 무거워져요', icon: 'clod', hit: [2, 3], effect: 'weaken-next', weight: 1 },
+    { id: 'crust', line: '볕에 흙이 더 단단히 굳어 가요', did: '볕에 흙이 더 단단히 굳었다', icon: 'crust', hit: [2, 3], weight: 2 },
+    { id: 'clod', line: '흙덩이가 엉겨 손이 무거워져요', did: '흙덩이가 엉겨 손이 무거워졌다', icon: 'clod', hit: [2, 3], effect: 'weaken-next', weight: 1 },
   ],
   opening: [
     { text: '볍씨를 뿌리려는데, 논 한쪽 흙이 돌처럼 굳어 있다.' },
@@ -70,11 +70,11 @@ const dokkaebiBet: Foe = {
   order: 'cycle',
   moves: [
     // 수수께끼 판: 지혜가 세다. 웃음보로 기세 한 칸을 가져간다
-    { id: 'riddle', line: '다음은 수수께끼다! 웃다가 기세를 뺏길라', icon: 'riddle', strong: 'wisdom', hit: [4, 6], effect: 'steal-momentum', weight: 1 },
+    { id: 'riddle', line: '다음은 수수께끼다! 웃다가 기세를 뺏길라', did: '도깨비가 수수께끼를 냈다', icon: 'riddle', strong: 'wisdom', hit: [4, 6], effect: 'steal-momentum', weight: 1 },
     // 씨름 판: 힘이 세다
-    { id: 'ssireum', line: '다음은 씨름이다! 샅바를 단단히 잡아라', icon: 'ssireum', strong: 'power', hit: [5, 7], weight: 1 },
+    { id: 'ssireum', line: '다음은 씨름이다! 샅바를 단단히 잡아라', did: '도깨비가 씨름을 걸었다', icon: 'ssireum', strong: 'power', hit: [5, 7], weight: 1 },
     // 일 겨루기 판: 솜씨가 세다
-    { id: 'work', line: '다음은 일 겨루기다! 누가 더 빠른가 보자', icon: 'work', strong: 'craft', hit: [4, 6], weight: 1 },
+    { id: 'work', line: '다음은 일 겨루기다! 누가 더 빠른가 보자', did: '도깨비가 일 겨루기를 걸었다', icon: 'work', strong: 'craft', hit: [4, 6], weight: 1 },
   ],
   // 여는 말 세 창 — 정령이 "옛이야기야"를 먼저
   opening: [

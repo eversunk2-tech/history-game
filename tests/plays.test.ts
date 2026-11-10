@@ -1116,12 +1116,12 @@ describe('화면 글 — 풀리지 않은 미션을 어디까지 했는지', () 
 
   it('셋 가운데 하나를 했으면 그렇게 적는다 — "해낸 일" 한 줄을 쓰지 않는다', () => {
     const line = progressLine(collect, having(['x.a']), true);
-    expect(line).toBe('셋 가운데 하나를 했어요. 나머지는 다른 계절에 해요.');
+    expect(line).toBe('셋 가운데 하나를 했어요. 나머지는 다음 에피소드에서 해요.');
     expect(line).not.toContain(collect.doneLine);
-    expect(progressLine(collect, having(['x.b', 'x.c']), true)).toBe('셋 가운데 둘을 했어요. 나머지는 다른 계절에 해요.');
+    expect(progressLine(collect, having(['x.b', 'x.c']), true)).toBe('셋 가운데 둘을 했어요. 나머지는 다음 에피소드에서 해요.');
   });
 
-  it('남은 계절이 없으면 "다른 계절에"를 붙이지 않는다. 한 계절짜리 미션에도 붙이지 않는다', () => {
+  it('뒤에 이어지는 에피소드가 없으면 "다음 에피소드에서"를 붙이지 않는다. 한 때짜리 미션에도 붙이지 않는다(4-1 ㉢ — 3판의 "다른 계절에"를 바꿨다)', () => {
     expect(progressLine(collect, having(['x.a']), false)).toBe('셋 가운데 하나를 했어요.');
     expect(progressLine({ ...collect, season: 'spring' }, having(['x.a']), true)).toBe('셋 가운데 하나를 했어요.');
   });
@@ -1143,7 +1143,7 @@ describe('화면 글 — 풀리지 않은 미션을 어디까지 했는지', () 
         const role = mission.roles?.[0] ?? pack.situation.roles[0].id;
         const state: GameState = { ...base, situationId: pack.situation.id, role, flags: [flags[0]], solved: [] };
         const line = progressLine(mission, state, true);
-        expect(line, mission.id).toBe(`${countWord(flags.length)} 가운데 하나를 했어요.${mission.season === 'year' ? ' 나머지는 다른 계절에 해요.' : ''}`);
+        expect(line, mission.id).toBe(`${countWord(flags.length)} 가운데 하나를 했어요.${mission.season === 'year' ? ' 나머지는 다음 에피소드에서 해요.' : ''}`);
         expect(line, mission.id).not.toBe(mission.doneLine);
       }
     }

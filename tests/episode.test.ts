@@ -277,7 +277,23 @@ describe('결과', () => {
     expect(out.today.replays).toEqual({});
     const current = toResult({ episode: 's1395-1', replay: false, game, phase: 'battle', minors: [] } as Current, out.paper);
     expect(current.phase).toBe('result');
-    expect(current.result).toEqual({ stars: [true, true, true], score: 400, xp: 160, purse: { rice: 6, cloth: 3, coin: 0 }, cards: out.paper.cards });
+    // 결과 종이를 다 보기 전에 끈 때 그대로 다시 그릴 칸(4-1 ㉢에서 더함 — 종이의 칸 모두)
+    expect(current.result).toEqual({
+      stars: [true, true, true],
+      score: 400,
+      xp: 160,
+      purse: { rice: 6, cloth: 3, coin: 0 },
+      cards: out.paper.cards,
+      first: true,
+      newStars: [true, true, true],
+      best: 400,
+      bestNew: true,
+      levels: out.paper.levels,
+      banked: out.paper.banked,
+      stepped: [],
+      relics: ['relic-seed-sack'],
+      rescued: false,
+    });
   });
 
   it('구해 줌: 별 ①만, 경험치·돈은 그대로(별 몫만 준다), 그 이야기의 기력 −1', () => {

@@ -1,12 +1,12 @@
 // 4판 자료의 검사(src/content/validate4.ts, validate.ts의 walkEpisodes·계절 맵 걷기 — spec 11.1 다 "검사기가 더 볼 것")와 ①-1의 자료.
-// ① 실제 4판 묶음(content/four.ts의 bundle4)이 잘못 0 ② 규칙마다 틀린 견본을 넣어 그 규칙이 잡는다
+// ① 실제 4판 묶음(content/index.ts의 bundle4)이 잘못 0 ② 규칙마다 틀린 견본을 넣어 그 규칙이 잡는다
 // ③ 맵·놀이가 읽는 농민 집 표시가 이름표(marks)에서 온다(1-라 Review 43번) ④ 꾸미기·옛이야기의 자료(11.1 사의 ㉡ 칸).
 
 import { describe, expect, it } from 'vitest';
 import { bundle, getPack } from '../src/content';
 import { marks, plan, s1395_1 } from '../src/content/episodes/s1395';
 import { bankSources } from '../src/content/bank/sources';
-import { bundle4, four, mapRef4, maps4, seasonLooks, sources4, type LooksOf } from '../src/content/four';
+import { bundle4, four, mapRef4, maps4, seasonLooks, sources4, type LooksOf } from '../src/content';
 import type { MapData } from '../src/map/types';
 import { foes } from '../src/content/foes';
 import { gear } from '../src/content/gear';
@@ -61,6 +61,19 @@ describe('실제 4판 묶음', () => {
 describe('계절의 맵도 걷는다(1-라 Review 43번)', () => {
   it('계절마다 맵의 모습: 봄 1 · 여름 3(맑은 해, 큰비 해 단오 앞뒤) · 가을 8(때 넷 × 큰물) · 겨울 1', () => {
     expect(SEASONS.map((s) => seasonLooks('neutigol', s).length)).toEqual([1, 3, 8, 1]);
+  });
+
+  it('모습마다 지은 맵의 계절·날씨·큰물이 그 이름과 같다(이름만 그 계절이고 맵은 봄인 판을 잡는다 — ㉡ 고침 바퀴 Review 권고 ㄷ)', () => {
+    for (const s of SEASONS) {
+      for (const { name, map } of seasonLooks('neutigol', s)) {
+        expect(map.season, name).toBe(s);
+        const [season, weather] = name.split('/');
+        expect(season, name).toBe(s);
+        expect(map.weather, name).toBe(weather);
+        // 큰물이 난 가을의 모습이면 냇가 쪽 낮은 논이 성기다(thin), 아니면 고르다
+        expect(Boolean(map.thin?.some((v) => v === 1)), name).toBe(name.endsWith('/큰물'));
+      }
+    }
   });
 
   it('농민 집 아이(두 모습)의 모든 일의 자리에 그 계절의 모든 모습에서 닿는다', () => {
@@ -152,10 +165,18 @@ describe('규칙마다 틀린 견본을 잡는다 — 에피소드', () => {
   const ep = (f: Content4) => f.plans[0].episodes[0];
   it('꼭 할 일·덤·작은 고비의 자리가 묶음에 있고 그 계절이다', () => {
     expect(rulesWith((f) => ep(f).missions.push('s1395-m-dano'))).toEqual(['episode']);
-    expect(rulesWith((f) => (ep(f).missions = []))).toEqual(['episode']);
+    // 꼭 할 일이 없으면 그 길에서만 듣는 문제의 'at:' 꼬리표(절 가는 길)도 에피소드 밖의 일을 가리킨다
+    expect(rulesWith((f) => (ep(f).missions = []))).toEqual(['at-tag', 'episode']);
     expect(rulesWith((f) => ep(f).extras.push('s1395-summer-news'))).toContain('episode');
     expect(rulesWith((f) => (ep(f).minors[0].at = 's1395-spring-nothing'))).toEqual(['episode']);
     expect(rulesWith((f) => (ep(f).minors[0].foe = 's1395-dokkaebi-bet'))).toEqual(['episode']);
+  });
+  it("이야기 문제의 'at:<일 id>'(그 사실을 한 길·한 덤에서만 듣는다 — 4-1 ㉢)는 그 에피소드의 일이고, 이야기 문제에만 단다", () => {
+    const q12 = (f: Content4) => f.questions.find((q) => q.id === 'ep-s1395-1-012')!;
+    expect(q12(four).tags).toContain('at:s1395-spring-temple');
+    expect(rulesWith((f) => (q12(f).tags = [...(q12(f).tags ?? []), 'at:s1395-summer-weed']))).toEqual(['at-tag']);
+    expect(rulesWith((f) => (q12(f).tags = [...(q12(f).tags ?? []), 'at:s1395-spring-nothing']))).toEqual(['at-tag', 'tags']);
+    expect(rulesWith((f) => (ep(f).extras = ep(f).extras.filter((id) => id !== 's1395-spring-temple')))).toEqual(['at-tag']);
   });
   it('덤이 해 ☀보다 많다', () => {
     expect(rulesWith((f) => (ep(f).suns = 4))).toEqual(['episode']);
@@ -235,7 +256,17 @@ describe('규칙마다 틀린 견본을 잡는다 — 카드·장비·꾸미기�
       card(f).tags = ['theme:duty'];
       for (const q of f.questions) q.tags = q.tags?.filter((t) => t !== 'theme:duty');
     })).toEqual(['card-tag']);
-    expect(rulesWith((f) => (card(f).facts = ['F99']))).toEqual(['facts']);
+    // 한도 20의 경계(㉡ 고침 바퀴 Review 권고 ㄱ): 모든 문제의 theme:duty를 지운 뒤 이야기 문제 열아홉에만 달면 모자라고, 스물에 달면 넉넉하다
+    const dutyOn = (n: number) => (f: Content4) => {
+      card(f).tags = ['theme:duty'];
+      for (const q of f.questions) q.tags = q.tags?.filter((t) => t !== 'theme:duty');
+      const story = f.questions.filter((q) => q.topic === 'ep-s1395-1');
+      expect(story).toHaveLength(20);
+      for (const q of story.slice(0, n)) q.tags = [...(q.tags ?? []), 'theme:duty'];
+    };
+    expect(rulesWith(dutyOn(19))).toEqual(['card-tag']);
+    expect(rulesWith(dutyOn(20))).toEqual([]);
+    expect(rulesWith((f) => (card(f).facts = ['F999']))).toEqual(['facts']);
     expect(rulesWith((f) => (card(f).text = '도깨비와 씨름하던 솜씨예요.'))).toEqual(['tale']);
   });
   it('장비: 시대 잠김(잠긴 까닭, 열린 이야기에 잠긴 것은 팔지 않는다 — 도리깨), 덧힘의 카드', () => {
@@ -265,7 +296,7 @@ describe('규칙마다 틀린 견본을 잡는다 — 카드·장비·꾸미기�
     // 이야기 문제를 id로 집는다(four.questions의 앞에는 은행 문제가 온다 — 은행이 차도 같은 문제를 본다)
     const story = (f: Content4) => f.questions.find((q) => q.id === 'ep-s1395-1-001')!;
     expect(rulesWith((f) => (story(f).answer = 9))).toEqual(['answer']);
-    expect(rulesWith((f) => (story(f).facts = ['F99', 'E9']))).toEqual(['facts']);
+    expect(rulesWith((f) => (story(f).facts = ['F999', 'E9']))).toEqual(['facts']);
   });
 });
 

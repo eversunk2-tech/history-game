@@ -1,5 +1,7 @@
+// 보류한 3판 한 해 길(4-3에서 carries로 옮기며 지운다): 4-1 ㉢부터 앱(src/app·screens·state·ui)은 이 파일을 부르지 않는다. 엔진·자료 시험만 쓴다.
+//   (한 해 돌아보기 화면 YearReview는 지웠다 — 4-3의 이야기 돌아보기 한 장이 이 셈을 이어받는다. spec 11.1 가)
 // 한 해 돌아보기: 푼 미션, 수치의 흐름, 올해의 바람, 한 해 이름. 화면·브라우저·시간을 모른다.
-// 겨울을 보낸 뒤 한 해 돌아보기 화면(src/screens/YearReview.tsx)과 이야기책의 도장이 읽는다.
+// 3판에서는 겨울을 보낸 뒤 한 해 돌아보기 화면과 이야기책의 도장이 읽었다.
 
 import { meets } from './conditions';
 import { deedsOfSeason, factsOf, roleOf } from './game';

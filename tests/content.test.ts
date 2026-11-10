@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { bundle, getPack, packs, shelf } from '../src/content';
-import { four } from '../src/content/four';
+import { four } from '../src/content';
 import { catalog } from '../src/content/situations/catalog';
 import {
   BANNED_WORDS,
@@ -571,10 +571,10 @@ describe('말과 근거를 잡아낸다', () => {
 
   it('근거 번호가 없거나 sources에 없는 번호이면', () => {
     expect(rules(broken((p) => void (hap(p, 't-well').facts = [])))).toEqual(['facts']);
-    expect(rules(broken((p) => void (hap(p, 't-well').facts = ['F99'])))).toEqual(['facts']);
-    expect(rules(broken((p) => void (p.situation.later![0].facts = ['F99'])))).toEqual(['facts']);
-    expect(rules(broken((p) => void (p.situation.proof.themes.farming = ['F98'])))).toEqual(['facts']);
-    expect(rules(brokenBundle((b) => void (b.cards[0].facts = ['F99'])))).toEqual(['facts']);
+    expect(rules(broken((p) => void (hap(p, 't-well').facts = ['F999'])))).toEqual(['facts']);
+    expect(rules(broken((p) => void (p.situation.later![0].facts = ['F999'])))).toEqual(['facts']);
+    expect(rules(broken((p) => void (p.situation.proof.themes.farming = ['F998'])))).toEqual(['facts']);
+    expect(rules(brokenBundle((b) => void (b.cards[0].facts = ['F999'])))).toEqual(['facts']);
     expect(rules(brokenBundle((b) => void b.sources.push({ ...b.sources[0] })))).toEqual(['sources']);
   });
 
@@ -1379,7 +1379,7 @@ describe('겨루기·거점의 글도 대본과 같은 글이다', () => {
     // 글 칸만(id·그림 이름·꼬리표·근거 번호·빛깔·갈래 같은 이름표는 뺀다)
     for (const foe of four.foes) {
       out.push([`${foe.id} 이름`, foe.name], [`${foe.id} 방패가 깎일 때`, foe.fade]);
-      for (const move of foe.moves) out.push([`${foe.id}/${move.id} 예고`, move.line]);
+      for (const move of foe.moves) out.push([`${foe.id}/${move.id} 예고`, move.line], [`${foe.id}/${move.id} 기록 줄`, move.did ?? '']);
       for (const key of ['opening', 'win', 'rescue', 'dusk', 'phaseOpen', 'wisdom'] as const) foe[key].forEach((line, i) => out.push([`${foe.id} ${key}[${i}]`, line.text]));
     }
     for (const card of four.skills) out.push([`${card.id} 이름`, card.name], [`${card.id} 글`, card.text]);

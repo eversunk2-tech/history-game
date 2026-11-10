@@ -34,7 +34,7 @@ import { ART } from '../pixel/px';
 import { cameraGoal } from './camera';
 import { buildScene, groundFor, miniColors, type Scene } from './draw';
 import { TILE, isWater, type MapData, type Weather, type Who } from './types';
-import { createWorld, type World } from './world';
+import { createWorld, setCompanion, type World } from './world';
 
 export interface MapSession {
   key: string;
@@ -348,17 +348,30 @@ export interface SessionSpec {
   at?: [number, number];
   /** 이어 할 때: 가 본 칸(칸마다 0/1) */
   walked?: Uint8Array;
+  /**
+   * 곁에 떠 있는 동료의 이름(정령 'neuti' — spec 6.2). 주면 그 그림을 짓고 주인공을 따라다니게 그린다(맵의 셈에는 끼지 않는다).
+   * 주지 않으면 지금과 똑같다. 미리 지으려면 prepareMap·prewarm의 사람 목록에도 같은 이름을 넣는다(넣지 않았으면 판을 연 뒤 쉬는 틈에 짓는다).
+   */
+  companion?: string;
 }
 
 /** 열쇠가 같으면 들고 있던 판을 그대로 돌려주고, 다르면 새로 짓는다. */
 export function openSession(spec: SessionSpec): MapSession {
-  if (session && session.key === spec.key && held && session.atlas === held.atlas) return session;
+  if (session && session.key === spec.key && held && session.atlas === held.atlas) {
+    // 같은 판인데 동료만 바뀌었으면(세우거나 거두기) 그것만 고친다
+    if ((session.world.companion?.sprite ?? null) !== (spec.companion ?? null)) {
+      setCompanion(session.world, spec.companion ?? null);
+      if (spec.companion) session.later.unshift(...companionLater(session.atlas, spec.companion, session.world));
+    }
+    return session;
+  }
   // 그림은 짓지 않는다(판은 꼴의 표로 세운다) — 미리 지은 것은 이어 쓰고, 남은 것은 맵을 연 뒤 쉬는 틈에 짓는다
   const atlas = atlasFor(spec.map.season, spec.map.weather);
   const world = createWorld(spec.map, spec.who, spec.hero, spec.at);
   if (spec.walked && spec.walked.length === world.visited.length) {
     for (let i = 0; i < world.visited.length; i++) if (spec.walked[i]) world.visited[i] = 1;
   }
+  if (spec.companion) setCompanion(world, spec.companion);
   const same = prep !== null && prep.map === spec.map && prep.atlas === atlas;
   // 미리 칠해 둔 땅이 있으면 그것을 이어 쓴다(같은 맵, 같은 벌)
   const ground = same && prep?.ground ? prep.ground : groundFor(spec.map, atlas);
@@ -369,14 +382,22 @@ export function openSession(spec: SessionSpec): MapSession {
     prep.steps = [];
     prep.later = [];
     prep.ground = ground;
+    // 미리 짓기에 동료를 넣지 않았으면 그 그림을 맨 앞에(작다 — 여덟 장)
+    if (spec.companion) later.unshift(...companionLater(atlas, spec.companion, world));
   } else {
     // 미리 짓지 않고 바로 열었다: 모두 뒤로 미루고(벌의 바탕·주인공은 주인공 자리에), 처음 보이는 것은 그리기가 그 자리에서 짓는다
     const p = world.player;
-    const all = splitNeeds(spec.map, atlas, [spec.hero], [-1, -1, -1, -1], { x: p.x, y: p.y });
+    const all = splitNeeds(spec.map, atlas, spec.companion ? [spec.hero, spec.companion] : [spec.hero], [-1, -1, -1, -1], { x: p.x, y: p.y });
     later = [{ at: [[p.x, p.y]], steps: all.now }, ...all.later];
   }
   session = { key: spec.key, map: spec.map, atlas, world, scene: buildScene(spec.map, atlas, world, ground), mini: miniColors(spec.map, atlas), later };
   return session;
+}
+
+/** 동료의 그림을 짓는 일감(이미 지었으면 빈 목록) — 주인공 자리에 */
+function companionLater(atlas: Atlas, name: string, world: World): Later[] {
+  const steps = personSteps(atlas, name);
+  return steps.length > 0 ? [{ at: [[world.player.x, world.player.y]], steps }] : [];
 }
 
 /** 한 장에서 뒤로 미룬 그림을 짓기 시작해도 되는 시간(밀리초) */

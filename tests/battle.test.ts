@@ -13,6 +13,7 @@ import {
   canCombo,
   cardPower,
   chooseCard,
+  comesAgain,
   hintSeed,
   phaseFloor,
   previewOf,
@@ -405,6 +406,33 @@ describe('틀린 문제 다시', () => {
     expect(b.pending).toMatchObject({ q: missed, again: true });
     b = answer(b, true, ask);
     expect(b.asked.map((a) => a.again)).toEqual([false, false, true]);
+  });
+
+  it('comesAgain: 틀리면 다시 나올 차례가 한도 안에 남았을 때만 참이다(화면의 "두 차례 뒤에 다시 나와요" — 작은 고비 3차례, 큰 고비 16차례)', () => {
+    const ask = askFor();
+    // 작은 고비(한도 3차례 — 기운이 많은 굳은 논흙으로 3차례를 다 간다): 첫 차례에 틀린 것은 셋째 차례에 다시 나오고, 둘째·셋째 차례에 틀린 것은 다시 나오지 않는다
+    let m = startBattle(bossSetup({ ...hardsoil, hp: 100000 }));
+    const seen: { q: string; again: boolean }[] = [];
+    for (let turn = 1; turn <= 3; turn++) {
+      m = chooseCard(m, first(m), ask);
+      const q = m.pending?.q as string;
+      seen.push({ q, again: comesAgain(m) });
+      m = answer(m, false, ask);
+    }
+    expect(seen.map((x) => x.again)).toEqual([true, false, false]);
+    expect(m.end).toBe('dusk');
+    expect(m.asked.filter((a) => a.again).map((a) => a.q)).toEqual([seen[0].q]);
+    // 큰 고비: 열넷째 차례까지 틀린 것은 다시 나올 차례가 남고, 열다섯째·열여섯째는 남지 않는다
+    let b = startBattle(bossSetup(wall()));
+    const left: boolean[] = [];
+    for (let turn = 1; turn <= 16 && !b.end; turn++) {
+      b = chooseCard(b, first(b), ask);
+      left.push(comesAgain(b));
+      b = answer(b, false, ask);
+    }
+    expect(left).toEqual([...Array(14).fill(true), false, false]);
+    // 답을 기다리는 문제가 없으면 거짓
+    expect(comesAgain(startBattle(bossSetup(wall())))).toBe(false);
   });
 
   it('한 겨루기 안에서 같은 문제를 두 번 내지 않는다(틀려서 다시 내는 것 말고)', () => {

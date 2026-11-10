@@ -1,0 +1,686 @@
+/* 문제 창(src/quiz/QuizWindow.tsx) — 겨루기에서 카드를 내면 무대가 어두워지고 가운데에 뜨는 문제 종이. 서당도 이 꼴을 쓴다.
+   시안: docs/plan-4-1/battle-question.png(물음 23px · 고를 것 21px · 고를 것 단추 64px · 정령의 귀띔 · 답한 뒤 두 모습).
+   클래스는 모두 quiz-로 시작한다(다른 화면과 겹치지 않게). 단추의 바탕은 base.css의 .btn·.btn.primary를 빌린다.
+
+   자리: .quiz-veil은 가장 가까운 자리 잡은 조상(겨루기의 무대 — 위쪽 띠 아래)을 가득 덮고, 종이는 그 가운데에 선다.
+   너비는 무대의 68%(최대 55rem — 1024 너비에서 약 696px, 1366 너비에서 880px). 높이는 무대 안에 든다(넘칠 만큼 길면 종이 안에서 세로로 넘겨 본다).
+   크기 셈(1024×690, 1rem = 16px): 물음 23px(1.4375rem)·고를 것 21px(1.3125rem)·그 밖의 글 20px(1.25rem)부터, 이름표만 18px(1.125rem).
+   고를 것 단추 64px(4rem), 낮은 화면(높이 740px 아래 — 1024×690, 1366×650)에서는 56px(3.5rem)까지 좁힌다. 56px 아래로는 줄이지 않는다.
+   맞음·틀림은 색만으로 보이지 않는다: ○ 맞았어요! / 둥근 세모 아쉬워요, "○ 맞는 답"·"내가 고른 답"·"아니에요" 딱지, 짝의 번호 딱지 ①·②.
+   움직임은 맞았을 때 ○가 부드럽게 커지는 것 하나(움직임을 줄인 기기에서는 가만히). 번쩍임·흔들림·초읽기가 없다. */
+
+.quiz-veil {
+  --quiz-line: #6d6150;
+  --quiz-face: #fffdf6;
+  --quiz-right-bg: #e2edd0;
+  --quiz-wrong-bg: #f7e6cc;
+  --quiz-answer-bg: #ecf4df;
+  --quiz-spirit-bg: #fff4d2;
+
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  background: rgba(27, 20, 16, 0.58);
+  cursor: default;
+}
+
+.quiz-paper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(55rem, 68%);
+  max-height: 100%;
+  padding: 1.1rem 1.5rem 1.2rem;
+  border: 0.16rem solid var(--ink);
+  border-radius: 1.1rem;
+  background: var(--paper-light);
+  color: var(--ink);
+  box-shadow:
+    0 0.3rem 0 rgba(0, 0, 0, 0.35),
+    0 0.8rem 2rem rgba(0, 0, 0, 0.3);
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
+  text-align: left;
+}
+
+.quiz-paper:focus {
+  outline: none;
+}
+
+.quiz-paper > * {
+  flex: none;
+}
+
+/* ── 머리(부르는 쪽이 그린다)와 물음 ── */
+
+.quiz-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.8rem;
+  min-height: 2.2rem;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.quiz-ask {
+  font-size: 1.4375rem;
+  font-weight: 800;
+  line-height: 1.38;
+}
+
+.quiz-guide {
+  margin-top: -0.3rem;
+  color: var(--ink-soft);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.quiz-soon {
+  padding: 0.6rem 0.9rem;
+  border: 0.14rem dashed var(--ink-faint);
+  border-radius: 0.8rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+/* ── 고를 것 묶음 ── 창이 뜨면 초점이 여기에 있다. 자판으로 왔을 때만 점선 테와 "↑↓로 고르고 Enter로 정해요"가 보인다 */
+
+.quiz-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.quiz-body:focus {
+  outline: none;
+}
+
+.quiz-body:focus-visible {
+  outline: 0.18rem dashed var(--focus);
+  outline-offset: 0.35rem;
+  border-radius: 0.9rem;
+}
+
+.quiz-keys {
+  position: absolute;
+  bottom: 0.15rem;
+  left: 50%;
+  z-index: 1;
+  display: none;
+  padding: 0.05rem 0.9rem;
+  border: 0.1rem solid rgba(233, 217, 180, 0.6);
+  border-radius: 2rem;
+  background: rgba(27, 20, 16, 0.86);
+  color: var(--paper-light);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.quiz-veil:has(.quiz-body:focus-visible) .quiz-keys {
+  display: block;
+}
+
+/* ── 고르기·OX의 고를 것 ── */
+
+.quiz-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  min-height: 4rem;
+  margin: 0;
+  padding: 0.45rem 1.1rem;
+  border: 0.14rem solid var(--quiz-line);
+  border-radius: 0.85rem;
+  background: var(--quiz-face);
+  color: var(--ink);
+  font-size: 1.3125rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: left;
+}
+
+button.quiz-choice {
+  cursor: pointer;
+}
+
+button.quiz-choice:active {
+  background: var(--paper-deep);
+  transform: translateY(0.06rem);
+}
+
+.quiz-num {
+  flex: none;
+  width: 1.7rem;
+  font-size: 1.4rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.quiz-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 딱지: 맞는 답(먹빛으로 찬 바탕 · ○) · 내가 고른 답(테두리) · 아니에요(점선) — 글로 뜻을 적는다 */
+.quiz-tag {
+  flex: none;
+  padding: 0.05rem 0.65rem;
+  border: 0.12rem solid var(--ink);
+  border-radius: 2rem;
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* 문제 창 머리의 한 줄(겨루기 — 「카드」 · 맞히면 힘 N · 틀려도 힘 N)은 문장이라 20px, 좁으면 줄을 바꾼다(딱지는 이름표라 18px — 권고 ㄹ) */
+.quiz-head .quiz-tag {
+  font-size: 1.25rem;
+  white-space: normal;
+}
+
+.quiz-tag.quiz-tag-answer,
+.quiz-tag.quiz-tag-good {
+  background: var(--ink);
+  color: var(--paper-light);
+}
+
+.quiz-tag.quiz-tag-mine {
+  background: var(--paper-light);
+}
+
+.quiz-tag.quiz-tag-gone {
+  border-style: dashed;
+  border-color: var(--ink-faint);
+  color: var(--ink-soft);
+}
+
+/* 귀띔이 지운 것: 흐리게 · 줄을 긋고 · 누를 수 없게(단추가 아니다) */
+.quiz-choice.quiz-gone {
+  border-style: dashed;
+  border-color: var(--ink-faint);
+  background: transparent;
+  color: var(--ink-faint);
+}
+
+.quiz-choice.quiz-gone .quiz-text {
+  text-decoration: line-through;
+  text-decoration-thickness: 0.12rem;
+}
+
+/* 답한 뒤 */
+.quiz-choice.quiz-answer {
+  border: 0.24rem solid var(--ink);
+  background: var(--quiz-answer-bg);
+  padding: 0.35rem 1rem;
+}
+
+.quiz-choice.quiz-mine:not(.quiz-answer) {
+  border: 0.18rem dashed var(--ink-soft);
+  background: var(--quiz-wrong-bg);
+}
+
+.quiz-choice.quiz-other {
+  border-color: var(--ink-faint);
+  color: var(--ink-soft);
+}
+
+/* OX: 큰 단추 둘(기호와 글을 함께) */
+.quiz-ox-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.quiz-choice.quiz-ox {
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  min-height: 6.5rem;
+  text-align: center;
+}
+
+.quiz-ox-mark {
+  font-size: 2.8rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.quiz-ox-word {
+  font-size: 1.375rem;
+  font-weight: 800;
+}
+
+/* ── 순서·짝: 두 줄기 ── */
+
+.quiz-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.6rem 1.4rem;
+}
+
+.quiz-two.quiz-one {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.quiz-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.quiz-col-head {
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.quiz-card,
+.quiz-slot,
+.quiz-pair {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 4rem;
+  margin: 0;
+  padding: 0.4rem 0.9rem;
+  border: 0.14rem solid var(--quiz-line);
+  border-radius: 0.85rem;
+  background: var(--quiz-face);
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: left;
+}
+
+button.quiz-card,
+button.quiz-slot,
+button.quiz-pair {
+  cursor: pointer;
+}
+
+button.quiz-card:active,
+button.quiz-slot:active,
+button.quiz-pair:active {
+  background: var(--paper-deep);
+  transform: translateY(0.06rem);
+}
+
+/* 칸에 놓은 낱장: 흐린 점선과 "n번 칸" 딱지(다시 누르면 되돌아간다) */
+.quiz-card.quiz-placed {
+  border-style: dashed;
+  border-color: var(--ink-faint);
+  background: transparent;
+  color: var(--ink-faint);
+}
+
+.quiz-slot-num {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 0.14rem solid currentColor;
+  border-radius: 50%;
+  font-size: 1.125rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.quiz-slot.quiz-empty {
+  border-style: dashed;
+  border-color: var(--ink-faint);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.quiz-slot-when {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.quiz-slot.quiz-filled {
+  border-color: var(--ink);
+}
+
+.quiz-undo {
+  flex: none;
+  color: var(--ink-soft);
+  font-size: 1.3rem;
+}
+
+.quiz-slot.quiz-answer,
+.quiz-slot.quiz-good,
+.quiz-pair.quiz-answer,
+.quiz-pair.quiz-good {
+  border-color: var(--ink);
+  background: var(--quiz-answer-bg);
+}
+
+.quiz-slot.quiz-answer {
+  border-width: 0.2rem;
+}
+
+.quiz-slot.quiz-off,
+.quiz-pair.quiz-off {
+  border-style: dashed;
+  background: var(--quiz-wrong-bg);
+}
+
+/* 답한 뒤의 순서·짝: 더는 누르는 것이 아니므로(단추가 아니다) 줄을 좁혀 "맞는 차례"·"맞는 짝"과 풀이가 함께 들게 한다 */
+.quiz-paper:not(.quiz-asking) .quiz-slot,
+.quiz-paper:not(.quiz-asking) .quiz-pair {
+  min-height: 2.9rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  line-height: 1.3;
+}
+
+.quiz-paper:not(.quiz-asking) .quiz-col {
+  gap: 0.4rem;
+}
+
+.quiz-paper:not(.quiz-asking) .quiz-slot-num {
+  width: 1.85rem;
+  height: 1.85rem;
+}
+
+.quiz-paper:not(.quiz-asking) .quiz-badge {
+  min-width: 2rem;
+  height: 2rem;
+  font-size: 1.25rem;
+}
+
+/* 짝: 이어진 둘은 같은 번호 딱지(①·②). 먼저 누른 것은 겹테와 "고름" 딱지 */
+.quiz-pair.quiz-side-left {
+  justify-content: space-between;
+}
+
+.quiz-pair.quiz-linked {
+  border-color: var(--ink);
+}
+
+.quiz-pair.quiz-picked {
+  border-color: var(--ink);
+  box-shadow:
+    0 0 0 0.18rem var(--paper-light),
+    0 0 0 0.38rem var(--ink);
+}
+
+.quiz-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.3rem;
+  height: 2.3rem;
+  padding: 0 0.3rem;
+  border: 0.14rem dashed var(--ink-faint);
+  border-radius: 1.2rem;
+  font-size: 1.45rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.quiz-badge.quiz-on {
+  border-style: solid;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper-light);
+}
+
+.quiz-badge.quiz-picked {
+  border-style: solid;
+  border-color: var(--ink);
+  padding: 0 0.45rem;
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+/* ── 답한 뒤: 맞음·틀림, 풀이, 덧붙이는 한 줄, 다음 ── */
+
+.quiz-verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.6rem;
+  min-height: 2.8rem;
+  padding: 0.25rem 0.9rem;
+  border: 0.14rem solid var(--ink);
+  border-radius: 0.8rem;
+}
+
+.quiz-verdict.quiz-got {
+  background: var(--quiz-right-bg);
+}
+
+.quiz-verdict.quiz-missed {
+  background: var(--quiz-wrong-bg);
+}
+
+.quiz-mark {
+  flex: none;
+  width: 2.3rem;
+  height: 2.3rem;
+}
+
+.quiz-verdict.quiz-got .quiz-mark {
+  animation: quiz-grow 0.45s ease-out both;
+}
+
+@keyframes quiz-grow {
+  from {
+    opacity: 0.35;
+    transform: scale(0.55);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.quiz-verdict-word {
+  font-size: 1.5rem;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.quiz-verdict-sub {
+  color: var(--ink-soft);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.quiz-chip {
+  flex: none;
+  padding: 0 0.55rem;
+  border: 0.12rem solid var(--ink);
+  border-radius: 0.4rem;
+  background: var(--paper-light);
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.65;
+  white-space: nowrap;
+}
+
+.quiz-explain {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.5rem 0.9rem;
+  border-left: 0.35rem solid var(--ink);
+  border-radius: 0.5rem;
+  background: var(--paper-deep);
+}
+
+.quiz-explain-text {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.quiz-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  min-height: 3.5rem;
+}
+
+/* 아주 긴 문제가 종이를 넘쳐 세로로 넘겨 보게 되어도 "다음"·"정했어요"는 늘 보인다(아래에 붙는다) */
+.quiz-paper > .quiz-foot {
+  position: sticky;
+  bottom: -1.2rem;
+  margin-bottom: -1.2rem;
+  padding-bottom: 1.2rem;
+  background: var(--paper-light);
+}
+
+.quiz-note {
+  flex: 1 1 14rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.quiz-wait {
+  flex: 1 1 12rem;
+  color: var(--ink-soft);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.quiz-next,
+.quiz-settle {
+  margin-left: auto;
+}
+
+.quiz-next {
+  min-width: 9rem;
+}
+
+.quiz-hint {
+  gap: 0.45rem;
+}
+
+.quiz-hint-icon {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+/* 정령의 한 줄: 창 귀퉁이(아래 오른쪽)의 작은 말풍선 */
+.quiz-spirit {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  max-width: 62%;
+  margin-left: auto;
+  padding: 0.35rem 0.9rem;
+  border: 0.14rem solid var(--ink);
+  border-radius: 1.2rem 1.2rem 0.3rem 1.2rem;
+  background: var(--quiz-spirit-bg);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.quiz-settle + .quiz-spirit {
+  margin-left: 0;
+}
+
+.quiz-spirit-name {
+  flex: none;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+/* ── 낮은 화면(1024×690, 1366×650 — 높이 740px 아래는 1rem이 16px로 멈춘다): 사이를 좁히고 단추를 56px까지 ── */
+
+@media (max-height: 740px) {
+  .quiz-veil {
+    padding: 0.5rem;
+  }
+
+  .quiz-paper {
+    gap: 0.55rem;
+    padding: 0.8rem 1.3rem 0.9rem;
+  }
+
+  /* 순서·짝은 두 줄기라 낱장 글이 좁다: 낮은 화면에서는 종이를 조금 넓혀 줄 수를 줄인다(1024×690에서 약 820px) */
+  .quiz-paper.quiz-form-order,
+  .quiz-paper.quiz-form-match {
+    width: min(55rem, 80%);
+  }
+
+  .quiz-paper > .quiz-foot {
+    bottom: -0.9rem;
+    margin-bottom: -0.9rem;
+    padding-bottom: 0.9rem;
+  }
+
+  .quiz-body,
+  .quiz-col {
+    gap: 0.45rem;
+  }
+
+  .quiz-choice,
+  .quiz-card,
+  .quiz-slot,
+  .quiz-pair {
+    min-height: 3.5rem;
+    padding-top: 0.3rem;
+    padding-bottom: 0.3rem;
+  }
+
+  .quiz-choice.quiz-answer {
+    padding-top: 0.2rem;
+    padding-bottom: 0.2rem;
+  }
+
+  .quiz-choice.quiz-ox {
+    min-height: 5.5rem;
+  }
+
+  .quiz-head {
+    min-height: 2rem;
+  }
+
+  .quiz-verdict {
+    min-height: 2.6rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quiz-verdict.quiz-got .quiz-mark {
+    animation: none;
+  }
+
+  button.quiz-choice:active,
+  button.quiz-card:active,
+  button.quiz-slot:active,
+  button.quiz-pair:active {
+    transform: none;
+  }
+}

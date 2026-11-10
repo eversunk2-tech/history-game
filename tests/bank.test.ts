@@ -21,7 +21,7 @@ import {
 import { bankQuestions, bankReadIssues, bankTopics, checkBankFiles, readBankFile } from '../src/content/bank';
 import { bankSources } from '../src/content/bank/sources';
 import { s1395_1 } from '../src/content/episodes/s1395';
-import { sources4 } from '../src/content/four';
+import { sources4 } from '../src/content';
 import { skills } from '../src/content/skills';
 import { storyQuestions, storyTopics } from '../src/content/situations/s1395/questions';
 import { SOURCE_ID as VALIDATE_SOURCE_ID } from '../src/content/validate';
@@ -110,6 +110,13 @@ describe('실제 문제는 잘못이 없다', () => {
     const topics = [...files.map((one) => one.file!.topic), ...storyTopics];
     const questions = [...files.flatMap((one) => one.file!.questions), ...storyQuestions];
     expect(bankErrors(checkBank(topics, questions, CTX)).map((i) => `${i.where}: ${i.message}`)).toEqual([]);
+    // 넘긴 목록을 실제로 본다(㉡ 고침 바퀴 Review 권고 ㄴ): 문제 하나의 풀이 끝 "요"를 뺀 2-1을 넘기면 그 잘못이 나온다
+    const broken = JSON.parse(JSON.stringify(plain)) as typeof plain;
+    broken.questions[0].explain = broken.questions[0].explain.replace(/요\.?$/, '다.');
+    const brokenFiles = [{ path: './soc5-2-1.json', ...readBankFile('./soc5-2-1.json', broken as unknown) }, files[1]];
+    const caught = bankErrors(checkBankFiles(CTX, brokenFiles));
+    expect(caught.map((i) => i.rule)).toEqual(['explain-yo']);
+    expect(caught[0].where).toContain(broken.questions[0].id);
   });
 
   it('은행의 근거는 F86부터(이미 있는 번호를 다시 적지 않는다)', () => {
@@ -205,7 +212,7 @@ describe('규칙마다 틀린 견본을 잡는다 — 문제 하나', () => {
 
   it('facts: 근거 번호가 1개 이상이고 근거 목록에 있다(수학만 calc)', () => {
     expect(rule(good({ facts: [] }))).toEqual(['facts']);
-    expect(rule(good({ facts: ['F99'] }))).toEqual(['facts']);
+    expect(rule(good({ facts: ['F999'] }))).toEqual(['facts']);
     expect(rule(good({ facts: ['F4'] }))).toEqual(['facts']);
     expect(rule(good({ facts: ['calc'] }))).toEqual(['facts']);
   });
@@ -252,6 +259,12 @@ describe('규칙마다 틀린 견본을 잡는다 — 문제 하나', () => {
     expect(rule(good({ tags: ['theme:food'] }))).toEqual(['tags']);
     expect(rule(good({ tags: ['hint:x'] }))).toEqual(['tags']);
     expect(rule(good({ tags: ['core', 'ep:s1395-1', 'card:skill-bund', 'theme:duty', 'topic:soc5-2-1'] }))).toEqual([]);
+    // 'at:<일 id>'(4-1 ㉢)는 이야기 문제에만, 있는 일만
+    expect(rule(good({ tags: ['at:s1395-spring-temple'] }))).toEqual(['tags']);
+    const story = { ...storyQuestions[0], tags: ['ep:s1395-1', 'at:s1395-spring-temple'] };
+    const ctxAt: BankContext = { ...CTX, happenings: new Set(['s1395-spring-temple']) };
+    expect(rulesOf(checkQuestion(story, ctxAt))).toEqual([]);
+    expect(rulesOf(checkQuestion({ ...story, tags: ['at:s1395-spring-nothing'] }, ctxAt))).toEqual(['tags']);
   });
 
   it('받은 문제를 거를 때 꼴이 틀린 것은 버린다(filterQuestions)', () => {

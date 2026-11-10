@@ -200,7 +200,8 @@ export function validateFour(bundle: Bundle4): Issue4[] {
   };
 
   // ── 문제 전수(bankRules) ──
-  const ctx = { sources: sourceIds, cards: new Set(skillById.keys()), episodes: episodeIds };
+  const happeningIds = new Set(bundle.packs.flatMap((p) => p.happenings.map((h) => h.id)));
+  const ctx = { sources: sourceIds, cards: new Set(skillById.keys()), episodes: episodeIds, happenings: happeningIds };
   for (const one of [...(four.bankIssues ?? []), ...checkBank(four.topics, four.questions, ctx)]) issues.push({ ...one });
 
   // ── 에피소드 ──
@@ -307,6 +308,18 @@ export function validateFour(bundle: Bundle4): Issue4[] {
           if (!q.tags?.includes('core')) err('core', where, `핵심 물음 "${id}"에 'core' 꼬리표가 없다`);
         }
       }
+      // 'at:<일 id>'(그 사실을 듣는 일)는 그 에피소드의 일(꼭 할 일의 일·도움의 일·덤)이어야 한다(4-1 ㉢)
+      const epHappenings = new Set<string>(ep.extras);
+      for (const id of ep.missions) {
+        const m = mission.get(id);
+        for (const part of m?.parts ?? []) epHappenings.add(part);
+        if (m?.rescue) epHappenings.add(m.rescue);
+      }
+      for (const q of four.questions.filter((x) => x.topic === ep.storyTopic)) {
+        for (const tag of q.tags ?? []) {
+          if (tag.startsWith('at:') && !epHappenings.has(tag.slice(3))) err('at-tag', `문제 ${q.id}`, `'${tag}'의 일이 에피소드 ${ep.id}의 일이 아니다`);
+        }
+      }
       const tagged = four.questions.filter((q) => q.topic === ep.storyTopic && q.tags?.includes('core')).map((q) => q.id);
       for (const id of tagged) if (!ep.core.includes(id)) err('core', where, `'core' 꼬리표를 단 "${id}"가 에피소드의 핵심 물음에 없다`);
       for (const t of ep.topics) {
@@ -329,6 +342,9 @@ export function validateFour(bundle: Bundle4): Issue4[] {
       moveIds.add(move.id);
       if (!move.line) err('foe', at, '예고 한 줄이 없다');
       budget(at, 'budget-intent', move.line, BUDGET4.intent);
+      // 기록 줄(그 차례에 한 일 — 겨루기 화면의 "방금 일어난 일"). 예고의 말을 기록에 다시 쓰지 않는다(4-1 ㉢ 고침 바퀴)
+      if (!move.did) err('foe', at, '기록 줄(그 차례에 한 일)이 없다');
+      else budget(at, 'budget-intent', move.did, BUDGET4.intent);
       if (!move.icon) err('foe', at, '그림 표시가 없다');
       if (!(move.weight > 0)) err('foe', at, '무게는 0보다 크다');
       if (move.strong && !CARD_KINDS.includes(move.strong)) err('foe', at, `모르는 갈래 "${move.strong}"`);
@@ -350,7 +366,7 @@ export function validateFour(bundle: Bundle4): Issue4[] {
     if (tale && !foe.facts.some((f) => /^F7[0-4]$/.test(f))) err('tale', where, '옛이야기 고비의 근거(F70~F74)가 없다');
     if (tale && !(foe.opening[0]?.who === 'neuti' && foe.opening[0].text.includes('옛이야기'))) err('tale', where, '여는 말의 첫 창은 정령이 "옛이야기야"라고 먼저 말한다(7.8)');
     // 낱말: 실제 나라·사람, "쓰러뜨린다", 쓰지 않는 각편·그림
-    const pieces = piecesOf(where, { name: foe.name, moves: foe.moves.map((m) => m.line), opening: foe.opening, win: foe.win, rescue: foe.rescue, dusk: foe.dusk, phaseOpen: foe.phaseOpen, wisdom: foe.wisdom, fade: foe.fade });
+    const pieces = piecesOf(where, { name: foe.name, moves: foe.moves.map((m) => m.line), did: foe.moves.map((m) => m.did ?? ''), opening: foe.opening, win: foe.win, rescue: foe.rescue, dusk: foe.dusk, phaseOpen: foe.phaseOpen, wisdom: foe.wisdom, fade: foe.fade });
     for (const piece of pieces) {
       banned(piece);
       for (const word of REAL_NAMES) if (piece.text.includes(word)) err('real-name', piece.where, `실제 나라·사람의 이름 "${word}" — 고비가 되지 않는다(7.8)`);

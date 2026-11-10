@@ -16,6 +16,7 @@ import { FOOT_SHIFT, GUISES, HEROES, PERSON_H, PERSON_W, SHEET_COLS, VILLAGERS, 
 import { ART, Px, strip, toCanvas } from './px';
 import type { Snapper } from './quant';
 import type { SpriteDef } from './shapes';
+import { isSpirit, spiritSheet } from './spirit';
 import { THINGS } from '../map/things';
 import type { MapData, Placed, Weather } from '../map/types';
 
@@ -246,13 +247,17 @@ function thingStep(atlas: Atlas, key: string): () => boolean {
   };
 }
 
-/** 사람 시트 하나(처음 부를 때 짓는다) */
+/**
+ * 사람 시트 하나(처음 부를 때 짓는다). 정령(spirit.ts — 'neuti')도 이 이름표로 짓는다: 정령의 시트는 줄이 방향, 칸이 떠 있기 두 장이다
+ * (사람 시트의 열두 칸과 다르다 — 그리기는 world.companion으로 따로 그린다). 정령은 그 이름을 needs나 주인공 목록에 넣을 때만 짓는다(ㅋ).
+ */
 export function personCanvas(atlas: Atlas, name: string): HTMLCanvasElement | undefined {
   let sheet = atlas.people.get(name);
   if (!sheet) {
     const p = personOf(name);
-    if (!p) return undefined;
-    sheet = toCanvas(atlas.snap.apply(personSheet(p)));
+    if (p) sheet = toCanvas(atlas.snap.apply(personSheet(p)));
+    else if (isSpirit(name)) sheet = toCanvas(spiritSheet(atlas.snap));
+    else return undefined;
     atlas.people.set(name, sheet);
   }
   return sheet;
@@ -289,6 +294,7 @@ export function runSteps(steps: readonly Step[]): void {
 /** 사람 시트 하나를 방향 한 줄씩(열두 장씩) 넷으로 나눠 짓는 일감들(이미 지었으면 빈 목록) */
 export function personSteps(atlas: Atlas, name: string): Step[] {
   const p = personOf(name);
+  if (!p && isSpirit(name) && !atlas.people.has(name)) return [() => void personCanvas(atlas, name)];
   if (!p || atlas.people.has(name)) return [];
   const sheet = new Px(PERSON_W * SHEET_COLS, PERSON_H * 4);
   const out: Step[] = [];

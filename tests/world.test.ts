@@ -22,6 +22,7 @@ import {
   type World,
   type WorldEvent,
 } from '../src/map/world';
+import { pressRow } from '../src/map/stage';
 
 const map = neutigol();
 const FARMER_BOY: Who = { role: 'farmer', look: 'boy' };
@@ -143,6 +144,44 @@ describe('누르면 걸어가기', () => {
         expect(tileOf(world.player), m.spot.id).toEqual(m.spot.stand);
       }
     }
+  });
+
+  it('할 일 쪽지의 줄을 두 번 누르면: 첫 누름은 화살표만, 둘째 누름으로 그 자리까지 걸어가 깃발을 누른 것과 같이 그 일이 열린다(꼭 할 일·덤 — 4-1 ㉢ 권고 ㄱ, pressRow)', () => {
+    for (const [id, must] of [
+      ['ourPaddy', true],
+      ['well', false],
+      ['temple', false],
+    ] as const) {
+      const world = createWorld(map, FARMER_BOY, 'farmer-boy');
+      const m = mark(id, must);
+      setMarks(world, [mark('tree'), m]);
+      const spot = m.spot;
+      // 첫 누름: 화살표가 아직 그 자리를 가리키지 않는다 → 걷지 않는다(부르는 쪽이 화살표를 건다)
+      expect(pressRow(world, 'tree', spot)).toBe('guide');
+      expect(world.player.route.length, id).toBe(0);
+      expect(run(world, 2).some((e) => e.type === 'mark')).toBe(false);
+      // 둘째 누름(화살표가 그 자리를 가리킬 때): 걸어가 다다르면 그 표시의 일이 열린다('mark' — 맵 화면이 대화 장면을 연다)
+      expect(pressRow(world, id, spot)).toBe('walk');
+      const events = run(world, 60, (all) => all.some((e) => e.type === 'mark'));
+      const hit = events.find((e) => e.type === 'mark');
+      expect(hit && hit.type === 'mark' && hit.mark.id, id).toBe(m.id);
+      expect(tileOf(world.player), id).toEqual(spot.stand);
+    }
+  });
+
+  it('줄을 두 번 눌러도: 창이 떠 있으면 걷지 않고, 그 자리에 표시가 없으면 서는 칸까지 걷기만 한다(일이 열리지 않는다)', () => {
+    const world = createWorld(map, FARMER_BOY, 'farmer-boy');
+    const well = mark('well', false);
+    setMarks(world, [well]);
+    world.paused = true;
+    expect(pressRow(world, 'well', well.spot)).toBe('walk');
+    expect(world.player.route.length).toBe(0);
+    expect(pressRow(null, 'well', well.spot)).toBe('walk');
+    world.paused = false;
+    setMarks(world, []);
+    pressRow(world, 'well', well.spot);
+    expect(run(world, 60).some((e) => e.type === 'mark')).toBe(false);
+    expect(tileOf(world.player)).toEqual(well.spot.stand);
   });
 
   it('이어 하기: 마지막에 서 있던 칸에서 시작한다. 그 칸에 설 수 없으면 처음 서는 칸으로 간다', () => {
