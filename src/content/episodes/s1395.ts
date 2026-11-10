@@ -50,7 +50,7 @@ export const s1395_1: Episode = {
   boss: 's1395-dokkaebi-bet',
   // 정해 준 여섯(힘·지혜 둘씩, 솜씨·어울림 하나씩 — 11.1 다의 "카드")
   starter: ['skill-bund', 'skill-carry', 'skill-reckon', 'skill-tithe', 'skill-soil', 'skill-call'],
-  // 현장에서 얻는 솜씨 카드(길에 따라 하나~셋 — 7.3): 서로 거들기 · 길양식 보태기 · 볍씨 고루 뿌리기 · 나무하기
+  // 현장에서 얻는 솜씨 카드(길에 따라 하나~셋 — 7.3): 서로 거들기 · 곡식 보태기 · 볍씨 고루 뿌리기 · 나무하기
   skills: [
     { at: 's1395-spring-return-help', card: 'skill-help' },
     { at: 's1395-spring-return-monks', card: 'skill-provision' },

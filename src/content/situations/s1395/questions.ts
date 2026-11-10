@@ -187,7 +187,8 @@ export const storyQuestions: Question[] = [
     explain: '글에 백성 열에 셋이 스님이라는 말이 나올 만큼 스님이 많았어요.',
     level: 3,
     facts: ['F35'],
-    tags: [EP, 'theme:inheritance'],
+    // 글(상소)은 스님이 많으니 궁궐 일을 스님에게 맡기자는 말이다 — 나라의 일(부역)이라 theme:duty(대본 26.9)
+    tags: [EP, 'theme:duty'],
   },
 
   // ── 돌려보낸 까닭과 불려 간 사람 ──

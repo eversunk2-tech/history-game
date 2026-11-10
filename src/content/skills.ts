@@ -121,7 +121,7 @@ export const skills: SkillCard[] = [
     bonus: 'heal',
     tags: ['ep:s1395-1', 'topic:soc5-2-1'],
     eras: ALL,
-    text: '궁궐 짓는 스님들은 나라에서 옷과 먹을 것을 받았어요. 먼 길에 먹을 곡식을 보태요.',
+    text: '스님들도 일한 새 궁궐은 1395년 가을에 다 지어졌어요. 곡식을 보태 함께 힘을 모아요.',
     facts: ['F34'],
   },
   {

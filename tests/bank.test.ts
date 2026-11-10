@@ -6,6 +6,7 @@ import {
   BANK_SIZES,
   SOURCE_ID,
   STANDARDS,
+  TOPIC_SIZES,
   asksYear,
   bankErrors,
   checkBank,
@@ -49,19 +50,20 @@ const good = (over: Partial<Question> = {}): Question => ({
   ...over,
 });
 
-/** 맞는 주제 하나(문제 n개, 어려움 3:5:2) */
-function topicOf(n: number, kind: 'bank' | 'story' = 'bank'): { topic: Topic; questions: Question[] } {
-  const id = kind === 'bank' ? 'soc5-2-1' : 'ep-s1395-1';
+/** 맞는 주제 하나(문제 n개, 어려움 3:5:2). id를 주면 그 주제로(물음의 낱말을 주제마다 달리해 주제를 건너 겹치지 않게) */
+function topicOf(n: number, kind: 'bank' | 'story' = 'bank', topicId?: string): { topic: Topic; questions: Question[] } {
+  const id = topicId ?? (kind === 'bank' ? 'soc5-2-1' : 'ep-s1395-1');
   const topic: Topic = { id, grade: 5, subject: 'social', title: '시험 주제', unit: '5-2 2단원', standards: ['[6사05-01]'], count: n, bankVer: '2026-11-10', kind };
   const easy = Math.round(n * 0.3);
   const mid = Math.round(n * 0.5);
   const words = ['궁궐', '종묘', '사직단', '도성', '대문', '향교', '성균관', '서원', '서당', '한양', '삼강행실도', '관혼상제', '양반', '중인', '상민', '천민', '노비', '과거', '유교', '효도'];
+  const shift = topicId === undefined ? 0 : Number(id.replace(/\D/g, '')) % words.length; // soc5-2-1 → 1, soc5-2-2 → 2
   const questions = Array.from({ length: n }, (_, i): Question => {
     const no = String(i + 1).padStart(kind === 'bank' ? 4 : 3, '0');
     return good({
       id: `${id}-${no}`,
       topic: id,
-      ask: `${words[i % words.length]}에 대해 묻는 ${i + 1}번째 물음 ${'가나다라마바사아자차카타파하'[i % 14]}${Math.floor(i / 14)}은 무엇일까요?`,
+      ask: `${words[(i + shift) % words.length]}에 대해 묻는 ${i + 1}번째 물음 ${'가나다라마바사아자차카타파하'[i % 14]}${Math.floor(i / 14)}은 무엇일까요?`,
       choices: [`보기${i}가`, `보기${i}나`, `보기${i}다`, `보기${i}라`],
       answer: i % 4,
       level: i < easy ? 1 : i < easy + mid ? 2 : 3,
@@ -91,6 +93,23 @@ describe('실제 문제는 잘못이 없다', () => {
     expect(bankErrors(checkBankFiles(CTX))).toEqual([]);
     expect(bankQuestions.length).toBe(bankTopics.reduce((sum, t) => sum + t.count, 0));
     for (const topic of bankTopics) expect(topic.kind).toBe('bank');
+  });
+
+  it('맞는 은행 파일(80문제 — 꼬리표 없는 2-1, theme:duty를 단 2-2)을 견본 목록으로 넘기면 읽기와 검사 잘못 0(이 폴더에 파일을 두지 않는다)', () => {
+    const plain = topicOf(80, 'bank', 'soc5-2-1');
+    const tagged = topicOf(80, 'bank', 'soc5-2-2');
+    tagged.topic.title = '유교 질서와 조선 사회';
+    for (const q of tagged.questions) q.tags = ['theme:duty', 'topic:soc5-2-2'];
+    // JSON 파일로 읽은 것과 같게 한 번 글자로 바꿨다 되돌린다
+    const files = ([['./soc5-2-1.json', plain], ['./soc5-2-2.json', tagged]] as const).map(([path, raw]) => ({ path, ...readBankFile(path, JSON.parse(JSON.stringify(raw)) as unknown) }));
+    expect(files.flatMap((one) => one.issues)).toEqual([]);
+    expect(files.map((one) => one.file?.questions.length)).toEqual([80, 80]);
+    expect(bankErrors(checkBankFiles(CTX, files)).map((i) => `${i.where}: ${i.message}`)).toEqual([]);
+    expect(checkBankFiles(CTX, files).filter((i) => i.level === 'gap')).toEqual([]);
+    // 4판 묶음처럼 이야기 문제 20과 함께 묶어도 잘못 0
+    const topics = [...files.map((one) => one.file!.topic), ...storyTopics];
+    const questions = [...files.flatMap((one) => one.file!.questions), ...storyQuestions];
+    expect(bankErrors(checkBank(topics, questions, CTX)).map((i) => `${i.where}: ${i.message}`)).toEqual([]);
   });
 
   it('은행의 근거는 F86부터(이미 있는 번호를 다시 적지 않는다)', () => {
@@ -258,6 +277,34 @@ describe('규칙마다 틀린 견본을 잡는다 — 주제와 묶음', () => {
     expect(rule(odd.topic, odd.questions)).toEqual(['count']);
     const long = topicOf(21, 'story');
     expect(rule(long.topic, long.questions)).toEqual(['count']);
+  });
+
+  it('count: 9.5의 표에 있는 주제는 그 수와 같아야 한다(2-1은 80 — 60이면 잡는다), 표에 없는 은행 주제는 40·60·80 가운데 하나', () => {
+    const short = topicOf(60, 'bank', 'soc5-2-1');
+    expect(rule(short.topic, short.questions)).toEqual(['count']);
+    expect(checkTopic(short.topic, short.questions, CTX).find((i) => i.rule === 'count')?.message).toContain('80문제');
+    expect(rule(topicOf(80, 'bank', 'soc5-2-1').topic, topicOf(80, 'bank', 'soc5-2-1').questions)).toEqual([]);
+    const six = topicOf(60, 'bank', 'soc5-2-3');
+    expect(rule(six.topic, six.questions)).toEqual([]);
+    const eight = topicOf(80, 'bank', 'soc5-2-3');
+    expect(rule(eight.topic, eight.questions)).toEqual(['count']);
+    // 표에 없는 은행 주제(다른 과목·덤 등)는 지금처럼
+    for (const n of [40, 60, 80]) {
+      const other = topicOf(n, 'bank', 'soc5-9-1');
+      expect(rule(other.topic, other.questions), String(n)).toEqual([]);
+    }
+    const odd = topicOf(70, 'bank', 'soc5-9-1');
+    expect(rule(odd.topic, odd.questions)).toEqual(['count']);
+  });
+
+  it('9.5의 표: 역사 스물여섯 주제, 단원마다 740 · 540 · 540(합계 1,820)', () => {
+    expect(TOPIC_SIZES.size).toBe(26);
+    const byUnit = [1, 2, 3].map((unit) => [...TOPIC_SIZES].filter(([id]) => id.startsWith(`soc5-${unit}-`)).reduce((sum, [, n]) => sum + n, 0));
+    expect(byUnit).toEqual([740, 540, 540]);
+    expect([...TOPIC_SIZES.keys()].filter((id) => !/^soc5-[1-3]-\d{1,2}$/.test(id))).toEqual([]);
+    expect([...TOPIC_SIZES.values()].every((n) => n === 60 || n === 80)).toBe(true);
+    expect(TOPIC_SIZES.get('soc5-2-1')).toBe(80);
+    expect(TOPIC_SIZES.get('soc5-2-2')).toBe(80);
   });
 
   it('level-mix: 쉬움 3 : 보통 5 : 어려움 2(±1)', () => {

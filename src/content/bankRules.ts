@@ -85,6 +85,43 @@ export const LEVEL_SLACK = 1;
 export const BANK_SIZES: readonly number[] = [40, 60, 80];
 export const STORY_SIZE = { min: 15, max: 20 } as const;
 
+/**
+ * 9.5의 표에서 주제마다 정한 문제 수(5학년 사회 역사 스물여섯 — id는 'soc5-<단원>-<주제>', 9.3).
+ * 은행 주제(kind 'bank')의 id가 이 표에 있으면 문제 수가 이 수와 같아야 한다.
+ * 표에 없는 은행 주제(다른 과목·덤 독도 등)는 BANK_SIZES 가운데 하나면 된다. 교사 문제(class)와 이야기 문제(story)는 따로 본다.
+ */
+export const TOPIC_SIZES: ReadonlyMap<string, number> = new Map([
+  // 1단원(740)
+  ['soc5-1-1', 80], // 구석기와 신석기 사람들의 생활
+  ['soc5-1-2', 80], // 청동기 시대와 고인돌
+  ['soc5-1-3', 60], // 고조선
+  ['soc5-1-4', 80], // 삼국과 가야의 성립과 발전
+  ['soc5-1-5', 80], // 삼국과 가야 사람들의 생활
+  ['soc5-1-6', 60], // 통일신라
+  ['soc5-1-7', 60], // 발해
+  ['soc5-1-8', 80], // 고려의 건국과 사회
+  ['soc5-1-9', 80], // 고려와 주변 나라
+  ['soc5-1-10', 80], // 고려의 문화
+  // 2단원(540)
+  ['soc5-2-1', 80], // 조선의 건국과 한양
+  ['soc5-2-2', 80], // 유교 질서와 조선 사회
+  ['soc5-2-3', 60], // 세종 때의 발전
+  ['soc5-2-4', 60], // 주변 나라와 두 전쟁
+  ['soc5-2-5', 60], // 조선 후기의 경제 변화
+  ['soc5-2-6', 60], // 조선 후기의 사회 변화
+  ['soc5-2-7', 60], // 서민 문화
+  ['soc5-2-8', 80], // 개항 이후 달라진 생활
+  // 3단원(540)
+  ['soc5-3-1', 60], // 나라를 지키려는 노력
+  ['soc5-3-2', 60], // 1910년대의 식민 통치와 저항
+  ['soc5-3-3', 60], // 3·1 운동과 대한민국 임시 정부
+  ['soc5-3-4', 60], // 3·1 운동 뒤의 민족 운동
+  ['soc5-3-5', 80], // 일제 통치 시기의 생활
+  ['soc5-3-6', 80], // 8·15 광복과 대한민국 정부 수립
+  ['soc5-3-7', 80], // 6·25 전쟁과 사람들의 생활
+  ['soc5-3-8', 60], // 6·25 전쟁 뒤의 사회와 생활
+]);
+
 /** 연도를 그대로 묻는 문제는 주제마다 열에 하나 안(9.4) */
 export const YEAR_SHARE = 0.1;
 
@@ -398,7 +435,9 @@ export function checkTopic(topic: Topic, questions: readonly Question[], ctx: Ba
 
   // 문제 수(9.5)
   if (mine.length !== topic.count) err('count', where, `주제의 문제 수(count ${topic.count})와 실제 문제 수(${mine.length})가 다르다`);
-  if (topic.kind === 'bank' && !BANK_SIZES.includes(mine.length)) err('count', where, `은행 주제의 문제 수는 ${BANK_SIZES.join('·')} 가운데 하나다(9.5 — ${mine.length}개)`);
+  const size = topic.kind === 'bank' ? TOPIC_SIZES.get(topic.id) : undefined;
+  if (size !== undefined && mine.length !== size) err('count', where, `9.5의 표에서 이 주제는 ${size}문제다(${mine.length}개)`);
+  if (topic.kind === 'bank' && size === undefined && !BANK_SIZES.includes(mine.length)) err('count', where, `은행 주제의 문제 수는 ${BANK_SIZES.join('·')} 가운데 하나다(9.5 — ${mine.length}개)`);
   if (topic.kind === 'story' && (mine.length < STORY_SIZE.min || mine.length > STORY_SIZE.max)) err('count', where, `이야기 문제는 에피소드마다 ${STORY_SIZE.min}~${STORY_SIZE.max}개다(${mine.length}개)`);
 
   // 어려움 비율 3:5:2(±1)

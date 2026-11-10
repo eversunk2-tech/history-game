@@ -5,6 +5,7 @@
 //   four      4판 자료: 에피소드 표·고비·솜씨 카드·장비·꾸미기·유물·거점·문제(서당 은행 + 이야기 문제)
 //   sources4  근거 목록 = 이야기의 근거(sources.ts) + 은행의 근거(bank/sources.ts — F86부터)
 //   maps4     검사기가 보는 맵: 봄의 맵뿐 아니라 계절마다 맵의 모습(이야기의 때·날씨·큰물)을 모두 걸어 자리에 닿는지 본다(1-라 Review 43번)
+//   mapRef4   maps4를 짓는 셈(맵 하나 + 모습을 짓는 셈 — 시험이 계절마다 다른 꾸민 모습을 넣어 본다)
 //   bundle4   검사기(validateContent)에 넘길 묶음 = 3판 묶음 + 위의 셋
 
 import { bundle, getMap } from './index';
@@ -64,17 +65,21 @@ export function seasonLooks(id: string, season: Season): { name: string; map: Ma
   return out;
 }
 
+/** 맵 id와 계절 → 그 계절에 맵이 지어질 수 있는 모습들(이름과 맵) */
+export type LooksOf = (id: string, season: Season) => { name: string; map: MapData }[];
+
 /**
  * 검사기가 보는 맵(3판의 것 + 계절의 모습마다 걷기). 계절의 모습마다 그 모습에 서는 막는 사람이 모두 칸을 막은 채로 걷는다
  * (판의 표시로 숨는 사람까지 막은 셈 — 실제 판보다 길이 좁거나 같다. 여기서 닿으면 실제 판에서도 닿는다).
+ * looks는 모습을 짓는 셈이다(묶음은 seasonLooks). 시험이 계절마다 다른 꾸민 모습을 넣어, 그 계절의 모습을 걷는지 본다.
  */
-function mapRef4(base: MapRef): MapRef {
+export function mapRef4(base: MapRef, looks: LooksOf = seasonLooks): MapRef {
   const reach = new Map<string, Uint16Array>();
   return {
     ...base,
     canReachIn(spot: string, who: { role: RoleId; look: Look }, season: Season): string[] {
       const out: string[] = [];
-      for (const { name, map } of seasonLooks(base.id, season)) {
+      for (const { name, map } of looks(base.id, season)) {
         const target = map.spots.find((s) => s.id === spot);
         if (!target) {
           out.push(name);
@@ -94,7 +99,7 @@ function mapRef4(base: MapRef): MapRef {
   };
 }
 
-export const maps4: MapRef[] = bundle.maps.map(mapRef4);
+export const maps4: MapRef[] = bundle.maps.map((base) => mapRef4(base));
 
 /** 검사기에 넘길 4판 묶음 */
 export const bundle4: ContentBundle = { ...bundle, sources: sources4, maps: maps4, four };

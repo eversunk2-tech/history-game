@@ -5,7 +5,9 @@
 import { describe, expect, it } from 'vitest';
 import { bundle, getPack } from '../src/content';
 import { marks, plan, s1395_1 } from '../src/content/episodes/s1395';
-import { bundle4, four, maps4, seasonLooks, sources4 } from '../src/content/four';
+import { bankSources } from '../src/content/bank/sources';
+import { bundle4, four, mapRef4, maps4, seasonLooks, sources4, type LooksOf } from '../src/content/four';
+import type { MapData } from '../src/map/types';
 import { foes } from '../src/content/foes';
 import { gear } from '../src/content/gear';
 import { outfits } from '../src/content/outfits';
@@ -32,9 +34,17 @@ describe('실제 4판 묶음', () => {
     expect(errorsOf(issues).map(formatIssue)).toEqual([]);
   }, 120_000);
 
-  it('4판 검사의 알림은 아직 만들지 않은 곳뿐이다(은행 주제가 비었다, 낫의 거두기 카드는 4-3)', () => {
-    const gaps = validateFour({ ...bundle4, four }).filter((i) => i.level === 'gap');
-    expect([...new Set(gaps.map((g) => g.rule))].sort()).toEqual(['bank-empty', 'gear-idle']);
+  it('4판 검사의 알림은 아직 만들지 않은 곳뿐이다(은행에 아직 없는 서당 주제, 낫의 거두기 카드는 4-3)', () => {
+    // 은행이 비었든 찼든 돈다: 은행 문제의 "비슷한 물음"(사람이 볼 것 — ㉮의 몫)은 빼고 본다
+    const bankIds = new Set(four.topics.filter((t) => t.kind === 'bank').map((t) => t.id));
+    const gaps = validateFour({ ...bundle4, four })
+      .filter((i) => i.level === 'gap')
+      .filter((g) => !(g.rule === 'ask-similar' && [...bankIds].some((id) => g.where.startsWith(`문제 ${id}-`))));
+    const linked = [...new Set([...four.plans.flatMap((p) => p.episodes.flatMap((ep) => ep.topics)), ...four.skills.flatMap((s) => s.tags.filter((t) => t.startsWith('topic:')).map((t) => t.slice('topic:'.length)))])];
+    const missing = linked.filter((id) => !bankIds.has(id));
+    expect([...new Set(gaps.map((g) => g.rule))].sort()).toEqual(missing.length > 0 ? ['bank-empty', 'gear-idle'] : ['gear-idle']);
+    // bank-empty는 은행에 아직 없는 주제만 가리킨다
+    for (const g of gaps.filter((one) => one.rule === 'bank-empty')) expect(missing.some((id) => g.message.includes(`"${id}"`) || g.message.includes(`"topic:${id}"`)), g.message).toBe(true);
   });
 
   it('3판 묶음(지금 앱이 쓰는 것)에는 4판 자료가 없어 지금과 같게 검사한다', () => {
@@ -43,7 +53,7 @@ describe('실제 4판 묶음', () => {
   });
 
   it('근거 목록은 이야기의 근거와 은행의 근거를 합친 것이다', () => {
-    expect(sources4.length).toBe(bundle.sources.length);
+    expect(sources4.map((s) => s.id)).toEqual([...bundle.sources, ...bankSources].map((s) => s.id));
     expect(sources4.map((s) => s.id)).toEqual(expect.arrayContaining(['F71', 'F80', 'F82', 'F84', 'E9']));
   });
 });
@@ -65,6 +75,39 @@ describe('계절의 맵도 걷는다(1-라 Review 43번)', () => {
       }
     }
     expect(checked).toBeGreaterThan(50);
+  });
+
+  it('걷기는 그 계절의 모습을 걷는다: 가을의 한 모습에서만 막힌 자리는 가을에 그 모습의 이름이 나오고, 봄에는 빈 목록이다', () => {
+    // 꾸민 맵(가로 5 × 세로 3): 왼쪽 끝에서 서서 오른쪽 끝의 자리로 간다. 가을의 '꾸밈/가을/막힘' 모습만 가운데 줄이 막혔다
+    const tiny = (name: string, wall: boolean) => {
+      const w = 5;
+      const h = 3;
+      const blocked = new Uint8Array(w * h);
+      if (wall) for (let y = 0; y < h; y++) blocked[y * w + 2] = 1;
+      const map: MapData = {
+        id: 'tiny', season: 'autumn', weather: 'clear', raining: false, w, h,
+        terrain: new Uint8Array(w * h), blocked, objects: [], spots: [{ id: 'yard', at: [4, 1], stand: [4, 1], label: '마당' }],
+        gates: [], zones: [], dwellers: [], notes: [], sights: [], start: { farmer: [0, 1] },
+      };
+      return { name, map };
+    };
+    const looks: LooksOf = (_id, season) =>
+      season === 'autumn' ? [tiny('꾸밈/가을/트임', false), tiny('꾸밈/가을/막힘', true)] : [tiny(`꾸밈/${season}`, false)];
+    const base: MapRef = { id: 'tiny', hasSpot: (spot) => spot === 'yard', canReach: () => true };
+    const walk = mapRef4(base, looks);
+    const who = { role: 'farmer', look: 'boy' } as const;
+    expect(walk.canReachIn!('yard', who, 'autumn')).toEqual(['꾸밈/가을/막힘']);
+    expect(walk.canReachIn!('yard', who, 'spring')).toEqual([]);
+    expect(walk.canReachIn!('yard', who, 'winter')).toEqual([]);
+    // 걸은 길을 기억해 둔 뒤에 다시 물어도 같다
+    expect(walk.canReachIn!('yard', who, 'autumn')).toEqual(['꾸밈/가을/막힘']);
+  });
+
+  it('묶음의 걷기(maps4)는 계절마다 seasonLooks의 모습을 모두 걷는다(없는 자리를 물으면 그 계절의 모습 이름이 모두 나온다)', () => {
+    const map = maps4.find((m) => m.id === 'neutigol')!;
+    for (const season of SEASONS) {
+      expect(map.canReachIn!('no-such-spot', { role: 'farmer', look: 'girl' }, season), season).toEqual(seasonLooks('neutigol', season).map((l) => l.name));
+    }
   });
 
   it('어느 모습에서 닿지 못하면 잡는다(spot-unreachable)', () => {
@@ -187,7 +230,11 @@ describe('규칙마다 틀린 견본을 잡는다 — 카드·장비·꾸미기�
     expect(rulesWith((f) => (card(f).base = 13))).toEqual(['card']);
     expect(rulesWith((f) => (card(f).kind = 'luck' as never))).toContain('card');
     expect(rulesWith((f) => (card(f).tags = ['card:논둑']))).toEqual(['card']);
-    expect(rulesWith((f) => (card(f).tags = ['theme:duty']))).toEqual(['card-tag']);
+    // 문제들의 theme:duty도 지워, 은행이 무엇을 달든 그 꼬리표에 닿는 문제가 0이 되게 한다
+    expect(rulesWith((f) => {
+      card(f).tags = ['theme:duty'];
+      for (const q of f.questions) q.tags = q.tags?.filter((t) => t !== 'theme:duty');
+    })).toEqual(['card-tag']);
     expect(rulesWith((f) => (card(f).facts = ['F99']))).toEqual(['facts']);
     expect(rulesWith((f) => (card(f).text = '도깨비와 씨름하던 솜씨예요.'))).toEqual(['tale']);
   });
@@ -215,8 +262,10 @@ describe('규칙마다 틀린 견본을 잡는다 — 카드·장비·꾸미기�
     expect(rulesWith((f) => ((f.texts as { spirit: { intro: { text: string }[] } }).spirit.intro[0].text = '가'.repeat(61)))).toEqual(['budget-spirit']);
   });
   it('문제 전수 검사의 잘못도 함께 알린다(bankRules)', () => {
-    expect(rulesWith((f) => (f.questions[0].answer = 9))).toEqual(['answer']);
-    expect(rulesWith((f) => (f.questions[0].facts = ['F99', 'E9']))).toEqual(['facts']);
+    // 이야기 문제를 id로 집는다(four.questions의 앞에는 은행 문제가 온다 — 은행이 차도 같은 문제를 본다)
+    const story = (f: Content4) => f.questions.find((q) => q.id === 'ep-s1395-1-001')!;
+    expect(rulesWith((f) => (story(f).answer = 9))).toEqual(['answer']);
+    expect(rulesWith((f) => (story(f).facts = ['F99', 'E9']))).toEqual(['facts']);
   });
 });
 
