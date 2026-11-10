@@ -15,6 +15,9 @@
 // 만들어진 역할·계절에 대해서만 맵의 자리, 선택지 수, 막다른 길을 본다. 막다른 길은 엔진으로 실제로 걸어서 찾는다.
 
 import { isLocked, linesOf, meets } from '../engine/conditions';
+import { SOURCE_ID } from './bankRules';
+import { validateFour, type Content4 } from './validate4';
+import { fieldPack, startField } from '../engine/episode';
 import {
   canCloseSeason,
   choiceViews,
@@ -77,6 +80,11 @@ export interface MapRef {
   id: string;
   hasSpot(spot: string): boolean;
   canReach(spot: string, who: { role: RoleId; look: Look }): boolean;
+  /**
+   * [더함, 4-1 ㉡ — 1-라 Review 43번] 그 계절에 맵이 지어질 수 있는 모습(이야기의 때·날씨·큰물)마다 걸어, 자리에 닿지 못하는 모습의 이름들.
+   * 없으면 봄의 맵(canReach)만 본다(3판 묶음). 4판 묶음(content/four.ts의 bundle4)이 채운다.
+   */
+  canReachIn?(spot: string, who: { role: RoleId; look: Look }, season: Season): string[];
 }
 
 export interface ContentBundle {
@@ -89,6 +97,8 @@ export interface ContentBundle {
   sources: Source[];
   places: Place[];
   maps: MapRef[];
+  /** [더함, 4-1 ㉡] 4판 자료(에피소드·고비·카드·장비·꾸미기·유물·거점·문제). 있으면 validateFour와 에피소드 걷기를 함께 한다 */
+  four?: Content4;
 }
 
 /** 글의 한도 (5.2의 10번). 빈칸과 문장 부호까지 센다. 넘으면 잘못이다. */
@@ -198,6 +208,12 @@ export const BANNED_WORDS: { word: string; why: string; except?: 'note'[] }[] = 
   { word: '탈락', why: '실패라고 하지 않는다' },
 ];
 
+/**
+ * 근거 번호의 꼴(spec 12.2·12.5): 사실 근거 F01~F85(4-1의 은행 Build가 F86부터 더한다 — 백을 넘으면 세 자리), 교육과정·교과서 근거 E1~E13.
+ * 기기의 근거 T 번호(12.4)는 내용의 근거가 아니라 여기 들지 않는다. 문제 검사 규칙(bankRules)과 하나를 함께 쓴다.
+ */
+export { SOURCE_ID };
+
 /** 잠긴 까닭은 사람 탓이 아니라 제도·형편을 주어로 쓴다(5.2의 2번). 사람을 탓하는 말투를 잡는다. */
 export const BLAME_WORDS = ['네가', '너는', '네 탓', '게을러', '못나서', '모자란 아이'];
 
@@ -213,6 +229,60 @@ export function validateContent(bundle: ContentBundle, options: ValidateOptions 
   const issues: Issue[] = [];
   checkShared(bundle, issues);
   for (const pack of bundle.packs) issues.push(...validatePack(pack, bundle, options));
+  if (bundle.four) {
+    issues.push(...validateFour({ ...bundle, four: bundle.four }));
+    if (options.walk !== false) issues.push(...walkEpisodes(bundle.packs, bundle.four));
+  }
+  return issues;
+}
+
+/**
+ * 에피소드의 일만 걷기(4-1 ㉡ — 11.1 다 "검사기가 더 볼 것"): ① 3판의 걷기 검사(walkRole — 막다른 길 없음, 미션마다 푸는 길이 둘 이상)를
+ * "에피소드의 일만 담은 묶음"(engine/episode의 fieldPack)으로 한 번 더 돈다 ② 에피소드의 해 ☀로 현장을 처음부터 끝까지 모두 걸어(처음 수치와 바닥에서),
+ * "큰 고비로"가 뜨는 형편마다 작은 고비의 일을 지나왔는지 본다(작은 고비가 모든 길 — ①-1이면 미션 ①의 ㉠㉡㉢ — 에서 한 번씩 열린다).
+ */
+export function walkEpisodes(packs: readonly SituationPack[], four: Content4): Issue[] {
+  const issues: Issue[] = [];
+  const err: Report = (rule, where, message) => issues.push({ level: 'error', rule, where, message });
+  for (const plan of four.plans) {
+    const pack = packs.find((p) => p.situation.id === plan.story);
+    if (!pack) continue;
+    for (const ep of plan.episodes) {
+      let fp: SituationPack;
+      try {
+        fp = fieldPack(pack, ep);
+      } catch (error) {
+        err('episode', `에피소드 ${ep.id}`, (error as Error).message);
+        continue;
+      }
+      for (const role of pack.situation.roles) {
+        if (!fp.missions.some((m) => m.must && (!m.roles || m.roles.includes(role.id)))) continue;
+        // ① 3판의 걷기 검사를 에피소드의 일만으로
+        for (const one of walkRole(fp, role.id).issues) issues.push({ ...one, where: `에피소드 ${ep.id} — ${one.where}` });
+        // ② 작은 고비가 모든 길에서 열린다
+        for (const look of role.looks) {
+          for (const from of [undefined, { stats: { living: STAT_MIN, body: STAT_MIN, trust: STAT_MIN }, flags: [], cards: [], items: [] }]) {
+            const where = `에피소드 ${ep.id} (${role.id}/${look}${from ? ', 바닥 수치' : ''})`;
+            let start: GameState;
+            try {
+              start = startField(pack, ep, { role: role.id, look, seed: 1, from });
+            } catch (error) {
+              err('episode', where, `현장을 열 수 없다: ${(error as Error).message}`);
+              continue;
+            }
+            const out = walk(fp, start, false);
+            if (out.ends.length === 0) err('dead-end', where, '"큰 고비로"가 뜨는 길이 없다');
+            for (const dead of out.dead.slice(0, 3)) err('dead-end', where, `막다른 길: ${dead.path.join(' → ') || '(처음부터)'}`);
+            for (const thrown of out.thrown.slice(0, 3)) err('walk-throw', where, thrown);
+            for (const minor of ep.minors) {
+              const missed = out.ends.filter((end) => !end.done.includes(minor.at));
+              if (missed.length > 0) err('minor-path', where, `작은 고비 ${minor.id}("${minor.at}")를 지나지 않고 "큰 고비로"에 닿는 길이 있다(${missed.length}가지 — 한 일 ${missed[0].done.join(', ')})`);
+            }
+          }
+        }
+      }
+    }
+  }
   return issues;
 }
 
@@ -834,6 +904,9 @@ export function validatePack(pack: SituationPack, refs: Refs, options: ValidateO
             if (!map.canReach(h.spot, { role: role.id, look })) {
               err('spot-unreachable', `${where} (${role.id}/${look})`, `자리 "${h.spot}"에 걸어서 닿을 수 없다`);
             }
+            // 계절의 맵도 걷는다: 그 계절에 지어질 수 있는 모습마다(4-1 ㉡ — 1-라 Review 43번)
+            const missed = map.canReachIn?.(h.spot, { role: role.id, look }, h.season) ?? [];
+            if (missed.length > 0) err('spot-unreachable', `${where} (${role.id}/${look})`, `자리 "${h.spot}"에 ${missed.join(', ')}의 맵에서 걸어서 닿을 수 없다`);
           }
         }
       }
@@ -1006,7 +1079,7 @@ function checkShared(bundle: ContentBundle, issues: Issue[]): void {
   // 근거 목록
   const sourceIds = new Set<string>();
   for (const source of bundle.sources) {
-    if (!/^F\d{2}$/.test(source.id)) err('sources', `sources.ts ${source.id}`, '근거 번호는 F와 숫자 두 자리다');
+    if (!SOURCE_ID.test(source.id)) err('sources', `sources.ts ${source.id}`, '근거 번호는 F와 숫자 두세 자리(F01~F85, 은행은 F86부터), 또는 E와 숫자 한두 자리다');
     if (sourceIds.has(source.id)) err('sources', `sources.ts ${source.id}`, '근거 번호가 겹친다');
     sourceIds.add(source.id);
     if (!source.fact || !source.source) err('sources', `sources.ts ${source.id}`, '사실이나 출처가 비었다');

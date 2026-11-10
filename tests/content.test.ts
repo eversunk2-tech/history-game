@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { bundle, getPack, packs, shelf } from '../src/content';
+import { four } from '../src/content/four';
 import { catalog } from '../src/content/situations/catalog';
 import {
   BANNED_WORDS,
@@ -1233,15 +1234,21 @@ describe('바퀴 1-라에서 더한 규칙', () => {
 const SCRIPT = Object.values(import.meta.glob<string>('../docs/script-1395.md', { eager: true, query: '?raw', import: 'default' }))[0] ?? '';
 
 /**
- * 대본에서 25절("바퀴 1-라 고치기에서 바뀐 글과 수치" — 고치기 전의 글을 함께 적은 기록)을 뺀 것. 자료의 글은 이 안에서 찾는다
- * (4-1 ㉠, 1-라 Review 11.8 ⑩: 대본 전체에서 찾으면 고친 글을 25.2의 "전" 글로 되돌려도 통과했다).
+ * 대본에서 "바뀐 글" 절 둘 — 12절("바퀴 1-다 고치기에서 바뀐 글")과 25절("바퀴 1-라 고치기에서 바뀐 글과 수치") — 을 뺀 것.
+ * 고치기 전의 글을 함께 적은 기록이라, 자료의 글은 이것을 뺀 본문에서 찾는다
+ * (4-1 ㉠, 1-라 Review 11.8 ⑩: 대본 전체에서 찾으면 고친 글을 "전" 글로 되돌려도 통과했다. 4-1 ㉡에서 12절도 뺐다).
+ * 절은 다음 "# "·"## " 머리까지다(12절 뒤에는 여름·가을·겨울 대본의 머리 "# 대본 — …"이 온다).
  */
-const SCRIPT_BODY = ((): string => {
-  const at = SCRIPT.indexOf('\n## 25.');
-  if (at < 0) return SCRIPT;
-  const next = SCRIPT.indexOf('\n## ', at + 6);
-  return SCRIPT.slice(0, at) + (next < 0 ? '' : SCRIPT.slice(next));
-})();
+const withoutSection = (text: string, no: number): string => {
+  const at = text.indexOf(`\n## ${no}. `);
+  if (at < 0) return text;
+  const rest = text.slice(at + 1);
+  const next = rest.search(/\n#{1,2} /);
+  return text.slice(0, at) + (next < 0 ? '' : rest.slice(next));
+};
+const SCRIPT_BODY = withoutSection(withoutSection(SCRIPT, 25), 12);
+/** 거점의 대본(docs/script-hub.md — 4-1 ㉡) */
+const HUB_SCRIPT = Object.values(import.meta.glob<string>('../docs/script-hub.md', { eager: true, query: '?raw', import: 'default' }))[0] ?? '';
 
 // 4-1 ㉠(1-라 11.8 ⑨): 값 치르기를 알맞게 끝내면 놀이판의 마지막 말 바로 뒤에 결과 첫 창이 같은 말("알맞게 가져왔구나")로 떴다
 describe('값 치르기 놀이판의 마지막 말', () => {
@@ -1262,6 +1269,12 @@ describe('대본과 자료가 같은 글이다', () => {
   it('25절(고치기 전의 글)은 빼고 찾는다. 그리고 25.2의 "전" 글은 자료에 하나도 없다(고친 글을 되돌리면 잡는다)', () => {
     expect(SCRIPT).toContain('## 25. 바퀴 1-라 고치기에서 바뀐 글과 수치');
     expect(SCRIPT_BODY).not.toContain('## 25.');
+    // 12절(바퀴 1-다 고치기에서 바뀐 글)도 뺀다. 그 뒤의 여름·가을·겨울 대본과 26절(4판 ①-1)은 남는다
+    expect(SCRIPT).toContain('## 12. 바퀴 1-다 고치기에서 바뀐 글');
+    expect(SCRIPT_BODY).not.toContain('## 12. ');
+    expect(SCRIPT_BODY).toContain('# 대본 — ① 새 나라, 새 도읍 한양 · 1395년 · 여름·가을·겨울 · 농민 집 아이');
+    expect(SCRIPT_BODY).toContain('## 13. ');
+    expect(SCRIPT_BODY).toContain('## 26. ');
     expect(SCRIPT_BODY.length).toBeGreaterThan(SCRIPT.length * 0.7);
     // 25.2의 표: | 어디 | 전 | 후 | review |
     const table = SCRIPT.slice(SCRIPT.indexOf('### 25.2'), SCRIPT.indexOf('### 25.3'));
@@ -1351,5 +1364,54 @@ describe('대본과 자료가 같은 글이다', () => {
       .filter((name) => !name.endsWith('.ts')); // `autumn.ts` 같은 파일 이름은 뺀다
     expect(named.length).toBeGreaterThan(50);
     expect([...new Set(named)].filter((flag) => !known.has(flag))).toEqual([]);
+  });
+});
+
+// 4-1 ㉡(11.1 라): 겨루기·거점의 글도 대본에 먼저 쓰고 옮긴다 — 코드의 글이 대본(26절 등 — 12·25절 뺌)이나 거점 대본에 한 글자도 다르지 않게 있다.
+describe('겨루기·거점의 글도 대본과 같은 글이다', () => {
+  const texts = (): [string, string][] => {
+    const out: [string, string][] = [];
+    const walk = (where: string, value: unknown): void => {
+      if (typeof value === 'string') out.push([where, value]);
+      else if (Array.isArray(value)) value.forEach((one, i) => walk(`${where}[${i}]`, one));
+      else if (value && typeof value === 'object') for (const [key, one] of Object.entries(value as Record<string, unknown>)) walk(`${where}.${key}`, one);
+    };
+    // 글 칸만(id·그림 이름·꼬리표·근거 번호·빛깔·갈래 같은 이름표는 뺀다)
+    for (const foe of four.foes) {
+      out.push([`${foe.id} 이름`, foe.name], [`${foe.id} 방패가 깎일 때`, foe.fade]);
+      for (const move of foe.moves) out.push([`${foe.id}/${move.id} 예고`, move.line]);
+      for (const key of ['opening', 'win', 'rescue', 'dusk', 'phaseOpen', 'wisdom'] as const) foe[key].forEach((line, i) => out.push([`${foe.id} ${key}[${i}]`, line.text]));
+    }
+    for (const card of four.skills) out.push([`${card.id} 이름`, card.name], [`${card.id} 글`, card.text]);
+    for (const g of four.gear) out.push([`${g.id} 이름`, g.name], [`${g.id} 쪽지`, g.text], [`${g.id} 잠긴 까닭`, g.lock]);
+    for (const o of four.outfits) out.push([`${o.id} 이름`, o.label], [`${o.id} 쪽지`, o.note]);
+    for (const r of four.relics) out.push([`${r.id} 이름`, r.name], [`${r.id} 글`, r.text]);
+    for (const f of four.facilities) out.push([`시설 ${f.id} 이름`, f.name], [`시설 ${f.id} 하는 일`, f.does]);
+    for (const k of four.keepers) {
+      out.push([`시설지기 ${k.id}`, k.label]);
+      k.greet.forEach((line, i) => out.push([`시설지기 ${k.id} 말[${i}]`, line.text]));
+    }
+    for (const note of four.board) out.push([`알림판 ${note.id} 이름`, note.title], [`알림판 ${note.id} 글`, note.text]);
+    walk('거점의 글', four.texts);
+    for (const plan of four.plans) for (const ep of plan.episodes) out.push([`${ep.id} 이름`, ep.title], [`${ep.id} 때`, ep.when], [`${ep.id} 의뢰`, ep.goal], [`${ep.id} 정령의 물음`, ep.ask]);
+    for (const q of four.questions.filter((one) => one.topic.startsWith('ep-'))) {
+      out.push([`${q.id} 물음`, q.ask], [`${q.id} 풀이`, q.explain]);
+      for (const one of [...(q.choices ?? []), ...(q.items ?? []), ...(q.pairs ?? []).flat()]) out.push([`${q.id} 고를 것`, one]);
+    }
+    return out.filter(([, text]) => text.length > 0);
+  };
+  // 글에 섞이는 이름표(정령의 who 열쇠 등)는 글이 아니라 뺀다. 거점의 글 가운데 id·그림 이름처럼 영문 소문자로만 된 것도 뺀다
+  const isLabel = (text: string): boolean => /^[a-z0-9:'_-]+$/.test(text);
+
+  it('거점 대본을 읽었다', () => {
+    expect(HUB_SCRIPT.length).toBeGreaterThan(3000);
+    expect(HUB_SCRIPT).toContain('# 대본 — 느티나무 마을(거점) · 4판 4-1');
+  });
+
+  it('고비·솜씨 카드·장비·꾸미기·유물·거점·정령의 말·①-1의 줄·이야기 문제의 글이 대본(12·25절 뺌)이나 거점 대본에 그대로 있다', () => {
+    const all = texts().filter(([, text]) => !isLabel(text));
+    expect(all.length).toBeGreaterThan(250);
+    const gone = all.filter(([, text]) => !SCRIPT_BODY.includes(text) && !HUB_SCRIPT.includes(text)).map(([where, text]) => `${where}: ${text}`);
+    expect(gone).toEqual([]);
   });
 });

@@ -27,6 +27,7 @@ import { Gauge, Say, useEndOnce } from './bits';
 import { PlayFrame } from './Frame';
 import { clumpsNear, harvestField, harvestLeave, harvestVerdict, harvestYield, isRainYear, type HarvestEnd } from './harvestRules';
 import type { PlayProps } from './index';
+import { marks } from '../content/episodes/s1395';
 import { mountStage, prefersCalm, unit } from './stage';
 
 /** 놀이 방법 한 줄(마디마다). 규칙의 이름표는 지금 '1395' 하나다(모르는 값이면 이것을 쓴다). */
@@ -43,8 +44,11 @@ const REACH_X = 10;
 const REACH_Y = 8;
 /** 벤 벼가 넘어가는 시간(밀리초) */
 const FALL_MS = 160;
-/** 봄에 볍씨를 냇가 낮은 논에만 몰아 뿌렸다는 표시(내용 쪽의 것 — 큰비가 온 해에 거둔 것이 더 적다) */
-const LOW_ONLY = 'sow.low';
+/**
+ * 봄에 볍씨를 냇가 낮은 논에만 몰아 뿌렸다는 표시(큰비가 온 해에 거둔 것이 더 적다).
+ * 놀이는 이름을 따로 적지 않고 ①의 에피소드 표의 이름표(marks)에서 읽는다(4-1 ㉡, 1-라 Review 43번 — 값은 3판 그대로).
+ */
+const LOW_ONLY = marks.sowLow;
 /** 남은 벼를 식구들이 마저 베는 시간 */
 const GATHER_MS = 900;
 /** 자루가 나라 몫 자리로 옮겨 가는 시간 */

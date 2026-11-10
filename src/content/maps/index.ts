@@ -3,6 +3,7 @@
 
 import type { Season } from '../../engine/types';
 import type { MapData, Weather } from '../../map/types';
+import { marks } from '../episodes/s1395';
 import { neutigol, stageOf } from './neutigol';
 
 /** 맵을 고르는 판의 형편: 판의 표시와, 큰비가 온 해인가 */
@@ -19,9 +20,10 @@ const SEASONAL: Record<string, (season: Season, weather: Weather, flags: readonl
 /**
  * 이름으로 그 계절·날씨의 맵을 얻는다. 모르는 이름이면 undefined.
  * 판의 표시(flags)에 따라 가을과 큰비가 온 해의 여름은 때가 갈린다(없으면 장정들이 돌아온 뒤의 가을).
+ * 표시의 이름은 ①의 에피소드 표의 이름표(marks)에서 읽는다(1-라 Review 43번).
  */
 export function seasonalMap(id: string, season: Season, weather: Weather = 'clear', at: MapCase = {}): MapData | undefined {
-  return SEASONAL[id]?.(season, weather, at.flags ?? ['leave.tend', 'leave.back'], Boolean(at.flood));
+  return SEASONAL[id]?.(season, weather, at.flags ?? [marks.leaveTend, marks.leaveBack], Boolean(at.flood));
 }
 
 /** 맵의 모습을 가르는 열쇠(같은 열쇠면 같은 맵이다). 맵 화면이 판을 새로 지을지 정할 때 쓴다. */

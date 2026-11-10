@@ -15,6 +15,7 @@
 
 import type { Condition, RoleId, Season } from '../../engine/types';
 import { MapBuilder } from '../../map/build';
+import { marks } from '../episodes/s1395';
 import { T, type Dweller, type Gate, type MapData, type Note, type Spot, type Weather, type Who, type Zone } from '../../map/types';
 import { vnoise } from '../../pixel/px';
 
@@ -31,8 +32,11 @@ const SEED = 1395;
  */
 export type Stage = 'early' | 'gone' | 'late' | 'done';
 
-/** 이야기의 표시: 장정들이 떠났다 · 돌아왔다 · 가을걷이를 마쳤다 · 단오를 보냈다 */
-const FLAG = { tend: 'leave.tend', ours: 'leave.ours', back: 'leave.back', harvest: 'harvest.done', dano: 'dano.done' } as const;
+/**
+ * 이야기의 표시: 장정들이 떠났다(떠난 집 논까지 돌봄 · 우리 것만) · 돌아왔다 · 가을걷이를 마쳤다 · 단오를 보냈다.
+ * 맵은 표시의 이름을 따로 적지 않고 ①의 에피소드 표의 이름표(marks)에서 읽는다(4-1 ㉡, 1-라 Review 43번 — 값은 3판 그대로).
+ */
+const FLAG = { tend: marks.leaveTend, ours: marks.leaveOurs, back: marks.leaveBack, harvest: marks.harvestDone, dano: marks.danoDone } as const;
 
 /** 판의 표시로 맵의 때를 정한다(맵 화면이 부른다) */
 export function stageOf(season: Season, flags: readonly string[], weather: Weather = 'clear'): Stage {

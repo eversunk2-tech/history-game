@@ -33,6 +33,7 @@ import type { Px } from '../src/pixel/px';
 import { choiceViews, doHappening, happeningOf, lastDeed, openHappenings, openingLines } from '../src/engine/game';
 import { poseOf, talkClass, windowOf, type Step } from '../src/screens/Talk';
 import { toSeason, withStats } from './fixtures';
+import { stripComments } from './sourceText';
 
 // 코드 그림을 여러 장 그리는 시험이 있다(한 장에 수십 밀리초). 다른 시험들과 함께 돌아 바쁠 때도 넉넉하게(Review 1-라 35번 ㉢).
 vi.setConfig({ testTimeout: 60_000 });
@@ -870,7 +871,8 @@ describe('대화 장면 — 제삿날 첫 창의 쌀독(1-라 11.8 ⑤)', () => 
     const fs = (await import(/* @vite-ignore */ ['node', 'fs'].join(':'))) as { readFileSync(path: string, enc: string): string };
     CSS = fs.readFileSync(decodeURIComponent(new URL('../src/styles/talk.css', import.meta.url).pathname), 'utf8');
   });
-  const TALK = Object.values(import.meta.glob<string>('../src/screens/Talk.tsx', { eager: true, query: '?raw', import: 'default' }))[0] ?? '';
+  // 4-1 ㉡(㉠ 고침 바퀴 Review 권고 ㄷ): 소스 글자는 주석을 지운 것으로 본다(주석에 남긴 옛 줄에 속지 않게)
+  const TALK = stripComments(Object.values(import.meta.glob<string>('../src/screens/Talk.tsx', { eager: true, query: '?raw', import: 'default' }))[0] ?? '');
   const px = (rule: string): number => Number((CSS.match(new RegExp(`${rule.replace(/[.()]/g, '\\$&')} \\{\\s*left: (-?[\\d.]+)%;`)) ?? [])[1]);
 
   it('제삿날(s1395-winter-rite)의 무대는 왼쪽을 비운다. 그런 장면은 이것 하나다', () => {
@@ -918,6 +920,8 @@ describe('대화 장면 — 제삿날 첫 창의 쌀독(1-라 11.8 ⑤)', () => 
   it('대화 장면은 clear를 꼴(class)로 건다. 대화하는 동안 두 사람 다 오른쪽으로 비켜 서고, 선택지를 고를 때는 그대로다', () => {
     expect(CSS.length).toBeGreaterThan(1000);
     expect(TALK).toMatch(/happening\.stage\.clear \? ` clear-\$\{happening\.stage\.clear\}` : ''/);
+    // 대화 장면은 이 꼴(talkClass)을 덧붙이지 않고 그대로 건다 — 부르는 줄을 통째로(Review 권고 ㄷ의 Y6b)
+    expect(TALK).toMatch(/^\s*class=\{talkClass\(happening, snap\.season, step\.kind, showsFigures\)\}\s*$/m);
     // 칸의 너비는 50%, 사람은 칸의 가운데에 선다: 왼쪽 사람의 가운데가 46%(전 28%) — 쌀독(배경 너비의 12~26%)에서 비켜난다
     const left = px('.talk.clear-left:not(.step-choose).cast-2 .talk-slot.at-left');
     const right = px('.talk.clear-left:not(.step-choose).cast-2 .talk-slot.at-right');

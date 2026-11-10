@@ -1151,10 +1151,13 @@ describe('헛간과 집 사이 길목', () => {
     ['가을(떠난 뒤)', neutigol('autumn', 'clear', 'gone'), ['leave.tend'], true],
     ['가을(돌아온 뒤)', neutigol('autumn', 'clear', 'late'), ['leave.tend', 'leave.back'], false],
     ['가을(가을걷이 뒤)', neutigol('autumn', 'clear', 'done'), ['leave.tend', 'leave.back', 'harvest.done'], true],
+    ['큰비 해 가을(가을걷이 뒤)', neutigol('autumn', 'clear', 'done', true), ['leave.ours', 'leave.back', 'harvest.done'], true],
     ['겨울', neutigol('winter'), ['leave.back', 'harvest.done'], true],
   ];
 
-  it('나뭇더미(34,30)는 길목을 막지 않는다: 집 뒤 두 칸(34~35, 31)이 늘 열려 있고, 형이 그 자리에 없으면 집 뒤(35,31)에서 길목(35,32)을 지나 앞마당(35,33)으로 두 걸음에 간다', () => {
+  // 4-1 ㉡(㉠ 고침 바퀴 Review 권고 ㄱ): 가을에는 형이 같은 칸(35,32)에 둘 적혀 있고 하나는 늘 숨는다. 앞에는 숨는 쪽이 칸을 터
+  // 주인공이 형을 뚫고 지나갔다. 이제 형이 서는 때는 길목이 막히고(집 뒤에서 앞마당으로는 돌아간다 — 겨울과 같다), 형이 없는 때만 열린다.
+  it('나뭇더미(34,30)는 길목을 막지 않는다: 집 뒤 두 칸(34~35, 31)이 늘 열려 있다. 형이 서는 때는 길목(35,32)이 막히고, 형이 없으면 집 뒤(35,31)에서 길목을 지나 앞마당(35,33)으로 두 걸음에 간다', () => {
     for (const [name, map, flags, chopping] of LOOKS) {
       const grid = gridAt(map, flags);
       expect(map.objects.filter((o) => o.kind === 'woodpile' && Math.abs(o.tx - 34) <= 3 && Math.abs(o.ty - 31) <= 3).map((o) => `${o.tx},${o.ty}`), name).toEqual(['34,30']);
@@ -1162,15 +1165,82 @@ describe('헛간과 집 사이 길목', () => {
       // 형이 서는 때(장작을 팬다)는 형이 길목에 선다 — 나뭇더미 앞(남쪽)
       const standing = map.dwellers.filter((d) => d.person === 'brother' && d.at[0] === 35 && d.at[1] === 32 && (!d.shows || meets(d.shows, facts(flags))));
       expect(standing.length > 0, name).toBe(chopping);
-      if (grid.blocked[32 * grid.w + 35] === 0) {
+      if (chopping) {
+        // 형이 서는 때는 막힌다 — 형을 뚫고 지나가지 않는다. 그래도 집 뒤에서 앞마당까지 돌아가는 길은 있다
+        expect(grid.blocked[32 * grid.w + 35], `${name} 길목(형)`).toBe(1);
+        const around = findPath(grid, [35, 31], [35, 33]);
+        expect(around, `${name} 돌아가는 길`).not.toBeNull();
+        expect(around!.some(([x, y]) => x === 35 && y === 32), name).toBe(false);
+      } else {
+        // 형이 없으면 길목이 열려 있다
+        expect(grid.blocked[32 * grid.w + 35], `${name} 길목`).toBe(0);
         expect(findPath(grid, [35, 31], [35, 33]), name).toEqual([
           [35, 32],
           [35, 33],
         ]);
-      } else expect(chopping, `${name} 길목을 막는 것은 형뿐이다`).toBe(true);
-      // 형이 없으면 길목이 열려 있다
-      if (!chopping) expect(grid.blocked[32 * grid.w + 35], `${name} 길목`).toBe(0);
+      }
     }
+  });
+});
+
+// 4-1 ㉡(㉠ 고침 바퀴 Review 권고 ㄱ): 맵의 모습마다(계절·날씨·이야기의 때·큰물), 그 판에 보이는 막는 사람(solid)의 칸은 막혀 있다.
+// 한 칸에 둘 적힌 사람 가운데 하나가 숨어도 보이는 쪽이 칸을 지킨다. 숨은 막는 사람만 서던 칸은 트인다.
+describe('보이는 막는 사람의 칸은 막혀 있다', () => {
+  const facts = (who: Who, flags: string[]) => ({ role: who.role, look: who.look, stats: { living: 5, body: 5, trust: 5 }, flags, draw: null, items: [] });
+  // [이름, 맵, 판의 표시] — 맵 화면이 고르는 모습(stageOf)과 그 때의 표시
+  const CASES: [string, MapData, string[]][] = [
+    ['봄', neutigol('spring'), []],
+    ['봄(볍씨를 뿌린 뒤)', neutigol('spring'), ['return.help', 'return.done', 'sow.low']],
+    ['여름', neutigol('summer'), []],
+    ['여름(단오 뒤)', neutigol('summer'), ['dano.done']],
+    ['큰비 여름(단오 전)', neutigol('summer', 'rain', 'early'), []],
+    ['큰비 여름(단오 뒤)', neutigol('summer', 'rain', 'late'), ['dano.done']],
+    ['가을(떠나기 전)', neutigol('autumn', 'clear', 'early'), []],
+    ['가을(떠난 뒤 — 돌봄)', neutigol('autumn', 'clear', 'gone'), ['leave.tend']],
+    ['가을(떠난 뒤 — 우리 것만)', neutigol('autumn', 'clear', 'gone'), ['leave.ours']],
+    ['가을(돌아온 뒤)', neutigol('autumn', 'clear', 'late'), ['leave.tend', 'leave.back']],
+    ['가을(가을걷이 뒤)', neutigol('autumn', 'clear', 'done'), ['leave.tend', 'leave.back', 'harvest.done']],
+    ['큰비 해 가을(떠나기 전)', neutigol('autumn', 'clear', 'early', true), []],
+    ['큰비 해 가을(가을걷이 뒤)', neutigol('autumn', 'clear', 'done', true), ['leave.ours', 'leave.back', 'harvest.done']],
+    ['겨울', neutigol('winter'), ['leave.back', 'harvest.done']],
+  ];
+
+  it('맵 모습 열넷 × 역할·모습 여섯: 보이는 막는 사람의 칸은 막히고, 막는 사람이 모두 숨은 칸은 트인다', () => {
+    let doubled = 0;
+    for (const [name, map, flags] of CASES) {
+      for (const who of Object.values(WHO)) {
+        const world = createWorld(map, who, 'farmer-boy');
+        const f = facts(who, flags);
+        setHidden(world, new Set(map.dwellers.filter((d) => d.shows && !meets(d.shows, f)).map((d) => d.id)));
+        const byTile = new Map<number, boolean>();
+        for (const d of map.dwellers) {
+          if (!d.solid) continue;
+          const i = d.at[1] * map.w + d.at[0];
+          const shown = !d.shows || meets(d.shows, f);
+          if (byTile.has(i)) doubled++;
+          byTile.set(i, (byTile.get(i) ?? false) || shown);
+        }
+        for (const [i, shown] of byTile) {
+          const where = `${name} ${who.role}/${who.look} (${i % map.w},${Math.floor(i / map.w)})`;
+          expect(world.grid.blocked[i], where).toBe(shown ? 1 : 0);
+        }
+      }
+    }
+    // 한 칸에 막는 사람이 둘 적힌 곳이 실제로 있어야 이 시험이 뜻이 있다(가을의 형)
+    expect(doubled).toBeGreaterThan(0);
+  });
+
+  it('숨겼다가 다시 보이게 해도 같다(판의 표시가 바뀌어 사람이 오가는 차례에 기대지 않는다)', () => {
+    const map = neutigol('autumn', 'clear', 'done');
+    const who = WHO.farmerBoy;
+    const world = createWorld(map, who, 'farmer-boy');
+    const hide = (flags: string[]) => setHidden(world, new Set(map.dwellers.filter((d) => d.shows && !meets(d.shows, facts(who, flags))).map((d) => d.id)));
+    hide(['leave.tend', 'leave.back']); // 형은 논에 — 길목에 아무도 없다
+    expect(world.grid.blocked[32 * map.w + 35]).toBe(0);
+    hide(['leave.tend', 'leave.back', 'harvest.done']); // 가을걷이 뒤 — 형이 길목에서 장작을 팬다
+    expect(world.grid.blocked[32 * map.w + 35]).toBe(1);
+    hide([]); // 떠나기 전의 형(같은 칸의 다른 사람)
+    expect(world.grid.blocked[32 * map.w + 35]).toBe(1);
   });
 });
 

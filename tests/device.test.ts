@@ -22,7 +22,11 @@ import {
 import { guardKeys, holdKeys, keysAreHeld, swallowIfHeld } from '../src/ui/focus';
 import { OPEN_GAP_MS, READ_GAP_MS, TAP_GAP_MS, TapGate, nowMs, tapTime } from '../src/ui/taps';
 import { mapLook } from '../src/content/maps';
-import { heldLook } from '../src/screens/MapScreen';
+import { carryTap, carryWalk, heldLook, keysOf, mapPointOf, openingInput, shownOf, takeCarried, type Carried } from '../src/screens/MapScreen';
+import { neutigol } from '../src/content/maps/neutigol';
+import { tileOf } from '../src/map/path';
+import { createWorld, snapCamera, tapWorld } from '../src/map/world';
+import { stripComments } from './sourceText';
 import { tooSoonFor } from '../src/screens/Talk';
 import { turnNeeded } from '../src/ui/TurnNotice';
 
@@ -223,7 +227,14 @@ describe('홈 화면에 추가하는 법(spec 5.4의 글)', () => {
 
 const RAW = import.meta.glob<string>(['../public/manifest.webmanifest', '../index.html'], { eager: true, query: '?raw', import: 'default' });
 const ICONS = import.meta.glob<string>('../public/icons/*.png', { eager: true, query: '?url', import: 'default' });
-const SOURCES = import.meta.glob<string>(['../src/**/*.ts', '../src/**/*.tsx', '../index.html'], { eager: true, query: '?raw', import: 'default' });
+const RAW_SOURCES = import.meta.glob<string>(['../src/**/*.ts', '../src/**/*.tsx', '../index.html'], { eager: true, query: '?raw', import: 'default' });
+/**
+ * 소스 글자 검사는 주석을 지운 소스로 한다(4-1 ㉡, ㉠ 고침 바퀴 Review 권고 ㄷ — 부르는 줄을 주석으로 남기고 다른 줄로 바꿔도 앞에는 통과했다).
+ * index.html은 그대로 둔다.
+ */
+const SOURCES: Record<string, string> = Object.fromEntries(
+  Object.entries(RAW_SOURCES).map(([path, text]) => [path, /\.tsx?$/.test(path) ? stripComments(text) : text]),
+);
 
 /** PNG의 머리(IHDR)에서 가로·세로를 읽는다 */
 async function pngSize(name: string): Promise<[number, number]> {
@@ -602,5 +613,156 @@ describe('자판 — 선택지의 첫 자리와 세로 안내 뒤의 초점', ()
     const turn = source('/ui/TurnNotice.tsx');
     expect(turn).toMatch(/const kept = /);
     expect(turn).toMatch(/kept\.focus\(\{ preventScroll: true \}\)/);
+  });
+});
+
+// 4-1 ㉡(㉠ 고침 바퀴 Review 권고 ㄷ): 소스 글자 검사가 주석에 속지 않는다 — 주석을 지운 소스로 보고, 부르는 줄은 통째로 맞춰 본다.
+describe('주석을 지운 소스(권고 ㄷ)', () => {
+  const source = (end: string): string => SOURCES[Object.keys(SOURCES).find((path) => path.endsWith(end)) ?? ''] ?? '';
+  const count = (text: string, word: string): number => text.split(word).length - 1;
+
+  it('한 줄·묶음 주석(JSX의 {/* */} 안도)을 지우고 줄바꿈은 남긴다. 글자열·템플릿·정규식 글자 안의 //와 /*는 그대로다', () => {
+    expect(stripComments('a(); // b\nc();')).toBe('a(); \nc();');
+    expect(stripComments('a(); /* b\n b */ c();')).toBe('a(); \n c();');
+    expect(stripComments('<p>{/* 쪽지 */}</p>')).toBe('<p>{}</p>');
+    expect(stripComments("const u = 'https://x.y/z'; // 주소")).toBe("const u = 'https://x.y/z'; ");
+    expect(stripComments('const t = `//${a}/* b */`;')).toBe('const t = `//${a}/* b */`;');
+    expect(stripComments('const re = /\\/\\/|\\/\\*/g; // 정규식')).toBe('const re = /\\/\\/|\\/\\*/g; ');
+    expect(stripComments('if (/[/]/.test(s)) x = a / b / c; // 나눗셈')).toBe('if (/[/]/.test(s)) x = a / b / c; ');
+    expect(stripComments('const s = "따옴표 \\" 안의 // 그대로"; /* 끝 */')).toBe('const s = "따옴표 \\" 안의 // 그대로"; ');
+    // 부르는 줄을 주석으로 남기면 그 줄은 없는 것으로 본다
+    expect(stripComments('// lookRef.current = heldLook(lookRef.current, lookNow, talking);\nlookRef.current = lookNow;')).not.toContain('heldLook');
+  });
+
+  it('대화 장면은 꼴을 talkClass 한 번으로 정하고 덧붙이지 않는다(부르는 줄을 통째로 — Y6b)', () => {
+    const talk = source('/screens/Talk.tsx');
+    expect(talk).toMatch(/^\s*class=\{talkClass\(happening, snap\.season, step\.kind, showsFigures\)\}\s*$/m);
+    expect(count(talk, 'talkClass(')).toBe(2); // 정하는 줄과 부르는 줄
+  });
+
+  it('맵 화면은 맵의 모습을 heldLook 한 번으로 정한다(부르는 줄을 통째로 — Y4b)', () => {
+    const screen = source('/screens/MapScreen.tsx');
+    expect(screen).toMatch(/^\s*lookRef\.current = heldLook\(lookRef\.current, lookNow, talking\);\s*$/m);
+    expect(count(screen, 'heldLook(')).toBe(2);
+    expect(count(screen, 'lookRef.current =')).toBe(1);
+  });
+
+  it('대화 장면의 누름은 tooSoonFor(문, 사건) 하나로 가린다(부르는 줄을 통째로 — Y3b)', () => {
+    const talk = source('/screens/Talk.tsx');
+    expect(talk).toMatch(/^\s*const tooSoon = \(ev\?: Event \| null\): boolean => tooSoonFor\(gate\.current as TapGate, ev\);\s*$/m);
+    expect(count(talk, 'tooSoonFor(')).toBe(2);
+  });
+});
+
+// 4-1 ㉡(㉠ 고침 바퀴 Review 권고 ㄴ): 대화가 닫힌 뒤 맵을 새로 짓는 동안의 누름 넘기기 — 화면을 모르는 작은 함수로 떼어 행동을 본다.
+describe('맵을 새로 지을 때 넘기는 누름과 자판(권고 ㄴ)', () => {
+  const S = 4;
+  /** 그 화면에서 맵의 점 (x, y)가 그려지는 화소(render와 같은 셈) */
+  const screenOf = (x: number, y: number, shown: ReturnType<typeof shownOf>) => {
+    const camX = Math.round(shown.px * shown.s) - Math.round((shown.px - shown.cx) * shown.s);
+    const camY = Math.round(shown.py * shown.s) - Math.round((shown.py - shown.cy) * shown.s);
+    return { dx: x * shown.s - camX, dy: y * shown.s - camY };
+  };
+  const worldAt = (tx: number, ty: number) => {
+    const map = neutigol('autumn', 'clear', 'done');
+    const world = createWorld(map, { role: 'farmer', look: 'boy' }, 'farmer-boy', [tx, ty]);
+    world.view = { w: 1180 / S, h: 820 / S };
+    snapCamera(world);
+    return world;
+  };
+
+  it('mapPointOf는 그리기의 거꾸로다: 그 화면에 그려진 화소를 누르면 그 맵의 점', () => {
+    const world = worldAt(40, 36);
+    world.player.x += 3.37; // 칸 가운데가 아닌 자리(그리기는 주인공의 화소를 먼저 정수로 정한다)
+    world.player.y -= 1.91;
+    const shown = shownOf(world, S);
+    for (const [x, y] of [[100.5, 200.25], [705, 610], [44 * 16 + 8, 38 * 16 + 8]]) {
+      const { dx, dy } = screenOf(x, y, shown);
+      const p = mapPointOf(dx, dy, shown);
+      expect(p.x).toBeCloseTo(x, 6);
+      expect(p.y).toBeCloseTo(y, 6);
+    }
+  });
+
+  it('다시 짓기 앞뒤의 카메라가 달라도, 짓는 동안 누른 자리는 앞 화면(남아 있던 그림)으로 셈해 새 판에서 그 칸으로 걷는다', () => {
+    const before = worldAt(52, 42); // 앞 판: 타작 마당 쪽에 서 있었다
+    const after = worldAt(39, 35); // 새 판: 주인공이 다른 자리에서 열려 카메라가 다르다
+    expect(after.cam.x === before.cam.x && after.cam.y === before.cam.y).toBe(false);
+    const shownBefore = shownOf(before, S);
+    const { dx, dy } = screenOf(44 * 16 + 8, 38 * 16 + 8, shownBefore);
+    const carried = carryTap('neutigol', dx, dy, shownBefore)!;
+    expect([Math.floor(carried.x / 16), Math.floor(carried.y / 16)]).toEqual([44, 38]);
+    // 새 판의 카메라로 셈했다면 다른 칸이다(그래서 앞 화면으로 셈해야 한다)
+    const wrong = mapPointOf(dx, dy, shownOf(after, S));
+    expect([Math.floor(wrong.x / 16), Math.floor(wrong.y / 16)]).not.toEqual([44, 38]);
+    // 새 판을 열 때 꺼내 그 자리로 걷는다
+    const holder: { current: Carried | null } = { current: carried };
+    const start = openingInput(new Set(), holder, 'neutigol', false);
+    expect(start.tap).not.toBeNull();
+    tapWorld(after, start.tap!.x, start.tap!.y);
+    const end = after.player.route[after.player.route.length - 1];
+    expect(tileOf(end)).toEqual([44, 38]);
+  });
+
+  it('넘긴 누름은 한 번만 쓰고 비운다 — 다음 다시 짓기에 또 걷지 않는다(X1)', () => {
+    const holder: { current: Carried | null } = { current: { map: 'neutigol', x: 10, y: 20 } };
+    expect(takeCarried(holder, 'neutigol', false)).toEqual({ x: 10, y: 20 });
+    expect(holder.current).toBeNull();
+    expect(takeCarried(holder, 'neutigol', false)).toBeNull();
+    expect(openingInput(new Set(), holder, 'neutigol', false).tap).toBeNull();
+  });
+
+  it('새 판의 맵이 다르면, 또는 창이 떠 있으면 버린다(비우기는 한다 — Review 기록 4)', () => {
+    const holder: { current: Carried | null } = { current: { map: 'neutigol', x: 10, y: 20 } };
+    expect(takeCarried(holder, 'hub', false)).toBeNull();
+    expect(holder.current).toBeNull();
+    holder.current = { map: 'neutigol', x: 10, y: 20 };
+    expect(takeCarried(holder, 'neutigol', true)).toBeNull();
+    expect(holder.current).toBeNull();
+  });
+
+  it('짓는 동안의 누름은 앞 화면이 있을 때만 적고(처음 열 때는 버린다), 앞 판을 내릴 때는 걷던 길만 넘긴다(X6)', () => {
+    const world = worldAt(40, 36);
+    const shown = shownOf(world, S);
+    const tap = carryTap('neutigol', 300, 200, shown);
+    expect(tap).toEqual({ map: 'neutigol', ...mapPointOf(300, 200, shown) });
+    expect(carryTap('neutigol', 300, 200, null)).toBeNull();
+    expect(carryWalk('neutigol', { x: 1, y: 2 }, true)).toEqual({ map: 'neutigol', x: 1, y: 2 });
+    expect(carryWalk('neutigol', { x: 1, y: 2 }, false)).toBeNull();
+    expect(carryWalk('neutigol', null, true)).toBeNull();
+  });
+
+  it('새 판을 열 때 자판은 지금 눌려 있는 화살표대로 — 눌린 것이 없으면 선다(X2)', () => {
+    const holder: { current: Carried | null } = { current: null };
+    expect(openingInput(new Set(), holder, 'neutigol', false).keys).toEqual({ x: 0, y: 0 });
+    expect(keysOf(new Set())).toEqual({ x: 0, y: 0 });
+    expect(keysOf(new Set(['ArrowRight']))).toEqual({ x: 1, y: 0 });
+    expect(keysOf(new Set(['ArrowLeft', 'ArrowRight']))).toEqual({ x: 0, y: 0 });
+    expect(keysOf(new Set(['w', 'd', 'Shift']))).toEqual({ x: 1, y: -1 });
+    expect(openingInput(new Set(['ArrowDown']), holder, 'neutigol', false).keys).toEqual({ x: 0, y: 1 });
+  });
+
+  it('맵 화면은 이 함수들을 이렇게 부른다(부르는 줄을 통째로, 주석을 지운 소스로)', () => {
+    const screen = SOURCES[Object.keys(SOURCES).find((path) => path.endsWith('/screens/MapScreen.tsx')) ?? ''] ?? '';
+    const lines = (re: RegExp): number => (screen.match(re) ?? []).length;
+    // 그린 화면을 적고, 지금 판을 누르면 그 화면으로 셈한다
+    expect(lines(/^\s*shownRef\.current = shownOf\(world, view\.scale\);\s*$/gm)).toBe(1);
+    expect(lines(/^\s*const p = mapPointOf\(dx, dy, shownOf\(world, view\.scale\)\);\s*$/gm)).toBe(1);
+    // 짓는 동안 누른 것은 남아 있는 화면으로 적는다(X5·X6)
+    expect(lines(/^\s*const carried = carryTap\(map\.id, dx, dy, shownRef\.current\);\s*$/gm)).toBe(1);
+    expect(lines(/^\s*if \(carried\) carryRef\.current = carried;\s*$/gm)).toBe(1);
+    // 앞 판을 내릴 때 걷던 길을 넘긴다
+    expect(lines(/^\s*const kept = carryWalk\(map\.id, tapped, session\.world\.player\.route\.length > 0\);\s*$/gm)).toBe(1);
+    expect(lines(/^\s*if \(kept\) carryRef\.current = kept;\s*$/gm)).toBe(1);
+    // 넘긴 것을 넣는 곳은 이 둘뿐이고, 꺼내고 비우는 것은 openingInput(takeCarried) 하나다(X1)
+    expect(lines(/carryRef\.current =/g)).toBe(2);
+    // 새 판을 열 때 자판과 넘긴 누름을 한 번에 걸고(X2), 넘긴 누름으로 걷는다
+    expect(lines(/^\s*const start = openingInput\(held, carryRef, map\.id, overlaid\(\)\);\s*$/gm)).toBe(1);
+    expect(lines(/^\s*setKeys\(world, start\.keys\.x, start\.keys\.y\);\s*$/gm)).toBe(1);
+    expect(lines(/^\s*tapWorld\(world, start\.tap\.x, start\.tap\.y\);\s*$/gm)).toBe(1);
+    // 자판을 거는 곳은 셋뿐이다: 새 판을 열 때, 눌린 화살표가 바뀔 때(keysOf), 판을 내릴 때 멈춤
+    expect(lines(/setKeys\(/g)).toBe(3);
+    expect(lines(/^\s*const keys = keysOf\(held\);\s*$/gm)).toBe(1);
+    expect(lines(/^\s*setKeys\(session\.world, 0, 0\);\s*$/gm)).toBe(1);
   });
 });

@@ -1,0 +1,294 @@
+{
+  "schema": 5,
+  "build": "20261110-fixture",
+  "hero": {
+    "look": "girl",
+    "level": 1,
+    "xp": 0,
+    "banked": 0,
+    "stats": {
+      "power": 3,
+      "wisdom": 3,
+      "craft": 3,
+      "heart": 3
+    },
+    "points": 0,
+    "outfit": {},
+    "titles": [],
+    "cards": {},
+    "deck": [],
+    "gear": {
+      "hand": "gear-hoe"
+    }
+  },
+  "purse": {
+    "rice": 1,
+    "cloth": 2,
+    "coin": 0
+  },
+  "items": [
+    "gear-flail"
+  ],
+  "hub": {
+    "at": "24,18",
+    "intro": true,
+    "seen": [
+      "trial"
+    ]
+  },
+  "stories": {},
+  "quiz": {},
+  "today": {
+    "date": "2026-11-10",
+    "xp": 0,
+    "topics": {},
+    "replays": {}
+  },
+  "unlocked": [],
+  "current": {
+    "episode": "s1395-1",
+    "replay": false,
+    "game": {
+      "situationId": "s1395",
+      "role": "farmer",
+      "look": "girl",
+      "seed": 20261110,
+      "stats": {
+        "living": 5,
+        "body": 4,
+        "trust": 6
+      },
+      "flags": [
+        "return.help",
+        "return.done",
+        "sow.even",
+        "sow.split"
+      ],
+      "cards": [
+        "s1395-direct-sowing",
+        "s1395-palace-work"
+      ],
+      "items": [],
+      "draw": null,
+      "seasonIndex": 0,
+      "phase": "season",
+      "sunsLeft": 1,
+      "done": [
+        "s1395-spring-return",
+        "s1395-spring-return-help",
+        "s1395-spring-sow",
+        "s1395-spring-well"
+      ],
+      "solved": [
+        "s1395-m-return",
+        "s1395-m-sow"
+      ],
+      "history": [
+        {
+          "happeningId": "s1395-spring-return",
+          "season": "spring",
+          "missionId": "s1395-m-return",
+          "theme": "duty",
+          "choiceId": "help",
+          "label": "돌아온 집의 밀린 논갈이를 거든다",
+          "lines": [
+            {
+              "who": "neighbor-elder",
+              "pose": "glad",
+              "text": "거들어 주겠다고? 고맙구나. 우리 논에서 기다리마."
+            },
+            {
+              "text": "쟁기질은 못 해도 흙덩이 깨는 일은 할 수 있다. 이웃집 논으로 가자."
+            }
+          ],
+          "note": "나라는 농사 때를 놓칠까 봐 농민을 돌려보내고 스님들에게 일을 맡겼어요.",
+          "requested": {
+            "living": 0,
+            "body": 0,
+            "trust": 0
+          },
+          "delta": {
+            "living": 0,
+            "body": 0,
+            "trust": 0
+          },
+          "before": {
+            "living": 4,
+            "body": 6,
+            "trust": 5
+          },
+          "after": {
+            "living": 4,
+            "body": 6,
+            "trust": 5
+          },
+          "newCards": [],
+          "newItems": [],
+          "newFlags": [
+            "return.help"
+          ],
+          "solved": [],
+          "sun": 0,
+          "goTo": "neighborPaddy"
+        },
+        {
+          "happeningId": "s1395-spring-return-help",
+          "season": "spring",
+          "missionId": "s1395-m-return",
+          "theme": "duty",
+          "lines": [
+            {
+              "who": "neighbor-elder",
+              "pose": "glad",
+              "text": "덕분에 곧 볍씨를 뿌리겠다. 너희 집 일이 바쁠 때는 내가 가마."
+            },
+            {
+              "text": "팔다리는 뻐근하지만 마음은 가볍다."
+            }
+          ],
+          "note": "나라가 일꾼들을 돌려보낸 것은 이월 십구일, 봄 농사가 시작될 때였어요.",
+          "requested": {
+            "living": 0,
+            "body": -1,
+            "trust": 1
+          },
+          "delta": {
+            "living": 0,
+            "body": -1,
+            "trust": 1
+          },
+          "before": {
+            "living": 4,
+            "body": 6,
+            "trust": 5
+          },
+          "after": {
+            "living": 4,
+            "body": 5,
+            "trust": 6
+          },
+          "newCards": [],
+          "newItems": [],
+          "newFlags": [
+            "return.done"
+          ],
+          "solved": [
+            "s1395-m-return"
+          ],
+          "sun": 0
+        },
+        {
+          "happeningId": "s1395-spring-sow",
+          "season": "spring",
+          "missionId": "s1395-m-sow",
+          "theme": "farming",
+          "choiceId": "split",
+          "label": "높은 논에도 나눠 뿌린다",
+          "play": "even",
+          "lines": [
+            {
+              "who": "father",
+              "pose": "glad",
+              "text": "고루 잘 뿌렸구나. 덕분에 볍씨가 한 줌 남았다."
+            },
+            {
+              "text": "낮은 논과 높은 논을 오르내렸다. 큰비가 와도 한쪽은 남겠지."
+            }
+          ],
+          "note": "이때는 볍씨를 논에 바로 뿌렸어요. 벼와 풀이 함께 자라 논의 풀 뽑기가 힘들었어요.",
+          "requested": {
+            "living": 1,
+            "body": -1,
+            "trust": 0
+          },
+          "delta": {
+            "living": 1,
+            "body": -1,
+            "trust": 0
+          },
+          "before": {
+            "living": 4,
+            "body": 5,
+            "trust": 6
+          },
+          "after": {
+            "living": 5,
+            "body": 4,
+            "trust": 6
+          },
+          "newCards": [
+            "s1395-direct-sowing"
+          ],
+          "newItems": [],
+          "newFlags": [
+            "sow.even",
+            "sow.split"
+          ],
+          "solved": [
+            "s1395-m-sow"
+          ],
+          "sun": 0
+        },
+        {
+          "happeningId": "s1395-spring-well",
+          "season": "spring",
+          "theme": "duty",
+          "choiceId": "listen",
+          "label": "곁에 앉아 이야기만 듣는다",
+          "lines": [
+            {
+              "text": "우물가 돌에 앉아 이야기를 끝까지 들었다. 한양이 어떤 곳일지 그려 본다."
+            },
+            {
+              "who": "well-neighbor",
+              "text": "궁금한 게 많구나. 다음에 또 들려주마."
+            }
+          ],
+          "note": "한양으로 도읍을 옮긴 것은 지난해 시월이에요. 십이월부터 궁궐 터를 닦았어요.",
+          "requested": {
+            "living": 0,
+            "body": 0,
+            "trust": 0
+          },
+          "delta": {
+            "living": 0,
+            "body": 0,
+            "trust": 0
+          },
+          "before": {
+            "living": 5,
+            "body": 4,
+            "trust": 6
+          },
+          "after": {
+            "living": 5,
+            "body": 4,
+            "trust": 6
+          },
+          "newCards": [
+            "s1395-palace-work"
+          ],
+          "newItems": [],
+          "newFlags": [],
+          "solved": [],
+          "sun": 1
+        }
+      ],
+      "flow": [
+        {
+          "living": 4,
+          "body": 6,
+          "trust": 5
+        }
+      ],
+      "closings": [],
+      "seen": [],
+      "at": "41,39"
+    },
+    "phase": "battle",
+    "minors": [
+      "s1395-1-hardsoil",
+      "s1395-1-sowing"
+    ]
+  }
+}

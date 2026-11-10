@@ -1,0 +1,148 @@
+{
+  "schema": 5,
+  "build": "20261110-fixture",
+  "hero": {
+    "look": "girl",
+    "level": 2,
+    "xp": 13,
+    "banked": 0,
+    "stats": {
+      "power": 3,
+      "wisdom": 3,
+      "craft": 3,
+      "heart": 3
+    },
+    "points": 1,
+    "outfit": {},
+    "titles": [],
+    "cards": {
+      "skill-help": 1,
+      "skill-sow": 1,
+      "skill-bund": 1,
+      "skill-carry": 1,
+      "skill-reckon": 1,
+      "skill-tithe": 1,
+      "skill-soil": 1,
+      "skill-call": 1
+    },
+    "deck": [
+      "skill-bund",
+      "skill-carry",
+      "skill-reckon",
+      "skill-tithe",
+      "skill-soil",
+      "skill-call"
+    ],
+    "gear": {
+      "hand": "gear-hoe"
+    }
+  },
+  "purse": {
+    "rice": 7,
+    "cloth": 5,
+    "coin": 0
+  },
+  "items": [
+    "gear-flail",
+    "relic-seed-sack"
+  ],
+  "hub": {
+    "at": "30,12",
+    "intro": true,
+    "seen": [
+      "trial",
+      "board-s1395-2"
+    ]
+  },
+  "stories": {
+    "s1395": {
+      "role": "farmer",
+      "look": "girl",
+      "stats": {
+        "living": 5,
+        "body": 4,
+        "trust": 6
+      },
+      "flags": [
+        "return.help",
+        "return.done",
+        "sow.even",
+        "sow.split"
+      ],
+      "cards": [
+        "s1395-direct-sowing",
+        "s1395-palace-work"
+      ],
+      "items": [],
+      "firstRun": {
+        "s1395-spring-return": "help",
+        "s1395-spring-return-help": "",
+        "s1395-spring-sow": "split",
+        "s1395-spring-well": "listen"
+      },
+      "episodes": {
+        "s1395-1": {
+          "stars": [
+            true,
+            false,
+            false
+          ],
+          "best": 208,
+          "plays": 1,
+          "cleared": true
+        }
+      },
+      "met": [
+        "village",
+        "fields",
+        "neighbor-elder",
+        "monk"
+      ]
+    }
+  },
+  "quiz": {
+    "ep-s1395-1": {
+      "seen": "782002",
+      "right": "782002",
+      "wrong": [],
+      "lastRight": [
+        "ep-s1395-1-013",
+        "ep-s1395-1-005",
+        "ep-s1395-1-004",
+        "ep-s1395-1-003",
+        "ep-s1395-1-006",
+        "ep-s1395-1-017"
+      ],
+      "best": 0,
+      "laps": 0,
+      "rounds": 0
+    },
+    "soc5-2-1": {
+      "seen": "922409",
+      "right": "820409",
+      "wrong": [
+        "soc5-2-1-0004",
+        "soc5-2-1-0013"
+      ],
+      "lastRight": [
+        "soc5-2-1-0001",
+        "soc5-2-1-0007",
+        "soc5-2-1-0010",
+        "soc5-2-1-0016",
+        "soc5-2-1-0019"
+      ],
+      "best": 75,
+      "laps": 0,
+      "rounds": 1
+    }
+  },
+  "today": {
+    "date": "2026-11-10",
+    "xp": 0,
+    "topics": {
+      "soc5-2-1": 1
+    },
+    "replays": {}
+  },
+  "unlocked": []
+}

@@ -1,0 +1,48 @@
+{
+  "schema": 5,
+  "build": "20261110-fixture",
+  "hero": {
+    "look": "girl",
+    "level": 1,
+    "xp": 0,
+    "banked": 0,
+    "stats": {
+      "power": 3,
+      "wisdom": 3,
+      "craft": 3,
+      "heart": 3
+    },
+    "points": 0,
+    "outfit": {},
+    "titles": [],
+    "cards": {},
+    "deck": [],
+    "gear": {
+      "hand": "gear-hoe"
+    }
+  },
+  "purse": {
+    "rice": 1,
+    "cloth": 2,
+    "coin": 0
+  },
+  "items": [
+    "gear-flail"
+  ],
+  "hub": {
+    "at": "24,18",
+    "intro": true,
+    "seen": [
+      "trial"
+    ]
+  },
+  "stories": {},
+  "quiz": {},
+  "today": {
+    "date": "2026-11-10",
+    "xp": 0,
+    "topics": {},
+    "replays": {}
+  },
+  "unlocked": []
+}

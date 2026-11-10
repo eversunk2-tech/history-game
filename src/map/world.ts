@@ -331,6 +331,10 @@ export function spotPoint(spot: Spot): Pt {
 /**
  * 지금 자리에 없는 사람들을 정한다(맵의 사람 id). 제자리에 서서 길을 막던 사람이면 그 칸도 함께 트이고 막힌다.
  * 주인공이 서 있는 칸에는 사람이 돌아와 서지 않는다(끼이지 않게 — 주인공이 비켜난 뒤에 다시 부르면 선다).
+ *
+ * 한 칸에 막는 사람(solid)이 둘 적힌 때가 있다(가을의 형 — 아버지가 돌아오기 전의 형과 가을걷이 뒤의 형이 같은 칸에 서고 하나는 늘 숨는다).
+ * 그래서 사람을 다 정한 뒤 막는 사람이 서는 칸마다 다시 셈한다: 보이는 막는 사람이 하나라도 있으면 막고, 없으면 튼다
+ * (4-1 ㉡, ㉠ 고침 바퀴 Review 권고 ㄱ — 앞에는 숨는 쪽이 칸을 터 버려 가을에 형을 뚫고 지나갔다).
  */
 export function setHidden(world: World, ids: ReadonlySet<string>): void {
   const [px, py] = tileOf(world.player);
@@ -345,8 +349,19 @@ export function setHidden(world: World, ids: ReadonlySet<string>): void {
       a.held = false;
       if (world.arrive?.kind === 'dweller' && world.arrive.actor === a) world.arrive = null;
     }
-    if (a.def.solid) world.grid.blocked[ty * world.grid.w + tx] = hide ? 0 : 1;
   }
+  blockByStanders(world);
+}
+
+/** 막는 사람(solid)이 서는 칸마다: 보이는 막는 사람이 하나라도 있으면 막고, 모두 숨었으면 튼다 */
+function blockByStanders(world: World): void {
+  const standing = new Map<number, boolean>();
+  for (const a of world.actors) {
+    if (!a.def?.solid) continue;
+    const i = a.def.at[1] * world.grid.w + a.def.at[0];
+    standing.set(i, (standing.get(i) ?? false) || !a.hidden);
+  }
+  for (const [i, shown] of standing) world.grid.blocked[i] = shown ? 1 : 0;
 }
 
 /**
