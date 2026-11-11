@@ -1,0 +1,1407 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>시안 A · 한지 서책</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@500;700;800&family=Gowun+Batang:wght@400;700&family=Hahmlet:wght@600;700;800&display=block" rel="stylesheet">
+<script>
+  // ?s=title|map|talk|choose|review — 그 화면 하나만 창 가득(1180×820, 1024×768 점검과 찍기에 쓴다)
+  // &shot=1 — 흐르는 빛을 한 자리에 멈춘다(찍은 그림에 빛이 보이게)
+  (function () {
+    var q = new URLSearchParams(location.search);
+    var s = q.get('s');
+    if (s) { document.documentElement.classList.add('solo'); document.documentElement.dataset.solo = s; }
+    if (q.get('shot')) document.documentElement.classList.add('shot');
+  })();
+</script>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   시안 A 「한지 서책」 — 토큰
+   1rem = 게임의 바탕 글자. 1180×820에서 820/48 = 17.08px, 1024×768에서 16px.
+   (게임 base.css: min(100vw/64, max(16px, 100vh/48)))
+   ───────────────────────────────────────────────────────────── */
+:root {
+  font-size: 17.0833px;
+
+  /* 바탕(한지) */
+  --hanji: #f4eee2;
+  --hanji-2: #ece3cf;
+  --hanji-3: #e2d5b8;
+  --hanji-hi: #fbf7ee;
+  /* 먹 */
+  --ink: #1f1b16;
+  --ink-2: #3a342d;
+  --ink-3: #5a5249;
+  --ink-line: rgba(31, 27, 22, 0.22);
+  /* 오방색 — 점·선·작은 면에만 */
+  --red: #b5332e;      /* 주홍: 주 단추·번호·도장 */
+  --red-deep: #8f2420;
+  --blue: #2f5d8a;     /* 청: 초점 */
+  --gold: #d9a521;     /* 황: 금박 선(장식 — 글자에 쓰지 않는다) */
+  --gold-deep: #a87a12;
+  /* 계절 한 색(게임의 --season과 같은 값) — 계절 표시의 점·선에만 */
+  --season: #7fa650;
+
+  --f-title: 'Hahmlet', 'Gowun Batang', serif;
+  --f-story: 'Gowun Batang', 'Hahmlet', serif;
+  --f-ui: 'Gothic A1', 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+
+  /* 빛은 하나, 위에서. 그림자 두 겹(짧고 진한 것 + 넓고 연한 것), 층 셋 */
+  --shadow-1: 0 1px 1px rgba(60, 40, 20, 0.12), 0 2px 6px -2px rgba(60, 40, 20, 0.14);
+  --shadow-2: 0 1px 2px rgba(60, 40, 20, 0.16), 0 14px 30px -10px rgba(60, 40, 20, 0.32);
+  --shadow-3: 0 2px 4px rgba(40, 25, 10, 0.20), 0 38px 70px -26px rgba(40, 25, 10, 0.50);
+  --rim: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  --tex: url('../assets/tex-hanji-1024.webp');
+}
+.season-spring { --season: #7fa650; }
+.season-summer { --season: #2f8a76; }
+.season-autumn { --season: #c07f24; }
+.season-winter { --season: #64809c; }
+
+html.solo { font-size: min(calc(100vw / 64), max(16px, calc(100vh / 48))); }
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--f-ui);
+  color: var(--ink);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p, ul, ol, dl, dd, figure { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+img { display: block; }
+
+/* 한지 바탕: 한지색 + 한지 질감(옅게) + 위에서 내려오는 따뜻한 빛 */
+.paper {
+  background-color: var(--hanji);
+  background-image:
+    radial-gradient(130% 75% at 46% -12%, rgba(255, 249, 232, 0.85), rgba(255, 249, 232, 0) 62%),
+    linear-gradient(to bottom, rgba(120, 90, 50, 0) 70%, rgba(120, 90, 50, 0.07)),
+    linear-gradient(rgba(244, 238, 226, 0.42), rgba(244, 238, 226, 0.42)),
+    var(--tex);
+  background-size: auto, auto, auto, 512px 512px;
+  background-blend-mode: normal, normal, normal, multiply;
+}
+
+/* ── 화면 틀 ─────────────────────────────────────────────── */
+.frame {
+  position: relative;
+  width: 1180px;
+  height: 820px;
+  overflow: hidden;
+  container-type: size;
+}
+html.solo body { overflow: hidden; }
+html.solo .doc { display: none !important; }
+html.solo .frame { width: 100vw; height: 100vh; }
+html.solo .frame:not(.on) { display: none; }
+html.solo .shotbox { margin: 0; box-shadow: none; }
+html.solo .doc-wrap { width: auto; padding: 0; }
+.scr { position: absolute; inset: 0; overflow: hidden; }
+
+/* ── 단추 ────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: max(56px, 3.5rem);
+  padding: 0 1.15rem;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  font-family: var(--f-ui);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: transform 120ms var(--ease), box-shadow 120ms var(--ease);
+}
+.btn:active { transform: translateY(2px); }
+.btn:focus-visible, .choice:focus-visible, .note-row:focus-visible, .note-tab:focus-visible, .colophon:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 3px;
+}
+/* 종이 단추: 윗면 하이라이트 + 바닥 2px + 넓은 그림자 */
+.btn-paper {
+  background: linear-gradient(#fdfaf2, #f0e7d4);
+  border-color: rgba(31, 27, 22, 0.30);
+  color: var(--ink);
+  box-shadow: var(--rim), 0 2px 0 rgba(90, 66, 36, 0.30), 0 8px 16px -8px rgba(60, 40, 20, 0.40);
+}
+.btn-paper:active { box-shadow: var(--rim), 0 0 0 rgba(90, 66, 36, 0.30), 0 3px 8px -6px rgba(60, 40, 20, 0.40); }
+/* 주 단추: 주홍 */
+.btn-red {
+  background: linear-gradient(#c13c35, #a92e29);
+  border-color: var(--red-deep);
+  color: var(--hanji-hi);
+  box-shadow: inset 0 1px 0 rgba(255, 236, 220, 0.35), 0 3px 0 #7a1e1a, 0 12px 22px -10px rgba(120, 30, 20, 0.6);
+}
+.btn-red:active { box-shadow: inset 0 1px 0 rgba(255, 236, 220, 0.35), 0 1px 0 #7a1e1a, 0 4px 10px -6px rgba(120, 30, 20, 0.6); }
+/* 조용한 단추: 테 없이 밑줄만(누를 자리는 56px) */
+.btn-quiet {
+  background: none;
+  color: var(--ink-2);
+  padding: 0 0.5rem;
+  text-decoration: underline;
+  text-decoration-color: rgba(31, 27, 22, 0.35);
+  text-underline-offset: 0.3em;
+  text-decoration-thickness: 1px;
+}
+/* 잠긴 단추: 점선 + 자물쇠 + 흐린 글(색만으로 알리지 않는다) */
+.btn.locked {
+  background: rgba(236, 227, 207, 0.6);
+  border: 1.5px dashed rgba(31, 27, 22, 0.42);
+  color: var(--ink-3);
+  box-shadow: none;
+  cursor: default;
+}
+.ico { width: 1.15em; height: 1.15em; flex: none; }
+
+/* 금박 선 + 느린 빛(9초에 한 번) */
+.gold {
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  background: linear-gradient(90deg, #a87a12, #e7c254 22%, #c79320 48%, #e9c862 74%, #b0841a);
+  box-shadow: 0 1px 0 rgba(255, 250, 230, 0.7);
+}
+.gold::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 0;
+  width: 26%;
+  background: linear-gradient(100deg, rgba(255, 252, 235, 0), rgba(255, 252, 235, 0.95), rgba(255, 252, 235, 0));
+  transform: translateX(-130%);
+  animation: sheen 9s var(--ease) 1.2s infinite;
+}
+@keyframes sheen {
+  0% { transform: translateX(-130%); }
+  16%, 100% { transform: translateX(420%); }
+}
+html.shot .gold::after { animation: none; transform: translateX(160%); }
+
+/* 이중선(굵은 것 + 가는 것) */
+.rule2 { height: 6px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); }
+
+/* 낙관(도장) — 바탕만 먹이 번진 가장자리, 글자는 또렷하게 */
+.seal {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.7rem 0.34rem;
+  color: var(--hanji-hi);
+  font-family: var(--f-title);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  isolation: isolate;
+}
+.seal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 3px;
+  background: var(--red);
+  box-shadow: inset 0 0 0 2px var(--red), inset 0 0 0 3.5px rgba(251, 247, 238, 0.72);
+  filter: url(#ink-edge);
+}
+
+/* ═════════════════════════════════════════════════════════════
+   화면 1 · 제목
+   ═════════════════════════════════════════════════════════════ */
+.t .mast {
+  position: absolute;
+  left: 2.25rem; right: 2.25rem; top: 0;
+  z-index: 3;
+}
+.t .mast-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.9rem 0 0.55rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink-2);
+}
+.t .mast-line .ed { color: var(--red); }
+
+/* 그림: 위쪽 하늘이 한지에 스며든다(마스크). 아래 끝은 이중선 위에 선다 */
+.t .plate {
+  position: absolute;
+  left: 0; right: 0;
+  top: 2.2rem;
+  bottom: 15.2rem;
+  margin: 0;
+}
+.t .plate img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 58%;
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 14%, rgba(0,0,0,0.85) 34%, #000 46%);
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 14%, rgba(0,0,0,0.85) 34%, #000 46%);
+}
+.t .plate::after {
+  /* 그림의 아래 끝: 이중선 */
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -6px;
+  height: 6px;
+  border-top: 1px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+.t .plate figcaption {
+  position: absolute;
+  right: 2.25rem;
+  bottom: 0.8rem;
+  padding: 0.38rem 0.75rem 0.42rem;
+  background: rgba(251, 247, 238, 0.92);
+  box-shadow: var(--shadow-1);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--ink-2);
+  letter-spacing: 0.01em;
+}
+.t .plate figcaption b { color: var(--red); font-weight: 800; margin-right: 0.35rem; }
+.t .plate figcaption .src { color: var(--ink-3); }
+
+/* 세로쓰기 띠(제첨처럼 붙인 종이) */
+.t .vstrip {
+  position: absolute;
+  left: 2.25rem;
+  top: 4.6rem;
+  z-index: 2;
+  writing-mode: vertical-rl;
+  padding: 0.9rem 0.42rem;
+  background: var(--hanji-hi);
+  border-left: 1px solid var(--red);
+  border-right: 1px solid var(--red);
+  box-shadow: inset 3px 0 0 var(--hanji-hi), inset -3px 0 0 var(--hanji-hi), inset 4px 0 0 rgba(181, 51, 46, 0.5), inset -4px 0 0 rgba(181, 51, 46, 0.5), var(--shadow-1);
+  font-family: var(--f-story);
+  font-size: 1.1875rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--ink);
+}
+
+.t .head {
+  position: absolute;
+  left: 6.1rem;
+  top: 4.5rem;
+  z-index: 2;
+  width: 26rem;
+}
+.t h1 {
+  font-family: var(--f-title);
+  font-weight: 800;
+  font-size: 4.125rem;
+  line-height: 1.06;
+  letter-spacing: -0.045em;
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(255, 252, 240, 0.6);
+}
+.t .head .gold { width: 15.5rem; margin-top: 1.1rem; }
+
+/* 아래: 소개 · 단추 · 곧 열릴 것 */
+.t .below {
+  position: absolute;
+  left: 2.25rem; right: 2.25rem;
+  bottom: 0;
+  height: 14.6rem;
+  display: grid;
+  grid-template-columns: 1.08fr 1fr 0.86fr;
+  column-gap: 2rem;
+  padding-top: 1.35rem;
+}
+.t .lead {
+  font-family: var(--f-story);
+  font-size: 1.3125rem;
+  line-height: 1.78;
+  color: var(--ink);
+}
+.t .acts { display: flex; flex-direction: column; gap: 0.75rem; }
+.t .resume {
+  justify-content: space-between;
+  min-height: 4.6rem;
+  padding: 0 1.1rem 0 1.35rem;
+  text-align: left;
+}
+.t .resume .b { display: flex; flex-direction: column; gap: 0.2rem; }
+.t .resume .b-main { font-size: 1.375rem; font-weight: 800; letter-spacing: 0.02em; }
+.t .resume .b-sub { font-size: 1rem; font-weight: 500; opacity: 0.92; }
+.t .resume .go { font-size: 1rem; }
+.t .restart { width: 100%; }
+
+.t .side { border-left: 1px solid var(--ink-line); padding-left: 1.5rem; }
+.t .soon-head { font-size: 0.9375rem; font-weight: 700; letter-spacing: 0.16em; color: var(--ink-3); margin-bottom: 0.3rem; }
+.t .toc div { display: flex; align-items: baseline; gap: 0.4rem; padding: 0.28rem 0; font-size: 1.125rem; color: var(--ink-3); }
+.t .toc dt { font-weight: 700; color: var(--ink-2); }
+.t .toc .dots { flex: 1; border-bottom: 2px dotted rgba(31, 27, 22, 0.3); transform: translateY(-0.3em); }
+.t .toc dd { font-size: 1rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.25rem; }
+.t .smalls { display: flex; flex-direction: column; align-items: flex-start; margin-top: 0; margin-left: -0.5rem; }
+.t .smalls .btn { min-height: max(56px, 3.25rem); font-size: 1.0625rem; }
+.t .colophon {
+  position: absolute;
+  left: 2.25rem;
+  bottom: 0;
+  min-height: 56px;
+  padding: 0 0.25rem;
+  background: none;
+  border: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--ink-3);
+  text-decoration: underline dotted rgba(31, 27, 22, 0.4);
+  text-underline-offset: 0.3em;
+}
+
+/* ═════════════════════════════════════════════════════════════
+   쪽 머리(맵·대화가 함께 쓴다) — 이중선으로 마감한 얇은 지면 머리
+   ═════════════════════════════════════════════════════════════ */
+.rhead {
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  z-index: 5;
+  height: 4.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  padding: 0 0.95rem 6px 1.05rem;
+}
+.rhead::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 6px;
+  border-top: 1px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+.rh-season {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding-bottom: 0.15rem;
+  border-bottom: 3px solid var(--season);
+  font-family: var(--f-title);
+  font-weight: 800;
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+.rh-season .dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--season); box-shadow: 0 0 0 1px rgba(31,27,22,.35); }
+.rh-where { display: flex; flex-direction: column; line-height: 1.15; }
+.rh-where b { font-family: var(--f-title); font-weight: 700; font-size: 1.1875rem; letter-spacing: -0.01em; }
+.rh-where span { font-size: 0.9375rem; font-weight: 700; color: var(--ink-3); margin-top: 0.12rem; }
+.rh-sep { width: 1px; align-self: stretch; margin: 0.9rem 0; background: var(--ink-line); }
+.rh-stats { display: flex; gap: 1.05rem; }
+.rh-stat { display: grid; grid-template-columns: auto auto; column-gap: 0.4rem; align-items: baseline; }
+.rh-stat dt { font-size: 0.9375rem; font-weight: 700; color: var(--ink-3); }
+.rh-stat dd { font-family: var(--f-title); font-size: 1.5rem; font-weight: 800; line-height: 1; text-align: right; }
+.rh-stat .cells { grid-column: 1 / -1; display: flex; gap: 2px; margin-top: 0.3rem; }
+.rh-stat .cells i { width: 0.3rem; height: 0.42rem; border: 1px solid rgba(31,27,22,.45); border-radius: 1px; }
+.rh-stat .cells i.on { background: var(--ink-2); border-color: var(--ink-2); }
+.rh-sun { display: grid; grid-template-columns: auto auto; column-gap: 0.4rem; align-items: baseline; }
+.rh-sun dt { font-size: 0.9375rem; font-weight: 700; color: var(--ink-3); }
+.rh-sun dd { font-family: var(--f-title); font-size: 1.5rem; font-weight: 800; line-height: 1; }
+.rh-sun dd small { font-size: 0.9375rem; color: var(--ink-3); font-weight: 700; }
+.rh-sun .suns { grid-column: 1 / -1; display: flex; gap: 0.1rem; margin-top: 0.12rem; }
+.rh-sun .suns svg { width: 1.05rem; height: 1.05rem; }
+.rh-tools { margin-left: auto; display: flex; gap: 0.45rem; align-items: center; }
+.rh-tools .btn { font-size: 1.0625rem; padding: 0 0.85rem; }
+.rh-tools .btn-quiet { padding: 0 0.4rem; }
+
+/* ═════════════════════════════════════════════════════════════
+   화면 2 · 맵
+   ═════════════════════════════════════════════════════════════ */
+.m .stage {
+  position: absolute;
+  left: 0; right: 0;
+  top: 4.5rem;
+  bottom: 3.11rem;
+  /* 맵 그림(도트)은 늘이거나 줄이지 않는다: 1180×690 그대로, 오른쪽 아래에 붙인다(작은 지도 자리가 늘 맞게) */
+  background: #86a95a url('../now/map-clean.jpg') right bottom / 1180px 690px no-repeat;
+}
+.m .stage::before {
+  /* 머리 이중선 바로 아래 얇은 그늘(종이가 맵 위에 얹혀 있다) */
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0; height: 10px;
+  background: linear-gradient(rgba(40, 25, 10, 0.28), rgba(40, 25, 10, 0));
+}
+
+/* 할 일 쪽지 — 접은 서첩. 종이가 맵 위에 살짝 떠 있다 */
+.note {
+  position: absolute;
+  left: 1rem;
+  top: 1.05rem;
+  width: 25rem;
+  color: var(--ink);
+  /* 종이가 맵 위에 떠 있다: 짧고 진한 그림자 + 넓고 연한 그림자(잘린 귀의 꼴을 따른다) */
+  filter: drop-shadow(0 1px 1px rgba(60, 40, 20, 0.22)) drop-shadow(0 12px 13px rgba(60, 40, 20, 0.24));
+}
+.note-paper {
+  border-radius: 2px;
+  clip-path: polygon(0 0, calc(100% - 1.5rem) 0, 100% 1.5rem, 100% 100%, 0 100%);
+}
+.note::before {
+  /* 접힌 귀(오른쪽 위): 종이 뒷면이 보인다 */
+  content: '';
+  position: absolute; right: 0; top: 0;
+  width: 1.5rem; height: 1.5rem;
+  background: linear-gradient(45deg, #d8c9a6, #ece2c9 70%);
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
+  z-index: 2;
+}
+.note-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: max(56px, 3.5rem);
+  padding: 0 1.9rem 0 1.05rem;
+  background: none;
+  border: 0;
+  text-align: left;
+}
+.note-head h2 { font-family: var(--f-title); font-weight: 800; font-size: 1.375rem; letter-spacing: -0.01em; }
+.note-head .fold { font-size: 1rem; font-weight: 700; color: var(--ink-3); }
+.crease {
+  /* 접힌 자국: 어두운 선 + 밝은 선 */
+  height: 2px;
+  margin: 0 0.6rem;
+  border-top: 1px solid rgba(90, 66, 36, 0.22);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.85);
+}
+.note-tabs { display: flex; gap: 0.25rem; padding: 0.45rem 0.6rem 0; }
+.note-tab {
+  flex: 1;
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  min-height: max(56px, 3.5rem);
+  padding: 0 0.6rem;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--ink-line);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.note-tab .n { font-weight: 500; }
+.note-tab.on { color: var(--ink); border-bottom: 3px solid var(--ink); }
+.mk { width: 0.8rem; height: 0.8rem; flex: none; border: 1.5px solid var(--ink); }
+.mk.must { background: var(--red); border-color: var(--red-deep); }
+.mk.extra { background: #fff; }
+.note-list { padding: 0.35rem 0.6rem 0; }
+.note-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: 0.7rem;
+  width: 100%;
+  min-height: max(60px, 3.75rem);
+  padding: 0.45rem 0.6rem;
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted rgba(31, 27, 22, 0.28);
+  text-align: left;
+}
+.note-row .tt { display: flex; flex-direction: column; gap: 0.12rem; }
+.note-row .title { font-family: var(--f-story); font-weight: 700; font-size: 1.25rem; line-height: 1.3; }
+.note-row .where { font-size: 1.125rem; font-weight: 700; color: var(--ink-3); }
+.note-row .go { font-size: 1.05rem; color: var(--red); }
+.note-row.on {
+  /* 화살표가 가리키는 줄: 가장 밝다 */
+  background: linear-gradient(#fffdf6, #fbf4e2);
+  box-shadow: var(--rim), 0 0 0 1px rgba(181, 51, 46, 0.35);
+  border-radius: 3px;
+}
+.note-tip { padding: 0.55rem 1.2rem 0.15rem; font-family: var(--f-story); font-size: 1.25rem; line-height: 1.5; color: var(--ink-2); }
+.note-lock {
+  display: flex; align-items: center; gap: 0.45rem;
+  margin: 0.55rem 0.6rem 0;
+  padding: 0.6rem 0.6rem 0.75rem;
+  border-top: 1px solid var(--ink-line);
+  font-size: 1.125rem; font-weight: 700; color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* 작은 지도 — 옛 지도 액자. 속은 맵 그림의 작은 지도(96×72 캔버스를 2배로) 그대로.
+   액자가 화면 가장자리에서 조금 물러나도록 작은 지도 그림을 따로 깔고, 액자 테가 원래 자리를 덮는다 */
+.minimap {
+  position: absolute;
+  right: 22px;
+  bottom: 22px;
+  width: 192px;
+  height: 144px;
+  border-radius: 1px;
+  background: url('../now/map-clean.jpg') -973px -531px / 1180px 690px no-repeat;
+  box-shadow:
+    0 0 0 4px var(--hanji-hi),
+    0 0 0 5px var(--gold-deep),
+    0 0 0 9px #4a3726,
+    0 0 0 10px rgba(255, 240, 215, 0.35),
+    0 3px 3px 10px rgba(30, 18, 8, 0.35),
+    0 18px 30px 6px rgba(30, 18, 8, 0.35);
+}
+.minimap .mm-title {
+  position: absolute;
+  left: 50%;
+  top: -1.95rem;
+  transform: translateX(-50%);
+  padding: 0.12rem 0.85rem 0.18rem;
+  background: var(--hanji-hi);
+  border: 1px solid rgba(31, 27, 22, 0.45);
+  box-shadow: var(--shadow-1);
+  font-family: var(--f-story);
+  font-weight: 700;
+  font-size: 1.0625rem;
+  white-space: nowrap;
+}
+
+/* 아래 쪽 글줄 — 계절 글(맵을 가리지 않는다) */
+.rfoot {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 3.11rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 6px 1.05rem 0;
+}
+.rfoot::before {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0;
+  height: 6px;
+  border-top: 2px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+.rfoot .when { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--f-title); font-weight: 800; font-size: 1.125rem; }
+.rfoot .when .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--season); box-shadow: 0 0 0 1px rgba(31,27,22,.35); }
+.rfoot p { font-family: var(--f-story); font-size: 1.25rem; color: var(--ink); }
+.rfoot .page-no { margin-left: auto; font-size: 0.875rem; font-weight: 700; letter-spacing: 0.12em; color: var(--ink-3); }
+
+/* ═════════════════════════════════════════════════════════════
+   화면 3 · 대화
+   ═════════════════════════════════════════════════════════════ */
+.k .rh-chapter {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-left: 1.1rem;
+  border-left: 1px solid var(--ink-line);
+  align-self: stretch;
+}
+.k .rh-chapter .seal { font-size: 0.9375rem; padding: 0.24rem 0.5rem 0.28rem; }
+.k .rh-chapter b { font-family: var(--f-title); font-weight: 800; font-size: 1.375rem; letter-spacing: -0.01em; }
+.k .stage { position: absolute; left: 0; right: 0; top: 4.5rem; bottom: 0; overflow: hidden; background: #6d7f56; }
+.k .scene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; }
+.k .shade {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(rgba(40, 25, 10, 0.30), rgba(40, 25, 10, 0) 4%),
+    linear-gradient(to top, rgba(30, 20, 10, 0.45), rgba(30, 20, 10, 0) 38%);
+}
+.k .cast img {
+  position: absolute;
+  bottom: -2%;
+  height: 92%;
+  width: auto;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 18px 18px rgba(20, 12, 6, 0.28));
+  transition: left 400ms var(--ease), filter 240ms var(--ease);
+}
+.k .cast .father { left: 27%; }
+.k .cast .mother { left: 73%; }
+.k .cast .quiet { filter: drop-shadow(0 18px 18px rgba(20, 12, 6, 0.28)) brightness(0.8) saturate(0.85); }
+.k .later {
+  position: absolute; left: 1rem; top: 1rem; z-index: 3;
+}
+
+/* 대사 창: 한지 두루마리 띠 */
+.scroll {
+  position: absolute;
+  left: 1.75rem; right: 1.75rem;
+  bottom: 1.1rem;
+  min-height: 9.2rem;
+  z-index: 3;
+  padding: 2.05rem 3.2rem 1.15rem;
+  color: var(--ink);
+  background-color: var(--hanji-hi);
+  background-image:
+    linear-gradient(90deg, rgba(110, 76, 40, 0.16), rgba(110, 76, 40, 0) 3.5%, rgba(110, 76, 40, 0) 96.5%, rgba(110, 76, 40, 0.16)),
+    linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 30%),
+    var(--tex);
+  background-size: auto, auto, 512px 512px;
+  background-blend-mode: normal, normal, multiply;
+  box-shadow: var(--shadow-3);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  text-align: left;
+  font: inherit;
+}
+.scroll::before {
+  /* 윗가장자리 금박 선 */
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0.55rem;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(168, 122, 18, 0), rgba(168, 122, 18, 0.65) 8%, rgba(168, 122, 18, 0.65) 92%, rgba(168, 122, 18, 0));
+}
+.rod {
+  position: absolute;
+  top: -0.7rem; bottom: -0.7rem;
+  width: 1.1rem;
+  border-radius: 0.55rem;
+  background: linear-gradient(90deg, #3c281a, #7a5537 30%, #b08458 48%, #80593a 70%, #3a2618);
+  box-shadow: 0 6px 10px -2px rgba(20, 12, 6, 0.45);
+}
+.rod.l { left: -0.65rem; }
+.rod.r { right: -0.65rem; }
+.rod::before, .rod::after {
+  content: '';
+  position: absolute; left: -0.18rem; right: -0.18rem;
+  height: 0.55rem;
+  border-radius: 0.3rem;
+  background: linear-gradient(90deg, #2a1c12, #5e412a 40%, #8a6442 55%, #2a1c12);
+}
+.rod::before { top: -0.3rem; }
+.rod::after { bottom: -0.3rem; }
+.scroll .seal {
+  position: absolute;
+  left: 2.3rem;
+  top: -1.05rem;
+  font-size: 1.25rem;
+  padding: 0.38rem 0.8rem 0.42rem;
+  transform: rotate(-2.2deg);
+}
+.scroll .line {
+  font-family: var(--f-story);
+  font-size: 1.5rem;
+  line-height: 1.72;
+  max-width: 44em;
+}
+.scroll .advance {
+  position: absolute;
+  right: 2.4rem;
+  bottom: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+kbd {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.6rem;
+  padding: 0.06rem 0.38rem 0.1rem;
+  border: 1px solid rgba(31, 27, 22, 0.38);
+  border-bottom-width: 2px;
+  border-radius: 0.25rem;
+  background: var(--hanji-hi);
+  font-family: var(--f-ui);
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: var(--ink-2);
+}
+.scroll .advance .tri { color: var(--red); font-size: 0.875rem; animation: bob 1.6s ease-in-out infinite; }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+
+/* 고르기: 선 사람이 비켜서고, 선택지가 가운데 */
+.k.choosing .cast .father { left: 13%; }
+.k.choosing .cast .mother { left: 88%; }
+.k .dim { position: absolute; inset: 0; background: rgba(28, 20, 12, 0.34); }
+.choices {
+  position: absolute;
+  left: 50%;
+  top: 20.5%;
+  transform: translateX(-50%);
+  width: 31.5rem;
+  z-index: 3;
+}
+.choices .ask {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 0.75rem;
+  padding: 0.4rem 0.75rem 0.45rem 0.9rem;
+  border-radius: 0.375rem;
+  /* 하늘 위에서도 글자 대비가 4.5:1을 넘게: 먹빛 판(잠깐 뜨는 층) */
+  background: rgba(31, 27, 22, 0.66);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 18px -10px rgba(0, 0, 0, 0.5);
+  color: var(--hanji-hi);
+}
+.choices .ask h2 { font-family: var(--f-title); font-weight: 800; font-size: 1.5rem; }
+.choices .ask p { font-size: 0.9375rem; font-weight: 700; display: inline-flex; gap: 0; align-items: center; }
+.choices .ask kbd { color: var(--ink-2); text-shadow: none; margin: 0 0.12rem; }
+.choices .ask kbd + kbd { margin-left: 0.3rem; }
+.choices ul { display: flex; flex-direction: column; gap: 0.85rem; }
+.choice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.95rem;
+  width: 100%;
+  min-height: max(64px, 4.1rem);
+  padding: 0.6rem 1.25rem 0.6rem 0.95rem;
+  text-align: left;
+  border: 1px solid rgba(31, 27, 22, 0.35);
+  border-radius: 0.375rem;
+  background: linear-gradient(#fdfaf2, #f1e9d7);
+  box-shadow: var(--rim), 0 2px 0 rgba(90, 66, 36, 0.35), var(--shadow-2);
+  overflow: hidden;
+}
+.choice .num {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2.05rem; height: 2.05rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--red);
+  color: var(--red);
+  font-family: var(--f-title);
+  font-weight: 800;
+  font-size: 1.125rem;
+}
+.choice .label { font-family: var(--f-story); font-weight: 700; font-size: 1.375rem; line-height: 1.35; }
+/* 초점이 간 선택지: 가장 밝고, 아래 금박 선에 빛이 흐른다 */
+.choice.focus {
+  background: linear-gradient(#fffdf7, #f8f1e1);
+  outline: 3px solid var(--blue);
+  outline-offset: 3px;
+}
+.choice.focus .num { background: var(--red); color: var(--hanji-hi); }
+.choice.focus .gold { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
+.scroll.still { min-height: 7.2rem; }
+
+/* ═════════════════════════════════════════════════════════════
+   화면 4 · 한 해 돌아보기
+   ═════════════════════════════════════════════════════════════ */
+.r .scene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(0.7); }
+.r .veil { position: absolute; inset: 0; background: linear-gradient(rgba(236, 228, 210, 0.55), rgba(70, 60, 50, 0.35)); }
+.r .page {
+  position: absolute;
+  left: 2.1rem; right: 2.1rem;
+  top: 1.1rem; bottom: 1.1rem;
+  padding: 1.45rem 2.5rem 0;
+  box-shadow: var(--shadow-3);
+}
+.r .page::before {
+  /* 지면 안쪽 가는 테(서책의 광곽) */
+  content: '';
+  position: absolute; inset: 0.6rem;
+  border: 1px solid rgba(31, 27, 22, 0.18);
+  pointer-events: none;
+}
+.r .pg-head { display: grid; grid-template-columns: 1fr auto; align-items: end; column-gap: 2rem; }
+.r .kicker { font-size: 0.9375rem; font-weight: 700; letter-spacing: 0.06em; color: var(--ink-3); }
+.r h1 { font-family: var(--f-title); font-weight: 800; font-size: 2.375rem; letter-spacing: -0.035em; line-height: 1.15; margin-top: 0.2rem; }
+.r .steps { display: flex; align-items: center; gap: 0.5rem; padding-bottom: 0.35rem; }
+.r .steps li { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 1rem; font-weight: 700; color: var(--ink-3); }
+.r .steps .n {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.9rem; height: 1.9rem; border-radius: 50%;
+  border: 1.5px dashed rgba(31, 27, 22, 0.45);
+  font-family: var(--f-title); font-weight: 800; font-size: 1rem;
+}
+.r .steps .now { color: var(--ink); }
+.r .steps .now .n { border: 0; background: var(--red); color: var(--hanji-hi); }
+.r .steps .gap { width: 0.9rem; height: 1px; background: var(--ink-line); }
+.r .pg-rule { margin-top: 0.7rem; }
+.r .preface-row { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 2.5rem; margin-top: 0.85rem; }
+.r .preface { font-family: var(--f-story); font-size: 1.3125rem; line-height: 1.62; color: var(--ink); }
+.r .dropcap {
+  float: left;
+  margin: 0.28rem 0.6rem 0 0;
+  font-family: var(--f-title);
+  font-weight: 800;
+  font-size: 3.4rem;
+  line-height: 0.9;
+  color: var(--red);
+}
+.r .legend { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.9375rem; font-weight: 700; color: var(--ink-3); white-space: nowrap; }
+.r .legend span { display: inline-flex; gap: 0.45rem; align-items: baseline; }
+.r .legend .k1 { font-family: var(--f-ui); font-weight: 800; color: var(--ink); }
+
+/* 네 계절: 왼쪽에서 오른쪽으로 흐르는 한 해. 칸의 너비가 저마다 다르고, 칸 사이는 먹선(상자가 아니다) */
+.r .year {
+  display: grid;
+  grid-template-columns: 0.86fr 1.16fr 1.1fr 0.92fr;
+  margin-top: 0.95rem;
+  border-top: 1px solid var(--ink);
+}
+.r .sz { position: relative; padding: 0.9rem 1.15rem 0.5rem; border-left: 1px solid var(--ink-line); }
+.r .sz:first-child { padding-left: 0; border-left: 0; }
+.r .sz:last-child { padding-right: 0; }
+.r .plate4 { margin: 0 0 0.5rem; }
+.r .plate4 svg { display: block; width: 8.4rem; height: 6rem; }
+.r .plate4 figcaption { margin-top: 0.15rem; font-size: 0.875rem; font-weight: 700; color: var(--ink-3); }
+.r .plate4 figcaption b { color: var(--red); font-weight: 800; margin-right: 0.25rem; }
+.r .sz h2 { display: flex; align-items: center; gap: 0.5rem; font-family: var(--f-title); font-weight: 800; font-size: 1.625rem; line-height: 1.1; }
+.r .sz h2 .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--season); box-shadow: 0 0 0 1px rgba(31,27,22,.35); }
+.r .sz h2::after { content: ''; flex: 1; height: 2px; margin-left: 0.3rem; background: linear-gradient(90deg, var(--season), rgba(0,0,0,0) 85%); }
+.r .wx { margin-top: 0.35rem; font-size: 1rem; font-weight: 500; color: var(--ink-3); }
+.r .wx b { color: var(--ink); font-weight: 800; }
+.r .picks { margin-top: 0.5rem; }
+.r .picks li { position: relative; padding-left: 0.95rem; font-family: var(--f-story); font-weight: 700; font-size: 1.25rem; line-height: 1.5; }
+.r .picks li + li { margin-top: 0.3rem; }
+.r .picks li::before { content: ''; position: absolute; left: 0.1rem; top: 0.7em; width: 0.32rem; height: 0.32rem; border-radius: 50%; background: var(--ink); }
+.r .quote {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0 0.55rem;
+  border-top: 1px solid var(--ink-2);
+  border-bottom: 1px solid var(--ink-2);
+  font-family: var(--f-story);
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+.r .quote .ar { flex: none; font-family: var(--f-ui); font-weight: 800; }
+.r .quote .val { display: inline-block; margin-left: 0.15rem; padding: 0 0.4rem; border: 1px solid var(--ink-2); border-radius: 0.25rem; font-family: var(--f-ui); font-size: 0.9375rem; font-weight: 800; line-height: 1.5; white-space: nowrap; }
+.r .side { margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px dotted rgba(31, 27, 22, 0.4); font-family: var(--f-story); font-size: 1.25rem; line-height: 1.5; color: var(--ink-2); }
+.r .side b { color: var(--ink); }
+.r .pg-foot {
+  position: absolute;
+  left: 2.5rem; right: 2.5rem; bottom: 1.05rem;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.r .saved { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 1.0625rem; font-weight: 700; color: var(--ink-3); }
+.r .next { min-width: 9rem; font-size: 1.25rem; }
+
+/* 움직임 줄이기: 흐르는 빛과 까딱임을 멈춘다 */
+@media (prefers-reduced-motion: reduce) {
+  .gold::after { animation: none; transform: translateX(160%); }
+  .scroll .advance .tri { animation: none; }
+  .k .cast img { transition: none; }
+}
+
+/* ═════════════════════════════════════════════════════════════
+   시안 소개 쪽(찍을 때는 숨는다)
+   ═════════════════════════════════════════════════════════════ */
+html:not(.solo) body {
+  background-color: #dcd2bd;
+  background-image: var(--tex);
+  background-size: 512px 512px;
+  background-blend-mode: multiply;
+}
+.doc-wrap { width: 1180px; margin: 0 auto; padding: 48px 0 96px; }
+.intro { padding: 0 4px 40px; }
+.intro .tag { font-size: 14px; font-weight: 800; letter-spacing: 0.18em; color: var(--red); }
+.intro h1 { font-family: var(--f-title); font-weight: 800; font-size: 56px; letter-spacing: -0.04em; line-height: 1.1; margin-top: 6px; }
+.intro .one { font-family: var(--f-story); font-size: 22px; line-height: 1.7; margin-top: 12px; max-width: 760px; }
+.intro .gold { width: 220px; margin-top: 18px; }
+.intro-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; margin-top: 28px; }
+.intro h2 { font-size: 13px; font-weight: 800; letter-spacing: 0.18em; color: var(--ink-3); margin-bottom: 10px; }
+.intro dl.style { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 16px; }
+.intro dl.style dt { font-weight: 800; }
+.chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.chip { border: 1px solid rgba(31,27,22,.18); background: var(--hanji-hi); box-shadow: var(--shadow-1); }
+.chip i { display: block; height: 46px; }
+.chip p { padding: 6px 8px 8px; font-size: 12.5px; line-height: 1.35; color: var(--ink-2); }
+.chip p b { display: block; font-size: 13.5px; color: var(--ink); }
+.fonts p { display: grid; grid-template-columns: 150px 1fr; align-items: baseline; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--ink-line); }
+.fonts p span:first-child { font-size: 12.5px; font-weight: 800; color: var(--ink-3); }
+.states { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 14px; font-size: 17px; }
+.states figure { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.states figcaption { font-size: 12px; font-weight: 700; color: var(--ink-3); }
+.states .btn { font-size: 17px; min-height: 56px; }
+.shotbox { margin: 0 0 18px; box-shadow: 0 2px 4px rgba(40,25,10,.2), 0 30px 60px -30px rgba(40,25,10,.5); }
+.cap { display: grid; grid-template-columns: 220px 1fr; gap: 24px; padding: 8px 4px 64px; }
+.cap h3 { font-family: var(--f-title); font-weight: 800; font-size: 24px; line-height: 1.2; }
+.cap h3 small { display: block; font-family: var(--f-ui); font-size: 13px; letter-spacing: .14em; color: var(--red); margin-bottom: 4px; }
+.cap ul { font-size: 16px; line-height: 1.65; color: var(--ink-2); }
+.cap li { padding-left: 24px; position: relative; }
+.cap li::before { content: '—'; position: absolute; left: 0; color: var(--ink-3); }
+.extra-fig { display: flex; gap: 24px; align-items: flex-start; margin: -40px 4px 64px; }
+.extra-fig .clip { position: relative; width: 470px; height: 120px; overflow: hidden; background: #86a95a url('../now/map-clean.jpg') left top / 1180px 690px; box-shadow: var(--shadow-2); }
+.extra-fig .clip .note { font-size: 17.0833px; }
+.extra-fig p { font-size: 15px; line-height: 1.6; color: var(--ink-2); max-width: 460px; }
+.extra-fig p b { color: var(--ink); }
+.note.shut .note-head { min-height: 64px; }
+.note.shut .going { display: block; font-family: var(--f-story); font-weight: 700; font-size: 19px; color: var(--ink-2); margin-top: 2px; }
+</style>
+</head>
+<body class="paper-page">
+
+<!-- 공용 정의: 먹 번짐 가장자리(도장), 계절 삽화에 쓰는 매화 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="ink-edge" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="2" seed="7" result="n" />
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.6" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+    <symbol id="plum" viewBox="-6 -6 12 12">
+      <g fill="#f2dcd5" stroke="#3a342d" stroke-width="0.7">
+        <circle cx="0" cy="-3" r="2.5" /><circle cx="2.85" cy="-0.93" r="2.5" /><circle cx="1.76" cy="2.43" r="2.5" /><circle cx="-1.76" cy="2.43" r="2.5" /><circle cx="-2.85" cy="-0.93" r="2.5" />
+      </g>
+      <circle r="1.05" fill="#b5332e" />
+    </symbol>
+    <symbol id="sun" viewBox="0 0 32 32">
+      <g stroke="#3a342d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="16" cy="16" r="6.5" fill="#e9b13f" />
+        <path d="M16 3 V6.5 M16 25.5 V29 M3 16 H6.5 M25.5 16 H29 M6.8 6.8 L9.3 9.3 M22.7 22.7 L25.2 25.2 M25.2 6.8 L22.7 9.3 M9.3 22.7 L6.8 25.2" fill="none" />
+      </g>
+    </symbol>
+    <symbol id="lock" viewBox="0 0 32 32">
+      <g stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 15 V11 a6 6 0 0 1 12 0 V15" fill="none" />
+        <rect x="7" y="15" width="18" height="12" rx="2.5" fill="currentColor" fill-opacity="0.15" />
+        <path d="M16 19.5 V23" fill="none" />
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="doc-wrap">
+
+  <!-- ── 시안 소개 ───────────────────────────────────────── -->
+  <header class="intro doc">
+    <p class="tag">디자인 시안 A</p>
+    <h1>한지 서책</h1>
+    <p class="one">잘 엮은 옛 서책을 한 장씩 넘기듯, 1395년 느티골의 한 해를 읽고 고른다.</p>
+    <div class="gold"></div>
+    <div class="intro-grid">
+      <div>
+        <h2>스타일</h2>
+        <dl class="style">
+          <dt>주</dt><dd>에디토리얼·헤리티지 — 박물관·고서의 품격, 차분함</dd>
+          <dt>보조</dt><dd>없음(한 스타일만)</dd>
+          <dt>빛</dt><dd>박물관 조명 — 위에서 내리는 따뜻한 빛, 떠 있는 종이, 금박 선에 9초마다 한 번 빛</dd>
+        </dl>
+        <h2 style="margin-top:22px">색 견본 <span style="font-weight:500;letter-spacing:0">(한지 #f4eee2 위의 대비)</span></h2>
+        <div class="chips">
+          <div class="chip"><i style="background:#f4eee2"></i><p><b>한지</b>#f4eee2 · 바탕</p></div>
+          <div class="chip"><i style="background:#ece3cf"></i><p><b>한지 2</b>#ece3cf · 칸</p></div>
+          <div class="chip"><i style="background:#1f1b16"></i><p><b>먹</b>#1f1b16 · 14.8:1</p></div>
+          <div class="chip"><i style="background:#5a5249"></i><p><b>먹 3</b>#5a5249 · 6.6:1</p></div>
+          <div class="chip"><i style="background:#b5332e"></i><p><b>주홍</b>#b5332e · 5.2:1 · 위 글 5.7:1</p></div>
+          <div class="chip"><i style="background:#2f5d8a"></i><p><b>청</b>#2f5d8a · 6.0:1 · 초점</p></div>
+          <div class="chip"><i style="background:linear-gradient(90deg,#a87a12,#e7c254,#c79320)"></i><p><b>황(금박)</b>#d9a521 · 선에만</p></div>
+          <div class="chip"><i style="background:linear-gradient(90deg,#7fa650 25%,#2f8a76 25% 50%,#c07f24 50% 75%,#64809c 75%)"></i><p><b>계절</b>봄·여름·가을·겨울 · 점과 선에만</p></div>
+        </div>
+      </div>
+      <div>
+        <h2>글꼴 견본(한 화면에 셋까지)</h2>
+        <div class="fonts">
+          <p><span>제목 · Hahmlet 800</span><span style="font-family:var(--f-title);font-weight:800;font-size:34px;letter-spacing:-.04em">조선에서 한 해 살기</span></p>
+          <p><span>이야기 · Gowun Batang</span><span style="font-family:var(--f-story);font-size:22px;line-height:1.7">우리 논에 물이 찰랑인다. 볍씨 자루를 멘 아버지가 기다리신다.</span></p>
+          <p><span>정보·단추 · Gothic A1</span><span style="font-family:var(--f-ui);font-weight:700;font-size:19px">살림 4 · 기력 6 · 인심 5 · 해 3/3</span></p>
+        </div>
+        <h2 style="margin-top:22px">단추의 모습</h2>
+        <div class="states">
+          <figure><button type="button" class="btn btn-red">다음 ▶</button><figcaption>주 단추(주홍)</figcaption></figure>
+          <figure><button type="button" class="btn btn-paper">봇짐</button><figcaption>종이 단추</figcaption></figure>
+          <figure><button type="button" class="btn btn-paper" style="transform:translateY(2px);box-shadow:var(--rim),0 0 0 rgba(0,0,0,0),0 3px 8px -6px rgba(60,40,20,.4)">봇짐</button><figcaption>누름(2px 내려앉음)</figcaption></figure>
+          <figure><button type="button" class="btn btn-paper" style="outline:3px solid var(--blue);outline-offset:3px">봇짐</button><figcaption>초점(청)</figcaption></figure>
+          <figure><button type="button" class="btn locked" aria-disabled="true"><svg class="ico"><use href="#lock"/></svg>봄을 보낸다</button><figcaption>잠김(점선·자물쇠)</figcaption></figure>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══ 화면 1 · 제목 ══════════════════════════════════════ -->
+  <div class="frame shotbox" data-s="title">
+    <main class="scr t paper" aria-label="제목">
+      <header class="mast">
+        <p class="mast-line"><span class="ed">제3판</span><span>1395년 느티골</span><span>봄 · 여름 · 가을 · 겨울</span></p>
+        <div class="rule2"></div>
+      </header>
+
+      <figure class="plate">
+        <img src="../assets/bg-title-dawn-1376.jpg" alt="이른 봄 아침, 해가 산 너머에서 떠오르는 느티골 어귀. 오른쪽에 큰 느티나무가 서 있다.">
+        <figcaption><b>그림 1</b>1395년 봄, 느티골 어귀의 이른 아침 <span class="src">· AI(제미나이)로 만든 그림</span></figcaption>
+      </figure>
+
+      <p class="vstrip">조선 시대 마을 느티골 이야기</p>
+
+      <div class="head">
+        <h1>조선에서<br>한 해 살기</h1>
+        <div class="gold" aria-hidden="true"></div>
+      </div>
+
+      <div class="below">
+        <p class="lead">그때 사람이 되어 봄, 여름, 가을, 겨울을 살아 보아요. 내가 고르는 대로 한 해가 흘러가요.</p>
+        <div class="acts">
+          <button type="button" class="btn btn-red resume">
+            <span class="b"><span class="b-main">이어 하기</span><span class="b-sub">1395년 여름 · 농민 집 아이</span></span>
+            <span class="go" aria-hidden="true">▶</span>
+          </button>
+          <button type="button" class="btn btn-paper restart">처음부터</button>
+        </div>
+        <div class="side">
+          <p class="soon-head">곧 열려요</p>
+          <dl class="toc">
+            <div><dt>수첩</dt><span class="dots" aria-hidden="true"></span><dd><svg class="ico" style="width:1em;height:1em"><use href="#lock"/></svg>준비 중</dd></div>
+            <div><dt>선생님 자료</dt><span class="dots" aria-hidden="true"></span><dd><svg class="ico" style="width:1em;height:1em"><use href="#lock"/></svg>준비 중</dd></div>
+          </dl>
+          <div class="smalls">
+            <button type="button" class="btn btn-quiet">모두 지우고 처음부터</button>
+            <button type="button" class="btn btn-quiet">홈 화면에 추가</button>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="colophon" aria-label="판 20261111-2e1f6db. 이 기기의 정보 보기">판 20261111-2e1f6db · 이 기기</button>
+    </main>
+  </div>
+  <div class="cap doc">
+    <h3><small>화면 1</small>제목</h3>
+    <ul>
+      <li>그림의 빈 하늘이 한지로 스며들고, 그 자리에 제목(Hahmlet)과 금박 선이 앉는다. 그림에는 번호·설명·출처를 단다.</li>
+      <li>위에 이중선 마스트헤드 한 줄, 왼쪽에 제첨처럼 붙인 세로쓰기 띠(주홍 가는 선).</li>
+      <li>단추는 엄지가 닿는 아래로: 주홍 “이어 하기”(하던 이야기 한 줄) → 종이 “처음부터”.</li>
+      <li>“준비 중” 둘은 단추가 아니라 목차 줄(점선 이음 + 자물쇠)로 — 첫 화면이 덜 어지럽다. 작은 일 둘은 밑줄 글 단추, 판 번호는 판권처럼 맨 아래.</li>
+    </ul>
+  </div>
+
+  <!-- ══ 화면 2 · 맵 ════════════════════════════════════════ -->
+  <div class="frame shotbox" data-s="map">
+    <main class="scr m season-spring" aria-label="맵">
+      <header class="rhead paper">
+        <span class="rh-season"><span class="dot" aria-hidden="true"></span>봄</span>
+        <span class="rh-where"><b>1395년 느티골</b><span>농민 집 아이</span></span>
+        <span class="rh-sep" aria-hidden="true"></span>
+        <dl class="rh-stats">
+          <div class="rh-stat" role="img" aria-label="살림 4, 가장 많으면 10"><dt>살림</dt><dd>4</dd><span class="cells" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+          <div class="rh-stat" role="img" aria-label="기력 6, 가장 많으면 10"><dt>기력</dt><dd>6</dd><span class="cells" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></span></div>
+          <div class="rh-stat" role="img" aria-label="인심 5, 가장 많으면 10"><dt>인심</dt><dd>5</dd><span class="cells" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></span></div>
+        </dl>
+        <span class="rh-sep" aria-hidden="true"></span>
+        <dl class="rh-sun" role="img" aria-label="남은 해 3, 이 계절의 해 3"><dt>해</dt><dd>3<small>/3</small></dd><span class="suns" aria-hidden="true"><svg><use href="#sun"/></svg><svg><use href="#sun"/></svg><svg><use href="#sun"/></svg></span></dl>
+        <nav class="rh-tools" aria-label="도구">
+          <button type="button" class="btn btn-paper">지난 이야기</button>
+          <button type="button" class="btn btn-paper">봇짐</button>
+          <button type="button" class="btn locked" aria-disabled="true"><svg class="ico"><use href="#lock"/></svg>봄을 보낸다</button>
+          <button type="button" class="btn btn-quiet">처음으로</button>
+        </nav>
+      </header>
+
+      <div class="stage">
+        <aside class="note" aria-label="할 일 쪽지"><div class="note-paper paper">
+          <button type="button" class="note-head" aria-expanded="true"><h2>봄에 할 일</h2><span class="fold">접기 ▲</span></button>
+          <div class="crease" aria-hidden="true"></div>
+          <div class="note-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected="true" class="note-tab on"><span class="mk must" aria-hidden="true"></span>꼭 할 일 <span class="n">둘 남음</span></button>
+            <button type="button" role="tab" aria-selected="false" class="note-tab"><span class="mk extra" aria-hidden="true"></span>덤 <span class="n">4가지</span></button>
+          </div>
+          <ul class="note-list">
+            <li><button type="button" class="note-row on" aria-pressed="true"><span class="mk must" aria-hidden="true"></span><span class="tt"><span class="title">돌아온 사람들, 떠나는 스님들</span><span class="where">마을 어귀 느티나무</span></span><span class="go" aria-hidden="true">➤</span></button></li>
+            <li><button type="button" class="note-row" aria-pressed="false"><span class="mk must" aria-hidden="true"></span><span class="tt"><span class="title">볍씨 뿌리기</span><span class="where">우리 논</span></span><span></span></button></li>
+          </ul>
+          <p class="note-tip">줄을 누르면 화살표가 길을 알려 줘요.</p>
+          <p class="note-lock"><svg class="ico"><use href="#lock"/></svg>꼭 할 일을 마치면 봄을 보낼 수 있어요</p>
+        </div></aside>
+
+        <div class="minimap" role="img" aria-label="작은 지도. 가 본 곳이 채워져요."><p class="mm-title">마을 안</p></div>
+      </div>
+
+      <footer class="rfoot paper">
+        <span class="when"><span class="dot" aria-hidden="true"></span>봄</span>
+        <p>이월, 얼었던 땅이 풀리고 궁궐 공사에 갔던 이웃이 돌아왔다.</p>
+      </footer>
+    </main>
+  </div>
+  <div class="cap doc">
+    <h3><small>화면 2</small>맵</h3>
+    <ul>
+      <li>위 띠는 한 줄의 지면 머리: 계절(계절 색 밑줄) · 곳과 역할 · 정보표 꼴의 살림·기력·인심(이름 + 숫자 + 가는 칸) · 해 ☀ · 단추 넷. 아래를 이중선으로 마감한다.</li>
+      <li>계절 글은 맵 위 상자에서 맨 아래 “쪽 글줄”로 내렸다 — 맵(도트)을 가리지 않는다. 머리와 글줄이 맵을 위아래로 묶어 한 쪽의 그림처럼 보인다.</li>
+      <li>할 일 쪽지는 접은 서첩(접힌 자국·접은 귀·떠 있는 그림자). 화살표가 가리키는 줄이 가장 밝다. “봄을 보낸다”의 잠긴 까닭은 쪽지 맨 아래에.</li>
+      <li>작은 지도는 한지 매트 + 금박 + 나무 테의 옛 지도 액자, 위에 이름표. 맵 그림 자체는 그대로(1180×690, 늘이지 않음).</li>
+    </ul>
+  </div>
+  <div class="extra-fig doc">
+    <div class="clip">
+      <aside class="note shut" style="left:16px;top:16px;width:400px"><div class="note-paper paper">
+        <button type="button" class="note-head" aria-expanded="false"><span><h2>봄에 할 일</h2><span class="going">➤ 돌아온 사람들, 떠나는 스님들</span></span><span class="fold">펴기 ▼</span></button>
+      </div></aside>
+    </div>
+    <p><b>접은 꼴</b> — 쪽지를 접으면 머리 한 줄과 “화살표가 가리키는 일” 한 줄만 남는다(지금 게임의 접힌 꼴과 같은 내용). 접은 귀와 떠 있는 그림자는 그대로.</p>
+  </div>
+
+  <!-- ══ 화면 3 · 대화(말하는 때) ═════════════════════════════ -->
+  <div class="frame shotbox" data-s="talk">
+    <main class="scr k season-spring" aria-label="대화 장면">
+      <header class="rhead paper">
+        <span class="rh-season"><span class="dot" aria-hidden="true"></span>봄</span>
+        <span class="rh-where"><b>1395년 느티골</b><span>농민 집 아이</span></span>
+        <span class="rh-sep" aria-hidden="true"></span>
+        <dl class="rh-stats">
+          <div class="rh-stat"><dt>살림</dt><dd>4</dd><span class="cells" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+          <div class="rh-stat"><dt>기력</dt><dd>6</dd><span class="cells" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></span></div>
+          <div class="rh-stat"><dt>인심</dt><dd>5</dd><span class="cells" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></span></div>
+        </dl>
+        <span class="rh-sep" aria-hidden="true"></span>
+        <dl class="rh-sun"><dt>해</dt><dd>3<small>/3</small></dd><span class="suns" aria-hidden="true"><svg><use href="#sun"/></svg><svg><use href="#sun"/></svg><svg><use href="#sun"/></svg></span></dl>
+        <p class="rh-chapter"><span class="seal">꼭 할 일</span><b>볍씨 뿌리기</b></p>
+      </header>
+
+      <div class="stage">
+        <img class="scene" src="../../../src/assets/pictures/bg/s1395/paddy-spring.jpg" alt="">
+        <div class="shade"></div>
+        <div class="cast">
+          <img class="father" src="../../../src/assets/pictures/char/s1395/father-plain.webp" alt="아버지">
+          <img class="mother quiet" src="../../../src/assets/pictures/char/s1395/mother-plain.webp" alt="어머니">
+        </div>
+        <button type="button" class="btn btn-paper later"><span aria-hidden="true">←</span> 나중에 할게요</button>
+
+        <button type="button" class="scroll says" aria-label="아버지: 냇가 낮은 논은 물 대기가 쉬워 벼가 잘된다. 다 거기 뿌릴까 싶다. 누르면 넘어가요." style="text-align:left;border:0;width:auto">
+          <span class="rod l" aria-hidden="true"></span><span class="rod r" aria-hidden="true"></span>
+          <span class="seal">아버지</span>
+          <span class="line" style="display:block">냇가 낮은 논은 물 대기가 쉬워 벼가 잘된다. 다 거기 뿌릴까 싶다.</span>
+          <span class="advance" aria-hidden="true">누르면 넘어가요 <kbd>→</kbd><kbd>Space</kbd> <span class="tri">▼</span></span>
+        </button>
+      </div>
+    </main>
+  </div>
+  <div class="cap doc">
+    <h3><small>화면 3</small>대화 — 말하는 때</h3>
+    <ul>
+      <li>위 띠가 검은 띠로 바뀌지 않는다: 맵과 같은 한지 지면 머리에서 단추만 빠지고, 그 자리에 이 일의 장 제목(“꼭 할 일” 도장 + 볍씨 뿌리기)이 선다 — 떠 있던 표시가 머리에 묶였다.</li>
+      <li>대사 창은 양 끝에 나무 축이 달린 한지 두루마리 띠, 이야기 글은 Gowun Batang 25px·줄 간격 1.72. 말하는 사람은 주홍 낙관(도장)으로 창 위 가장자리에 찍힌다. 말하지 않는 사람은 조금 어두워진다.</li>
+      <li>“다음 ▼” 대신 오른쪽 아래 귀퉁이에 “누르면 넘어가요 → Space ▼” — 화면 어디를 눌러도·→·Space·Enter로 넘어간다는 것을 보인다. 처음 몇 창만 글로 보이고, 그다음은 ▼만 남긴다.</li>
+    </ul>
+  </div>
+
+  <!-- ══ 화면 3-2 · 대화(고르는 때) ═══════════════════════════ -->
+  <div class="frame shotbox" data-s="choose">
+    <main class="scr k choosing season-spring" aria-label="대화 장면 — 고르기">
+      <header class="rhead paper">
+        <span class="rh-season"><span class="dot" aria-hidden="true"></span>봄</span>
+        <span class="rh-where"><b>1395년 느티골</b><span>농민 집 아이</span></span>
+        <span class="rh-sep" aria-hidden="true"></span>
+        <dl class="rh-stats">
+          <div class="rh-stat"><dt>살림</dt><dd>4</dd><span class="cells" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+          <div class="rh-stat"><dt>기력</dt><dd>6</dd><span class="cells" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></span></div>
+          <div class="rh-stat"><dt>인심</dt><dd>5</dd><span class="cells" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></span></div>
+        </dl>
+        <span class="rh-sep" aria-hidden="true"></span>
+        <dl class="rh-sun"><dt>해</dt><dd>3<small>/3</small></dd><span class="suns" aria-hidden="true"><svg><use href="#sun"/></svg><svg><use href="#sun"/></svg><svg><use href="#sun"/></svg></span></dl>
+        <p class="rh-chapter"><span class="seal">꼭 할 일</span><b>볍씨 뿌리기</b></p>
+      </header>
+
+      <div class="stage">
+        <img class="scene" src="../../../src/assets/pictures/bg/s1395/paddy-spring.jpg" alt="">
+        <div class="shade"></div>
+        <div class="cast">
+          <img class="father" src="../../../src/assets/pictures/char/s1395/father-plain.webp" alt="아버지">
+          <img class="mother quiet" src="../../../src/assets/pictures/char/s1395/mother-plain.webp" alt="어머니">
+        </div>
+        <div class="dim"></div>
+        <button type="button" class="btn btn-paper later"><span aria-hidden="true">←</span> 나중에 할게요</button>
+
+        <div class="choices">
+          <div class="ask"><h2>어떻게 할까요?</h2><p><kbd>↑</kbd><kbd>↓</kbd>로 고르고&nbsp;<kbd>Enter</kbd>로 정해요</p></div>
+          <ul aria-label="어떻게 할까요? 화살표로 고르고 Enter로 정해요.">
+            <li><button type="button" class="choice focus"><span class="num">1</span><span class="label">낮은 논에 몰아 뿌린다</span><span class="gold" aria-hidden="true"></span></button></li>
+            <li><button type="button" class="choice"><span class="num">2</span><span class="label">높은 논에도 나눠 뿌린다</span></button></li>
+          </ul>
+        </div>
+
+        <div class="scroll still">
+          <span class="rod l" aria-hidden="true"></span><span class="rod r" aria-hidden="true"></span>
+          <span class="seal">아버지</span>
+          <p class="line">높은 논은 물 대기가 힘들어 덜 거두는데… 네 생각은 어떠냐?</p>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div class="cap doc">
+    <h3><small>화면 3-2</small>대화 — 고르는 때</h3>
+    <ul>
+      <li>선 사람이 양옆으로 비켜서고 장면이 어두워진다. 선택지는 가운데의 종이 쪽지 둘: 주홍 번호 + 이야기 글꼴. 마지막 말은 두루마리에 남는다.</li>
+      <li>초점이 간 선택지가 가장 밝다: 청 초점 테 + 번호가 주홍으로 차고, 아래 금박 선에 빛이 흐른다(이 화면의 한 곳). 자판으로 왔을 때만 “↑↓로 고르고 Enter로 정해요”가 뜬다.</li>
+      <li>“← 나중에 할게요”는 그대로 왼쪽 위 — 고르기 전에는 언제든 맵으로 돌아간다.</li>
+    </ul>
+  </div>
+
+  <!-- ══ 화면 4 · 한 해 돌아보기 ══════════════════════════════ -->
+  <div class="frame shotbox" data-s="review">
+    <main class="scr r season-winter" aria-label="한 해 돌아보기">
+      <img class="scene" src="../../../src/assets/pictures/bg/s1395/entrance-winter.jpg" alt="">
+      <div class="veil"></div>
+      <article class="page paper">
+        <header class="pg-head">
+          <div>
+            <p class="kicker">1395년 느티골 · 농민 집 아이 · 한 해 돌아보기</p>
+            <h1>네 계절에 고른 것</h1>
+          </div>
+          <ol class="steps" aria-label="4장 가운데 1장째: 네 계절">
+            <li class="now"><span class="n">1</span>네 계절</li>
+            <li class="gap" aria-hidden="true"></li>
+            <li><span class="n">2</span></li>
+            <li class="gap" aria-hidden="true"></li>
+            <li><span class="n">3</span></li>
+            <li class="gap" aria-hidden="true"></li>
+            <li><span class="n">4</span></li>
+          </ol>
+        </header>
+        <div class="gold pg-rule" aria-hidden="true"></div>
+
+        <div class="preface-row">
+          <p class="preface"><span class="dropcap">봄</span>부터 겨울까지, 느티골에서 한 해를 끝까지 살았어요.<br>계절마다 내가 고른 것을 한 장에 모아 보았어요.</p>
+          <p class="legend"><span><span class="k1">·</span>내가 고른 것</span><span><span class="k1">→</span>계절의 끝에 생긴 일</span></p>
+        </div>
+
+        <div class="year">
+          <section class="sz season-spring" aria-label="봄에 고른 것">
+            <figure class="plate4">
+              <svg viewBox="0 0 140 100" aria-hidden="true">
+                <defs><linearGradient id="hill-sp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c3d3a0" stop-opacity=".75" /><stop offset="1" stop-color="#c3d3a0" stop-opacity="0" /></linearGradient></defs>
+                <path d="M0 82 Q22 64 46 74 Q70 54 96 68 Q118 58 140 66 V100 H0Z" fill="url(#hill-sp)" />
+                <path d="M0 82 Q22 64 46 74 Q70 54 96 68 Q118 58 140 66" fill="none" stroke="#5a5249" stroke-width="1.3" />
+                <g fill="none" stroke="#3a342d" stroke-linecap="round">
+                  <path d="M6 98 C26 84 40 74 56 60 C68 48 84 40 102 26 C112 18 122 13 134 10" stroke-width="2.6" />
+                  <path d="M56 60 C60 50 62 42 60 32" stroke-width="1.8" />
+                  <path d="M86 38 C94 42 104 44 116 42" stroke-width="1.7" />
+                  <path d="M36 76 C42 70 46 64 46 56" stroke-width="1.6" />
+                </g>
+                <use href="#plum" x="53" y="24" width="15" height="15" />
+                <use href="#plum" x="95" y="15" width="14" height="14" />
+                <use href="#plum" x="109" y="34" width="15" height="15" />
+                <use href="#plum" x="39" y="47" width="14" height="14" />
+                <use href="#plum" x="72" y="37" width="13" height="13" />
+                <use href="#plum" x="125" y="2" width="12" height="12" />
+                <g fill="#c4564f" stroke="#3a342d" stroke-width=".7"><circle cx="66" cy="50" r="2" /><circle cx="90" cy="34" r="1.9" /><circle cx="118" cy="20" r="1.7" /></g>
+              </svg>
+              <figcaption><b>그림 2</b>매화 가지</figcaption>
+            </figure>
+            <h2><span class="dot" aria-hidden="true"></span>봄</h2>
+            <ul class="picks">
+              <li>돌아온 집의 밀린 논갈이를 거든다</li>
+              <li>낮은 논에 몰아 뿌린다</li>
+            </ul>
+          </section>
+
+          <section class="sz season-summer" aria-label="여름에 고른 것">
+            <figure class="plate4">
+              <svg viewBox="0 0 140 100" aria-hidden="true">
+                <path d="M6 74 Q18 58 70 58 Q126 58 134 74 Q124 92 70 92 Q14 92 6 74Z" fill="#cfe1d8" stroke="#3a342d" stroke-width="1.5" />
+                <g fill="none" stroke="#5a5249" stroke-width="1.2" stroke-linecap="round"><path d="M22 78 Q32 75 42 78" /><path d="M92 83 Q102 80 112 83" /><path d="M60 86 Q66 84 72 86" /></g>
+                <ellipse cx="42" cy="70" rx="17" ry="6" fill="#a9c48f" stroke="#3a342d" stroke-width="1.5" />
+                <path d="M42 70 L56 68" stroke="#3a342d" stroke-width="1.1" />
+                <path d="M100 76 C100 60 98 48 100 38" fill="none" stroke="#3a342d" stroke-width="1.6" />
+                <path d="M81 38 Q100 26 119 38 Q100 45 81 38Z" fill="#a9c48f" stroke="#3a342d" stroke-width="1.5" />
+                <path d="M100 38 L89 34.5 M100 38 L111 34.5 M100 38 L100 32" stroke="#3a342d" stroke-width="1" />
+                <path d="M70 72 C70 56 72 42 70 26" fill="none" stroke="#3a342d" stroke-width="1.6" />
+                <path d="M70 10 C62 18 62 24 70 28 C78 24 78 18 70 10Z" fill="#ecc6c3" stroke="#3a342d" stroke-width="1.5" />
+                <path d="M70 28 C66 24 66 17 70 10" fill="none" stroke="#3a342d" stroke-width="1" />
+              </svg>
+              <figcaption><b>그림 3</b>연못</figcaption>
+            </figure>
+            <h2><span class="dot" aria-hidden="true"></span>여름</h2>
+            <p class="wx">올해의 날씨 · <b>평소 같은 해</b></p>
+            <ul class="picks">
+              <li>하루 쉬며 놀이판에 어울린다</li>
+              <li>온 식구가 매달려 맨다</li>
+            </ul>
+            <p class="quote"><span class="ar" aria-hidden="true">→</span><span>낮은 논은 물 대기가 쉬웠다. 몰아 뿌린 벼가 고르게 잘 자랐다. <span class="val">살림 +1</span></span></p>
+          </section>
+
+          <section class="sz season-autumn" aria-label="가을에 고른 것">
+            <figure class="plate4">
+              <svg viewBox="0 0 140 100" aria-hidden="true">
+                <path d="M0 95 H140" stroke="#5a5249" stroke-width="1.3" />
+                <path d="M0 91 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0" fill="none" stroke="#5a5249" stroke-width="1.2" />
+                <g fill="none" stroke="#3a342d" stroke-linecap="round">
+                  <path d="M2 18 C28 22 50 28 70 40 C88 50 104 56 138 58" stroke-width="2.6" />
+                  <path d="M70 40 C74 52 74 60 72 68" stroke-width="1.7" />
+                  <path d="M40 26 C44 18 50 12 58 10" stroke-width="1.6" />
+                  <path d="M104 56 C106 62 108 66 106 70" stroke-width="1.5" />
+                </g>
+                <g stroke="#3a342d" stroke-width="1.2">
+                  <path d="M84 48 C90 38 100 38 104 42 C98 48 90 50 84 48Z" fill="#d7b06a" />
+                  <path d="M30 24 C34 32 30 38 24 40 C22 34 24 28 30 24Z" fill="#cf9a52" />
+                  <path d="M118 57 C124 50 132 50 134 54 C128 60 122 60 118 57Z" fill="#d7b06a" />
+                  <path d="M56 33 C60 26 66 24 70 26 C66 32 62 34 56 33Z" fill="#c98d4a" />
+                </g>
+                <g stroke="#3a342d" stroke-width="1.5" fill="#d58a4c"><circle cx="72" cy="75" r="7" /><circle cx="106" cy="76" r="6.5" /><circle cx="58" cy="17" r="6" /><circle cx="126" cy="64" r="5.5" /></g>
+                <g fill="#6f7a4a" stroke="#3a342d" stroke-width=".7"><path d="M67.5 68.5 L72 70.5 L76.5 68.5 L74.5 72.5 L69.5 72.5Z" /><path d="M101.5 70 L106 72 L110.5 70 L108.5 74 L103.5 74Z" /><path d="M53.5 11 L58 13 L62.5 11 L60.5 15 L55.5 15Z" /></g>
+              </svg>
+              <figcaption><b>그림 4</b>감나무와 기와 담</figcaption>
+            </figure>
+            <h2><span class="dot" aria-hidden="true"></span>가을</h2>
+            <ul class="picks">
+              <li>떠난 집 논까지 함께 돌본다</li>
+              <li>우리 집 쓸 만큼만 바꾼다</li>
+            </ul>
+            <p class="quote"><span class="ar" aria-hidden="true">→</span><span>한양에서 돌아온 이웃이 우리 집 가을걷이를 거들어 주었다. <span class="val">기력 +1</span></span></p>
+          </section>
+
+          <section class="sz season-winter" aria-label="겨울에 고른 것">
+            <figure class="plate4">
+              <svg viewBox="0 0 140 100" aria-hidden="true">
+                <defs><linearGradient id="snow-w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dfe7ee" /><stop offset="1" stop-color="#dfe7ee" stop-opacity="0" /></linearGradient></defs>
+                <path d="M0 92 Q40 84 80 88 Q110 92 140 86 V100 H0Z" fill="url(#snow-w)" />
+                <path d="M0 92 Q40 84 80 88 Q110 92 140 86" fill="none" stroke="#5a5249" stroke-width="1.3" />
+                <g fill="none" stroke="#3a342d" stroke-linecap="round">
+                  <path d="M62 92 C66 76 58 62 66 48 C72 38 68 28 76 16" stroke-width="3.4" />
+                  <path d="M64 72 C66 68 63 64 65 60 M70 44 C72 40 70 36 72 32" stroke-width="1.1" />
+                  <path d="M64 62 C52 58 40 60 28 56" stroke-width="2" />
+                  <path d="M68 46 C82 42 96 44 110 40" stroke-width="2" />
+                  <path d="M72 30 C64 26 56 26 48 22" stroke-width="1.7" />
+                </g>
+                <g stroke="#3a342d" stroke-width="1.3" fill="#8fa38a">
+                  <path d="M10 58 Q28 43 46 58 Q28 63 10 58Z" />
+                  <path d="M92 42 Q110 27 128 42 Q110 47 92 42Z" />
+                  <path d="M32 24 Q48 11 64 24 Q48 29 32 24Z" />
+                  <path d="M64 18 Q78 5 92 18 Q78 23 64 18Z" />
+                </g>
+                <g stroke="#3a342d" stroke-width="1.1" fill="#fbf7ee">
+                  <path d="M13 56 Q28 43 43 56 Q28 50 13 56Z" />
+                  <path d="M95 40 Q110 27 125 40 Q110 34 95 40Z" />
+                  <path d="M35 22 Q48 11 61 22 Q48 16.5 35 22Z" />
+                  <path d="M67 16 Q78 5 89 16 Q78 10.5 67 16Z" />
+                </g>
+                <g stroke="#5a5249" stroke-width="1"><path d="M19 59 L17 63 M28 60 L28 64 M37 59 L39 63 M101 43 L99 47 M110 44 L110 48 M119 43 L121 47" /></g>
+              </svg>
+              <figcaption><b>그림 5</b>눈 덮인 소나무</figcaption>
+            </figure>
+            <h2><span class="dot" aria-hidden="true"></span>겨울</h2>
+            <ul class="picks">
+              <li>절에 가서 지낸다</li>
+              <li>겨울 동안 동무에게 글자를 배운다</li>
+            </ul>
+            <p class="side">덤 미션 <b style="white-space:nowrap">「생활 카드 열 장」</b> — 생활 카드 10장 가운데 7장을 모았어요.</p>
+          </section>
+        </div>
+
+        <footer class="pg-foot">
+          <p class="saved" role="status"><svg class="ico" viewBox="0 0 32 32" aria-hidden="true"><path d="M7 17 L13 23 L25 9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>저절로 저장되었어요.</p>
+          <button type="button" class="btn btn-red next">다음 <span aria-hidden="true">▶</span></button>
+        </footer>
+      </article>
+    </main>
+  </div>
+  <div class="cap doc">
+    <h3><small>화면 4</small>한 해 돌아보기</h3>
+    <ul>
+      <li>표가 아니라 지면 한 쪽: 금박 선 아래 첫 글자를 키운 서문(주홍 드롭 캡)으로 한 해를 마친 보람을 먼저 말한다.</li>
+      <li>네 계절은 크기가 다른 칸(넓은·좁은 칸이 줄마다 엇갈린다), 칸 사이는 먹선 — 같은 상자 넷이 아니다. 계절마다 가는 먹선 삽화 한 점(봄 매화 가지·여름 연못·가을 감나무·겨울 소나무)이 한 벌의 화첩을 이룬다.</li>
+      <li>“계절의 끝에 생긴 일”은 위아래 가는 선 사이의 인용문 꼴, 값은 테 두른 작은 표지(살림 +1).</li>
+      <li>지면 안쪽에 서책의 가는 테(광곽), 위에서 내리는 따뜻한 빛. 쪽 표시는 지금 장만 주홍으로 차고 나머지는 점선 동그라미.</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+  // 홀로 보기: 고른 화면만 남긴다
+  (function () {
+    var s = document.documentElement.dataset.solo;
+    if (!s) return;
+    document.querySelectorAll('.frame').forEach(function (f) { if (f.dataset.s === s) f.classList.add('on'); });
+  })();
+</script>
+</body>
+</html>

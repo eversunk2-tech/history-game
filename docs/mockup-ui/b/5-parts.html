@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>B · 부품과 상태</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Jua&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+    <link rel="stylesheet" href="b.css" />
+    <script src="btn.js"></script>
+    <style>
+      .parts {
+        display: grid;
+        grid-template-columns: 1.05fr 1fr 1.15fr;
+        grid-template-rows: 1fr auto;
+        gap: 1.25rem 1.5rem;
+        padding: 1.5rem 1.75rem 1.5rem;
+      }
+
+      .part {
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+        min-width: 0;
+      }
+
+      .part h2 {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        padding-bottom: 0.375rem;
+        border-bottom: 2px solid var(--ink);
+        font-family: var(--f-title);
+        font-weight: 400;
+        font-size: 1.375rem;
+      }
+
+      .part h2 .no {
+        font-family: var(--f-ui);
+        font-weight: 800;
+        font-size: 0.9375rem;
+        color: var(--ju);
+      }
+
+      .cap {
+        font-size: 0.9375rem;
+        font-weight: 600;
+        line-height: 1.4;
+        color: var(--ink-3);
+      }
+
+      .row {
+        display: flex;
+        align-items: flex-end;
+        gap: 0.875rem;
+        flex-wrap: wrap;
+      }
+
+      .state {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+      }
+
+      .state .cap {
+        font-size: 0.875rem;
+      }
+
+      .static {
+        position: relative;
+      }
+
+      .todo.static {
+        position: relative;
+        left: auto;
+        top: auto;
+        width: 100%;
+      }
+
+      .bubble.static {
+        position: relative;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        min-height: 0;
+        padding: 1.25rem 1.5rem 1rem;
+        border-radius: 1.5rem;
+      }
+
+      .bubble.static .say {
+        font-size: 1.3125rem;
+      }
+
+      .on-scene {
+        padding: 1rem;
+        border-radius: 1.25rem;
+        background:
+          linear-gradient(rgba(24, 18, 12, 0.42), rgba(24, 18, 12, 0.42)),
+          url(../../../src/assets/pictures/bg/s1395/entrance-spring.jpg) center / cover;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .on-scene .choice {
+        font-size: 1.25rem;
+        min-height: 4.25rem;
+      }
+
+      .done-hint {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 0.875rem;
+        border-radius: 1rem;
+        font-size: 1.0625rem;
+        font-weight: 700;
+        line-height: 1.35;
+        background: var(--hwang-soft);
+        box-shadow: inset 0 0 0 1.5px rgba(180, 125, 18, 0.45);
+      }
+
+      .done-hint .mark {
+        width: 0.75rem;
+        height: 0.75rem;
+        border-radius: 50%;
+        background: var(--hwang-edge);
+        box-shadow: none;
+      }
+
+      .wide {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: auto auto auto 1fr;
+        gap: 1.75rem;
+        align-items: start;
+        padding-top: 0.25rem;
+      }
+
+      .chips {
+        display: flex;
+        gap: 0.5rem;
+      }
+
+      .stamp-row {
+        display: flex;
+        gap: 0.75rem;
+        padding-top: 0.25rem;
+      }
+
+      .stamp {
+        display: grid;
+        place-items: center;
+        min-width: 3.25rem;
+        height: 2.75rem;
+        padding: 0 0.5rem;
+        border-radius: 0.625rem;
+        font-family: var(--f-title);
+        font-size: 1.375rem;
+        line-height: 1;
+        color: var(--season-deep);
+        background: var(--baek);
+        box-shadow:
+          inset 0 0 0 3px var(--season-deep),
+          inset 0 0 0 5px var(--baek),
+          inset 0 0 0 6px var(--season-deep);
+        filter: url(#rough);
+      }
+
+      .stamp-row .stamp:nth-child(odd) {
+        transform: rotate(-4deg);
+      }
+
+      .stamp-row .stamp:nth-child(even) {
+        transform: rotate(3deg);
+      }
+
+      .meters {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .meters .tray {
+        height: 3rem;
+      }
+
+      /* 4:3에 가까운 화면: 견본 사이를 좁힌다 */
+      @media (max-aspect-ratio: 139/100) {
+        .parts {
+          gap: 0.75rem 1rem;
+          padding: 1rem 1.25rem;
+        }
+        .part {
+          gap: 0.4375rem;
+        }
+        .row {
+          gap: 0.5rem;
+        }
+        .row .clay {
+          padding: 0 0.875rem;
+        }
+        .part h2 {
+          font-size: 1.25rem;
+        }
+        .cap {
+          font-size: 0.875rem;
+        }
+        .wide {
+          gap: 1rem;
+          grid-template-columns: auto auto auto;
+        }
+        .wide > .state:last-child {
+          display: none;
+        }
+        .chips .season-chip {
+          padding: 0 0.625rem 0 0.25rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <filter id="rough">
+        <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="7" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" />
+      </filter>
+    </svg>
+    <main class="screen hanji parts season-spring">
+      <!-- 부품 1: 단추 -->
+      <section class="part">
+        <h2><span class="no">부품 1</span>점토 단추의 상태</h2>
+        <p class="cap">윗면 흰 빛 + 아래 5px 그림자. 누르면 그만큼 내려앉는다(120ms). 주 단추의 색은 한 화면에 하나만.</p>
+        <div class="row">
+          <div class="state"><span class="cap">기본</span><button class="clay primary"><span>다음</span><span aria-hidden="true">▶</span></button></div>
+          <div class="state"><span class="cap">누름</span><button class="clay primary is-pressed"><span>다음</span><span aria-hidden="true">▶</span></button></div>
+          <div class="state"><span class="cap">초점(자판)</span><button class="clay primary is-focus"><span>다음</span><span aria-hidden="true">▶</span></button></div>
+        </div>
+        <div class="row">
+          <div class="state"><span class="cap">보조</span><button class="clay"><span>처음부터</span></button></div>
+          <div class="state"><span class="cap">누름</span><button class="clay is-pressed"><span>처음부터</span></button></div>
+        </div>
+        <div class="row">
+          <div class="state"><span class="cap">잠김 — 깊이 없음 · 점선 · 자물쇠</span><button class="clay sm locked" aria-disabled="true"><i class="px" data-px="lock"></i><span>봄을 보낸다</span></button></div>
+          <div class="state"><span class="cap">풀림 — 맵의 주 단추가 된다</span><button class="clay sm primary"><span>봄을 보낸다</span><span aria-hidden="true">▶</span></button></div>
+        </div>
+        <p class="done-hint"><span class="mark" aria-hidden="true"></span>꼭 할 일을 다 했어요. 덤을 더 하거나 봄을 보낼 수 있어요.</p>
+      </section>
+
+      <!-- 부품 2: 할 일 쪽지 -->
+      <section class="part">
+        <h2><span class="no">부품 2</span>할 일 쪽지</h2>
+        <p class="cap">접힌 꼴: 화살표가 가리키는 일 한 줄만 남는다.</p>
+        <aside class="todo paper static" aria-label="할 일 쪽지(접힘)">
+          <button type="button" class="todo-head" aria-expanded="false">
+            <span>
+              <span class="t">봄에 할 일</span>
+              <span class="todo-going">➤ 볍씨 뿌리기</span>
+            </span>
+            <span class="fold">펴기 ▼</span>
+          </button>
+        </aside>
+        <p class="cap">하나를 해냈을 때: 주홍 칸에 흰 체크, 글은 옅게 + “해냄”.</p>
+        <aside class="todo paper static" aria-label="할 일 쪽지(하나 해냄)">
+          <div class="seg" role="tablist">
+            <button type="button" role="tab" class="on" aria-selected="true"><span class="mark must" aria-hidden="true"></span>꼭 할 일 <small>하나 남음</small></button>
+            <button type="button" role="tab" aria-selected="false"><span class="mark extra" aria-hidden="true"></span>덤 <small>4가지</small></button>
+          </div>
+          <ul class="todo-list">
+            <li>
+              <div class="todo-row done">
+                <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5 L10 17 L19 7" fill="none" stroke="#fffaf0" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
+                <span><span class="tt">돌아온 사람들, 떠나는 스님들</span><span class="wh">해냄</span></span>
+              </div>
+            </li>
+            <li>
+              <button type="button" class="todo-row on" aria-pressed="true">
+                <span class="check" aria-hidden="true"></span>
+                <span><span class="tt">볍씨 뿌리기</span><span class="wh">우리 논 <span class="go" aria-hidden="true">➤</span></span></span>
+              </button>
+            </li>
+          </ul>
+        </aside>
+      </section>
+
+      <!-- 부품 3: 대화 -->
+      <section class="part">
+        <h2><span class="no">부품 3</span>대화의 다른 꼴</h2>
+        <p class="cap">이야기 줄(말하는 사람이 없다): 리본·꼬리 없이, 보통 굵기.</p>
+        <div class="bubble paper static narrate">
+          <span class="say">우리 논에 물이 찰랑인다. 볍씨 자루를 멘 아버지가 기다리신다.</span>
+        </div>
+        <p class="cap">잠긴 선택지는 까닭을 함께 쓴다. 고른 것은 주홍 점이 찬다.</p>
+        <div class="on-scene">
+          <div class="choice locked" role="group" aria-label="잠긴 선택지">
+            <i class="px" data-px="lock"></i>
+            <span>스님들께 길에서 드실 곡식을 보탠다<span class="why">보탤 곡식이 남아 있지 않아요</span></span>
+          </div>
+          <button type="button" class="choice paper is-pressed"><span class="ring" aria-hidden="true"></span><span>돌아온 집의 밀린 논갈이를 거든다</span></button>
+        </div>
+      </section>
+
+      <!-- 부품 4: 계절과 수치 -->
+      <section class="part wide">
+        <div class="state">
+          <span class="cap">계절 칩(먹 글자 5:1 넘게)</span>
+          <div class="chips">
+            <span class="season-chip small season-spring"><i class="px" data-px="spring"></i>봄</span>
+            <span class="season-chip small season-summer"><i class="px" data-px="summer"></i>여름</span>
+            <span class="season-chip small season-autumn"><i class="px" data-px="autumn"></i>가을</span>
+            <span class="season-chip small season-winter"><i class="px" data-px="winter"></i>겨울</span>
+          </div>
+        </div>
+        <div class="state">
+          <span class="cap">계절 도장(한 해 돌아보기)</span>
+          <div class="stamp-row">
+            <span class="stamp season-spring">봄</span><span class="stamp season-summer">여름</span><span class="stamp season-autumn">가을</span><span class="stamp season-winter">겨울</span>
+          </div>
+        </div>
+        <div class="state">
+          <span class="cap">해 ☀: 남은 해는 살, 진 해는 점선</span>
+          <div class="tray suns" role="img" aria-label="남은 해 2, 이 계절의 해 3">
+            <span class="suns-label">해</span>
+            <i class="px" data-px="sun"></i><i class="px" data-px="sun"></i><i class="px" data-px="sunSpent"></i>
+            <span class="stat-num">2<small>/3</small></span>
+          </div>
+        </div>
+        <div class="state">
+          <span class="cap">젤리 막대: 열 칸 눈금 + 숫자</span>
+          <div class="tray stats">
+            <div class="stat">
+              <i class="px" data-px="sack"></i>
+              <div class="stat-top"><span class="stat-name">살림</span><span class="stat-num">1</span></div>
+              <div class="jelly" style="--v: 1"><b></b></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="px.js"></script>
+  </body>
+</html>

@@ -1,0 +1,1340 @@
+/* 시안 B 「단청 그림책」 — 한지 위의 먹 글자 + 한 단계 밝힌 단청색 + 말랑한 점토.
+   크기는 게임처럼 rem으로 적는다. 1024×768에서 1rem = 16px, 1180×820에서 17.08px(바탕 글자 = min(너비/64, max(16px, 높이/48))).
+   도트 아이콘만 px(32·40px)로 둔다 — 도트가 정수 배로 고르게 보이게. */
+
+:root {
+  font-size: min(calc(100vw / 64), max(16px, calc(100vh / 48)));
+
+  /* 바탕: 한지 */
+  --hanji: #f6efe1;
+  --hanji-2: #ede3cd;
+  --hanji-3: #e0d2b3;
+  --paper: #fbf7ee;
+  --tex: url(../assets/tex-hanji-1024.webp);
+
+  /* 글자: 먹 */
+  --ink: #2b241d; /* 한지 위 13.4:1 */
+  --ink-2: #4b4137; /* 8.7:1 */
+  --ink-3: #6a5e50; /* 5.5:1 — 가장 옅은 글자(한지2 위 4.95:1) */
+
+  /* 단청(한 단계 밝게). 이끄는 색은 주홍 하나 */
+  --ju: #c4462a; /* 주홍: 주 단추·꼭 할 일 표시. 위 흰 글자 4.7:1 */
+  --ju-edge: #8f2f18;
+  --rok: #1f7d74; /* 뇌록(청록): 이름 리본. 위 흰 글자 4.8:1 */
+  --rok-edge: #135650;
+  --rok-soft: #d6ece6;
+  --hwang: #e9ad2a; /* 황: 해·젤리 막대·고른 표시. 위 먹 글자 7.6:1 */
+  --hwang-edge: #b47d12;
+  --hwang-soft: #f8e6b0;
+  --baek: #fffaf0;
+  --sam: #2f5f9e; /* 청: 초점 테 */
+
+  /* 주 단추의 색 — 이 묶음만 바꿔 끼운다(아래 [data-btn] 후보). 기본은 처음 시안의 주홍 */
+  --btn: var(--ju);
+  --btn-edge: var(--ju-edge);
+  --btn-on: var(--baek); /* 단추 위 글자 */
+  --btn-hi: rgba(255, 214, 196, 0.6); /* 윗면 빛 */
+  --btn-glow: rgba(120, 40, 15, 0.5); /* 넓은 그림자의 빛깔 */
+  --btn-soft: var(--hwang-soft); /* "다음 ▼" 같은 옅은 짝 */
+  --btn-soft-edge: #dcc07a;
+  --focus: var(--sam); /* 초점 테 */
+  --jelly: var(--hwang); /* 젤리 막대 */
+
+  /* 계절(게임의 --season을 한 단계 밝힌 칩 색 — 위 먹 글자 모두 4.5:1 넘음) */
+  --season: #7fa650;
+  --season-chip: #8bb35c;
+  --season-soft: #e2ecc8;
+  --season-deep: #4d6e2c;
+
+  /* 빛: 위(조금 왼쪽)에서 하나. 그림자는 두 겹 */
+  --rim: inset 0 2px 0 rgba(255, 255, 255, 0.8);
+  --sh-1: 0 1px 2px rgba(58, 38, 18, 0.16);
+  --sh-2: 0 1px 2px rgba(58, 38, 18, 0.14), 1px 0.75rem 1.75rem -0.5rem rgba(58, 38, 18, 0.34);
+  --sh-3: 0 2px 4px rgba(58, 38, 18, 0.16), 2px 1.75rem 3.5rem -1.25rem rgba(40, 24, 10, 0.55);
+
+  /* 모양 */
+  --r-card: 1.5rem;
+  --r-btn: 1rem;
+  --press: 5px;
+
+  /* 움직임 */
+  --t-fast: 120ms;
+  --t-mid: 240ms;
+  --t-slow: 400ms;
+
+  /* 글꼴: 가족 셋 */
+  --f-title: 'Jua', 'BM Jua', sans-serif; /* 제목·단추·이름표 */
+  --f-story: 'Gowun Batang', serif; /* 이야기 글: 대사·고른 것·계절 글 */
+  --f-ui: 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', sans-serif; /* 정보·숫자 */
+}
+
+.season-spring {
+  --season: #7fa650;
+  --season-chip: #8bb35c;
+  --season-soft: #e2ecc8;
+  --season-deep: #4d6e2c;
+}
+.season-summer {
+  --season: #2f8a76;
+  --season-chip: #4fae97;
+  --season-soft: #cfe6d6;
+  --season-deep: #1f5f51;
+}
+.season-autumn {
+  --season: #c07f24;
+  --season-chip: #d39239;
+  --season-soft: #f1ddb0;
+  --season-deep: #7d5112;
+}
+.season-winter {
+  --season: #64809c;
+  --season-chip: #8aa6c2;
+  --season-soft: #dbe3ea;
+  --season-deep: #3e5770;
+}
+
+/* ── 주 단추 색 후보(주소 끝 ?btn=1·2·3 → html[data-btn]) ── */
+
+/* 1 쪽빛: 쪽물 들인 남색. 한지의 따뜻한 크림과 맞서는 유일한 찬 색. 흰 글자 7.2:1.
+   초점 테는 청에서 먹으로 바꾼다(단추와 같은 푸른 기라 초점이 묻히지 않게). */
+[data-btn='1'] {
+  --btn: #2e5591;
+  --btn-edge: #1b3563;
+  --btn-on: var(--baek);
+  --btn-hi: rgba(206, 222, 255, 0.5);
+  --btn-glow: rgba(18, 36, 80, 0.48);
+  --btn-soft: #dfe6f2;
+  --btn-soft-edge: #aab8d2;
+  --focus: var(--ink);
+}
+
+/* 2 송화(치자): 노란 단추에 먹 글자 8.1:1. 해·화살표 줄의 황과 한 집안.
+   젤리 막대는 황에서 뇌록으로 바꾼다(단추와 막대가 같은 노랑이면 단추가 묻힌다). */
+[data-btn='2'] {
+  --btn: #efb22c;
+  --btn-edge: #a8740e;
+  --btn-on: var(--ink);
+  --btn-hi: rgba(255, 250, 225, 0.85);
+  --btn-glow: rgba(140, 90, 10, 0.45);
+  --btn-soft: #f8e6b0;
+  --btn-soft-edge: #dcc07a;
+  --jelly: #3f9488;
+}
+
+/* 3 먹(옻칠): 검은 밤색 옻칠 단추에 한지 글자 11.8:1. 지금 게임의 어두운 단추와 가장 가깝다. */
+[data-btn='3'] {
+  --btn: #3a2f27;
+  --btn-edge: #15100c;
+  --btn-on: #fbf3e2;
+  --btn-hi: rgba(255, 238, 214, 0.28);
+  --btn-glow: rgba(20, 12, 6, 0.5);
+  --btn-soft: #e9e0d2;
+  --btn-soft-edge: #c7b8a1;
+}
+
+/* ── 바탕 ─────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--hanji);
+  color: var(--ink);
+  font-family: var(--f-ui);
+  font-size: 1.25rem;
+  font-weight: 500;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+ol,
+figure {
+  margin: 0;
+  padding: 0;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+kbd {
+  font: inherit;
+}
+
+/* 자판으로 왔을 때의 초점: 청 테 3px(어느 단추든) */
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.screen {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+i.px {
+  display: inline-block;
+  flex: none;
+  line-height: 0;
+}
+
+i.px svg {
+  display: block;
+}
+
+/* 한지 면: 질감 타일을 옅게(한지색을 반쯤 덮어 결만 남긴다) */
+.hanji {
+  background:
+    linear-gradient(rgba(246, 239, 225, 0.55), rgba(246, 239, 225, 0.55)),
+    var(--tex) 0 0 / 32rem repeat,
+    var(--hanji);
+}
+
+.paper {
+  background:
+    linear-gradient(rgba(251, 247, 238, 0.62), rgba(251, 247, 238, 0.62)),
+    var(--tex) 0 0 / 32rem repeat,
+    var(--paper);
+}
+
+/* 단청 띠: 먹선 · 흰 선 · 뇌록 · 흰 선 · 주홍 — 선으로만 쓴다(화면마다 한두 곳) */
+.dan {
+  height: 9px;
+  background: linear-gradient(
+    to bottom,
+    var(--ink) 0 2px,
+    var(--baek) 2px 3px,
+    var(--rok) 3px 6px,
+    var(--baek) 6px 7px,
+    var(--ju) 7px 9px
+  );
+}
+
+/* ── 점토 단추 ─────────────────────────────────────── */
+/* 윗면 흰 하이라이트 + 아래 두꺼운 그림자(5px) + 넓고 연한 확산 그림자. 누르면 그림자만큼 내려앉는다(120ms). */
+
+.clay {
+  --face: var(--paper);
+  --edge: #cdb98f;
+  --on: var(--ink);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3.5rem;
+  margin: 0 0 var(--press);
+  padding: 0 1.25rem;
+  border: 0;
+  border-radius: var(--r-btn);
+  font-family: var(--f-title);
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--on);
+  white-space: nowrap;
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 48%),
+    var(--face);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.05),
+    0 var(--press) 0 var(--edge),
+    1px calc(var(--press) + 0.375rem) 0.875rem -0.375rem rgba(58, 38, 18, 0.45);
+  transition:
+    transform var(--t-fast) ease-out,
+    box-shadow var(--t-fast) ease-out;
+}
+
+.clay > * {
+  position: relative;
+  z-index: 1;
+}
+
+.clay:hover {
+  transform: translateY(-1px);
+}
+
+.clay:active,
+.clay.is-pressed {
+  transform: translateY(var(--press));
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    0 0 0 var(--edge),
+    0 2px 3px rgba(58, 38, 18, 0.3);
+}
+
+.clay:focus-visible,
+.clay.is-focus,
+.choice:focus-visible,
+.choice.is-focus {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.clay.primary {
+  --face: var(--btn);
+  --edge: var(--btn-edge);
+  --on: var(--btn-on);
+  box-shadow:
+    inset 0 2px 0 var(--btn-hi),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.12),
+    0 var(--press) 0 var(--edge),
+    1px calc(var(--press) + 0.5rem) 1.125rem -0.375rem var(--btn-glow);
+}
+
+.clay.primary:active,
+.clay.primary.is-pressed {
+  box-shadow:
+    inset 0 2px 0 var(--btn-hi),
+    0 0 0 var(--edge),
+    0 2px 3px var(--btn-glow);
+}
+
+.clay.quiet {
+  --edge: #ddcfb1;
+  color: var(--ink-2);
+}
+
+/* 잠긴 단추: 깊이가 없다(바탕에 파인 자리) + 점선 테 + 자물쇠 — 색만으로 가르지 않는다 */
+.clay.locked {
+  background: rgba(224, 210, 179, 0.45);
+  color: var(--ink-3);
+  box-shadow:
+    inset 0 2px 3px rgba(58, 38, 18, 0.22),
+    inset 0 0 0 2px rgba(106, 94, 80, 0.35);
+  outline: 2px dashed rgba(106, 94, 80, 0.55);
+  outline-offset: -6px;
+  transform: translateY(var(--press));
+}
+
+.clay.locked:hover {
+  transform: translateY(var(--press));
+}
+
+.clay.big {
+  min-height: 4.5rem;
+  padding: 0 1.75rem;
+  border-radius: 1.25rem;
+  font-size: 1.625rem;
+  --press: 6px;
+}
+
+.clay.sm {
+  font-size: 1.1875rem;
+  padding: 0 1rem;
+}
+
+/* 주 단추에만 반짝 지나가는 빛(7.5초에 한 번). 움직임 줄이기면 멈춘다 */
+.sheen {
+  overflow: hidden;
+}
+
+.sheen::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 38%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transform: skewX(-18deg);
+  animation: sheen 7.5s cubic-bezier(0.2, 0.7, 0.2, 1) 1.6s infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes sheen {
+  0% {
+    left: -60%;
+  }
+  13% {
+    left: 135%;
+  }
+  100% {
+    left: 135%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheen::after {
+    display: none;
+  }
+  .clay,
+  .choice {
+    transition: none;
+  }
+}
+
+/* ── 알약·쟁반 ─────────────────────────────────────── */
+
+.tray {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  height: 3.125rem;
+  padding: 0 1rem 0 0.625rem;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow:
+    var(--rim),
+    0 3px 0 #dccaa5,
+    1px 0.5rem 0.875rem -0.5rem rgba(58, 38, 18, 0.4);
+}
+
+.season-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 3.125rem;
+  padding: 0 1.125rem 0 0.5rem;
+  border-radius: 999px;
+  background: var(--season-chip);
+  color: var(--ink);
+  font-family: var(--f-title);
+  font-size: 1.5rem;
+  line-height: 1;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    0 3px 0 var(--season-deep),
+    1px 0.5rem 0.875rem -0.5rem rgba(58, 38, 18, 0.45);
+}
+
+.season-chip.small {
+  height: 2.375rem;
+  font-size: 1.25rem;
+  padding: 0 0.875rem 0 0.375rem;
+}
+
+/* ── 수치: 도트 아이콘 + 이름 + 숫자 + 젤리 막대 ────────── */
+
+.stat {
+  display: grid;
+  grid-template-columns: 32px auto;
+  grid-template-rows: auto auto;
+  column-gap: 0.4375rem;
+  align-items: center;
+}
+
+.stat > i.px {
+  grid-row: 1 / span 2;
+}
+
+.stat-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  line-height: 1.05;
+}
+
+.stat-name {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.stat-num {
+  font-size: 1.3125rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-num small {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+
+/* 파인 트랙 안의 젤리 막대. 열 칸의 눈금이 함께 보인다(색만으로 읽지 않게) */
+.jelly {
+  position: relative;
+  width: 5.25rem;
+  height: 0.6875rem;
+  margin-top: 0.25rem;
+  border-radius: 999px;
+  background: var(--hanji-3);
+  box-shadow:
+    inset 0 2px 3px rgba(58, 38, 18, 0.3),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.6);
+  overflow: hidden;
+}
+
+.jelly > b {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--v) / var(--max, 10) * 100%);
+  border-radius: 999px;
+  background: var(--fill, var(--jelly));
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.12);
+}
+
+.jelly::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0 calc(100% / var(--max, 10) - 1px),
+    rgba(43, 36, 29, 0.28) calc(100% / var(--max, 10) - 1px) calc(100% / var(--max, 10))
+  );
+  pointer-events: none;
+}
+
+/* ── 위 띠(맵·대화가 함께 쓴다) ─────────────────────────── */
+
+.band {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem 0;
+  box-shadow: 0 0.375rem 1rem -0.5rem rgba(40, 24, 10, 0.5);
+}
+
+.band-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.band .dan {
+  margin: 0.25rem -1rem 0;
+}
+
+.where {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  padding: 0 0.25rem;
+}
+
+.where b {
+  font-family: var(--f-title);
+  font-weight: 400;
+  font-size: 1.375rem;
+}
+
+.where span {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.stats {
+  gap: 1.125rem;
+  padding: 0 1.125rem 0 0.75rem;
+}
+
+.stats .sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 0.625rem 0;
+  background: rgba(43, 36, 29, 0.14);
+}
+
+.suns {
+  gap: 0.375rem;
+  padding: 0 1rem 0 0.75rem;
+}
+
+.suns .suns-label {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  margin-right: 0.125rem;
+}
+
+.suns .px {
+  margin: 0 -1px;
+}
+
+.suns .stat-num {
+  margin-left: 0.375rem;
+}
+
+.band-tools {
+  justify-content: space-between;
+}
+
+.band-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1;
+  font-size: 1.1875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink-2);
+}
+
+.band-btns {
+  display: flex;
+  gap: 0.625rem;
+  flex: none;
+  padding-top: 2px;
+}
+
+/* ── 할 일 쪽지 ─────────────────────────────────────── */
+
+.todo {
+  position: absolute;
+  left: 1rem;
+  top: 1rem;
+  width: 25.5rem;
+  padding: 0.375rem 0.75rem 1rem;
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-2), var(--rim);
+}
+
+.todo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0 0.25rem 0 0.5rem;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.todo-head .t {
+  font-family: var(--f-title);
+  font-size: 1.625rem;
+  line-height: 1;
+}
+
+.todo-head .fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 2.5rem;
+  padding: 0 0.875rem;
+  border-radius: 999px;
+  background: var(--hanji-2);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  box-shadow: inset 0 1px 2px rgba(58, 38, 18, 0.18);
+}
+
+.todo-going {
+  display: block;
+  margin-top: 0.25rem;
+  font-family: var(--f-story);
+  font-weight: 700;
+  font-size: 1.1875rem;
+  color: var(--ink-2);
+}
+
+.seg {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 0.25rem;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: var(--hanji-3);
+  box-shadow: inset 0 2px 4px rgba(58, 38, 18, 0.24);
+}
+
+.seg button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--f-title);
+  font-size: 1.25rem;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.seg button small {
+  font-family: var(--f-ui);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+
+.seg button.on {
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow:
+    var(--rim),
+    0 3px 0 #cdb98f,
+    0 0.375rem 0.625rem -0.375rem rgba(58, 38, 18, 0.45);
+}
+
+/* 꼭 할 일 = 주홍 네모, 덤 = 흰 네모(작은 지도의 표시와 같은 모양) */
+.mark {
+  display: inline-block;
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 3px;
+}
+
+.mark.must {
+  background: var(--ju);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.mark.extra {
+  background: var(--baek);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.todo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.todo-row {
+  display: grid;
+  grid-template-columns: 2.25rem 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  width: 100%;
+  min-height: 4.25rem;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-radius: 1.125rem;
+  background: transparent;
+  text-align: left;
+}
+
+.todo-row .tt {
+  display: block;
+  font-family: var(--f-story);
+  font-weight: 700;
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+
+.todo-row .wh {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+/* 화살표가 가리키는 줄: 가장 밝다(점토 + 황 테) */
+.todo-row.on {
+  background: var(--paper);
+  box-shadow:
+    var(--rim),
+    inset 0 0 0 2.5px var(--hwang),
+    0 3px 0 #d9b75e,
+    0 0.5rem 0.875rem -0.5rem rgba(58, 38, 18, 0.45);
+}
+
+.todo-row.on .wh {
+  color: var(--ink-2);
+}
+
+.todo-row.on .go {
+  color: var(--hwang-edge);
+}
+
+/* 체크 칸: 빈 칸(아직) → 주홍 칸 + 흰 체크(해냄) */
+.check {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.625rem;
+  background: var(--baek);
+  box-shadow:
+    inset 0 0 0 2.5px var(--ju),
+    inset 0 3px 3px rgba(58, 38, 18, 0.12);
+}
+
+.check.extra {
+  box-shadow:
+    inset 0 0 0 2.5px var(--ink-3),
+    inset 0 3px 3px rgba(58, 38, 18, 0.12);
+}
+
+.check svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.todo-row.done .check {
+  background: var(--ju);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 214, 196, 0.6),
+    0 2px 0 var(--ju-edge);
+}
+
+.todo-row.done .tt {
+  color: var(--ink-3);
+}
+
+.todo-tip {
+  margin: 0.625rem 0.5rem 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+
+/* ── 맵 위에 잠깐 뜨는 말(계절 글) ─────────────────────── */
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  width: min(37rem, 56%);
+  padding: 1rem 1.5rem 1.125rem 1rem;
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-3), var(--rim);
+}
+
+.toast .tx {
+  font-family: var(--f-story);
+  font-weight: 700;
+  font-size: 1.375rem;
+  line-height: 1.55;
+  padding-top: 0.125rem;
+}
+
+/* ── 작은 지도 ──────────────────────────────────────── */
+
+.mini {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  padding: 0.5rem;
+  border-radius: 1.25rem;
+  box-shadow: var(--sh-2), var(--rim);
+}
+
+.mini-zone {
+  position: absolute;
+  top: -1.125rem;
+  left: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  height: 2.25rem;
+  padding: 0 0.875rem;
+  border-radius: 999px;
+  font-family: var(--f-title);
+  font-size: 1.1875rem;
+  background: var(--paper);
+  box-shadow: var(--rim), 0 2px 0 #d3c19c, var(--sh-1);
+}
+
+.mini-map {
+  width: 188px;
+  height: 140px;
+  border-radius: 0.875rem;
+  background: url(../now/02-map.jpg) -975px -663px / 1180px 820px no-repeat;
+  image-rendering: pixelated;
+  box-shadow: inset 0 0 0 1px rgba(43, 36, 29, 0.2);
+}
+
+.mini-key {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0.375rem 0.25rem 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+
+.mini-key span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.mini-key .mark {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 2px;
+}
+
+/* ── 대화 장면 ──────────────────────────────────────── */
+
+.stage {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+}
+
+.scenery {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.talk-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0) 20%, rgba(0, 0, 0, 0) 58%, rgba(30, 20, 10, 0.35));
+}
+
+.slot {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  left: 25%;
+}
+
+.slot.at-left {
+  left: 3%;
+}
+
+.slot.at-right {
+  left: 47%;
+}
+
+.slot img {
+  position: absolute;
+  bottom: -22%;
+  left: 50%;
+  height: 114%;
+  transform: translateX(-50%);
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 0.5rem 0.7rem rgba(0, 0, 0, 0.35));
+}
+
+.slot.quiet img {
+  filter: brightness(0.8) saturate(0.9) drop-shadow(0 0.3rem 0.25rem rgba(0, 0, 0, 0.3));
+}
+
+.talk-later {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 3;
+}
+
+/* 일의 표시: 위 띠에 매달린 책갈피(떠 있지 않고 띠에 붙는다) */
+.bookmark {
+  position: absolute;
+  top: -2px;
+  right: 1.5rem;
+  z-index: 4;
+  filter: drop-shadow(1px 0.375rem 0.5rem rgba(40, 24, 10, 0.4));
+}
+
+.bookmark > span {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 1.25rem 1.5rem;
+  font-family: var(--f-title);
+  font-size: 1.3125rem;
+  line-height: 1.1;
+  background:
+    linear-gradient(to bottom, var(--ju) 0 5px, var(--baek) 5px 6px, transparent 6px),
+    linear-gradient(rgba(251, 247, 238, 0.62), rgba(251, 247, 238, 0.62)),
+    var(--tex) 0 0 / 32rem repeat,
+    var(--paper);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 0.75rem), 0 100%);
+}
+
+.bookmark small {
+  font-family: var(--f-ui);
+  font-weight: 700;
+  font-size: 1.0625rem;
+  color: var(--ink-3);
+}
+
+.bookmark .sun-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* 대사 창: 둥근 말풍선. 꼬리가 말하는 사람을 가리킨다 */
+.bubble {
+  position: absolute;
+  left: 1.25rem;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  min-height: 10.75rem;
+  padding: 2.125rem 2rem 1rem 2.25rem;
+  border-radius: 2rem;
+  border: 0;
+  text-align: left;
+  box-shadow: var(--sh-3), var(--rim);
+}
+
+.bubble::before {
+  content: '';
+  position: absolute;
+  top: calc(-1.125rem + 1px);
+  left: var(--tail, 27%);
+  width: 2.5rem;
+  height: 1.125rem;
+  background: #f9f4ea;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.bubble.narrate::before {
+  display: none;
+}
+
+.say {
+  font-family: var(--f-story);
+  font-size: 1.5625rem;
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--ink);
+  max-width: 46rem;
+}
+
+.bubble.narrate .say {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+/* 이름표: 단청 리본(먹 테 · 황 선 · 뇌록 몸, 제비꼬리 끝) */
+.ribbon {
+  position: absolute;
+  top: -1.625rem;
+  left: 1.75rem;
+  filter: drop-shadow(1px 0.25rem 0.25rem rgba(19, 50, 46, 0.45));
+}
+
+.ribbon > span {
+  display: inline-flex;
+  align-items: center;
+  height: 3.125rem;
+  padding: 0 2.125rem;
+  font-family: var(--f-title);
+  font-size: 1.625rem;
+  line-height: 1;
+  color: var(--baek);
+  letter-spacing: 0.04em;
+  background: linear-gradient(
+    to bottom,
+    var(--rok-edge) 0 3px,
+    var(--hwang) 3px 5px,
+    #237f76 5px 45%,
+    var(--rok) 45% calc(100% - 5px),
+    var(--hwang) calc(100% - 5px) calc(100% - 3px),
+    var(--rok-edge) calc(100% - 3px)
+  );
+  clip-path: polygon(0 0, 100% 0, calc(100% - 0.875rem) 50%, 100% 100%, 0 100%, 0.875rem 50%);
+}
+
+.next-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1.25rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
+.tap-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1875rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.tap-hint .dot {
+  color: var(--ink-3);
+  font-weight: 800;
+}
+
+.tap-hand {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  margin-right: 0.125rem;
+}
+
+/* 손가락 끝에 퍼지는 물결: "눌러요" */
+.tap-hand::before,
+.tap-hand::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: -9px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--hwang-edge);
+  opacity: 0;
+  animation: tap 2.4s ease-out infinite;
+}
+
+.tap-hand::after {
+  animation-delay: 0.5s;
+}
+
+@keyframes tap {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.tap-hand.still::before {
+  animation: none;
+  opacity: 0.55;
+  transform: scale(1.05);
+}
+
+.tap-hand.still::after {
+  animation: none;
+  opacity: 0.25;
+  transform: scale(1.45);
+}
+
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2.25rem;
+  height: 2.125rem;
+  padding: 0 0.5rem;
+  border-radius: 0.5rem;
+  font-family: var(--f-ui);
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 3px 0 #cdb98f,
+    0 0 0 1px rgba(43, 36, 29, 0.16);
+  transform: translateY(-1px);
+}
+
+.next-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 3.5rem;
+  padding: 0 1.25rem;
+  border-radius: 999px;
+  font-family: var(--f-title);
+  font-size: 1.375rem;
+  color: var(--ink);
+  background: var(--btn-soft);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.8),
+    0 3px 0 var(--btn-soft-edge);
+}
+
+.next-go .tri {
+  display: inline-block;
+  font-size: 1rem;
+  animation: bob 1.4s ease-in-out infinite;
+}
+
+@keyframes bob {
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .next-go .tri,
+  .tap-hand::before,
+  .tap-hand::after {
+    animation: none;
+  }
+}
+
+/* 선택지 */
+.talk-dim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: rgba(24, 18, 12, 0.4);
+}
+
+.choices {
+  position: absolute;
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  width: 30rem;
+  transform: translateX(-50%);
+}
+
+.choices-head {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.5rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  font-family: var(--f-title);
+  font-size: 1.25rem;
+  color: var(--baek);
+  background: rgba(24, 18, 12, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.choice {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  min-height: 4.75rem;
+  margin-bottom: 6px;
+  padding: 0.75rem 1.5rem 0.75rem 1.25rem;
+  border: 0;
+  border-radius: 1.375rem;
+  text-align: left;
+  font-family: var(--f-story);
+  font-weight: 700;
+  font-size: 1.4375rem;
+  line-height: 1.35;
+  color: var(--ink);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.9),
+    0 6px 0 #cdb98f,
+    1px 0.875rem 1.25rem -0.5rem rgba(20, 12, 4, 0.6);
+  transition:
+    transform var(--t-fast) ease-out,
+    box-shadow var(--t-fast) ease-out;
+}
+
+.choice .ring {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--baek);
+  box-shadow:
+    inset 0 0 0 2.5px var(--ink-2),
+    inset 0 3px 3px rgba(58, 38, 18, 0.15);
+}
+
+.choice:active,
+.choice.is-pressed {
+  transform: translateY(6px);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.7),
+    0 0 0 #cdb98f,
+    0 2px 4px rgba(20, 12, 4, 0.45);
+}
+
+.choice.is-pressed .ring {
+  background: var(--btn);
+  box-shadow:
+    inset 0 0 0 2.5px var(--btn-edge),
+    inset 0 0 0 7px var(--baek);
+}
+
+.choice.locked {
+  color: var(--ink-3);
+  background: rgba(224, 210, 179, 0.92);
+  box-shadow:
+    inset 0 2px 4px rgba(58, 38, 18, 0.25),
+    inset 0 0 0 2px rgba(106, 94, 80, 0.35);
+  outline: 2px dashed rgba(106, 94, 80, 0.55);
+  outline-offset: -7px;
+  grid-template-columns: 2rem 1fr;
+  margin-bottom: 0;
+}
+
+.choice.locked .why {
+  display: block;
+  font-family: var(--f-ui);
+  font-weight: 700;
+  font-size: 1.0625rem;
+  color: var(--ink-3);
+  margin-top: 0.125rem;
+}
+
+/* ── 둘레(화면 밖 견본 쪽) ───────────────────────────── */
+
+.hidden {
+  display: none !important;
+}

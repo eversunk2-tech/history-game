@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>B · 맵</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Jua&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+    <link rel="stylesheet" href="b.css" />
+    <script src="btn.js"></script>
+    <style>
+      /* 맵 그림(도트)은 바꾸지 않는다: 1180×690 그대로(화소 비율 2의 원본), 넓이를 늘리거나 줄이지 않고 위에 붙인다 */
+      .map {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: var(--band-h, 8.25rem);
+        background: url(../now/map-clean.jpg) center top / 1180px 690px no-repeat, #6f8f45;
+        image-rendering: pixelated;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="screen mapscreen season-spring">
+      <div class="map" role="img" aria-label="느티골 맵. 가려는 곳을 누르면 걸어가요."></div>
+
+      <header class="band hanji">
+        <div class="band-row band-info">
+          <span class="season-chip"><i class="px" data-px="spring"></i>봄</span>
+          <div class="where">
+            <b>1395년 느티골</b>
+            <span>농민 집 아이</span>
+          </div>
+          <div class="tray stats" role="group" aria-label="살림 4, 기력 6, 인심 5. 가장 많으면 10">
+            <div class="stat">
+              <i class="px" data-px="sack"></i>
+              <div class="stat-top"><span class="stat-name">살림</span><span class="stat-num">4</span></div>
+              <div class="jelly" style="--v: 4"><b></b></div>
+            </div>
+            <span class="sep" aria-hidden="true"></span>
+            <div class="stat">
+              <i class="px" data-px="body"></i>
+              <div class="stat-top"><span class="stat-name">기력</span><span class="stat-num">6</span></div>
+              <div class="jelly" style="--v: 6"><b></b></div>
+            </div>
+            <span class="sep" aria-hidden="true"></span>
+            <div class="stat">
+              <i class="px" data-px="trust"></i>
+              <div class="stat-top"><span class="stat-name">인심</span><span class="stat-num">5</span></div>
+              <div class="jelly" style="--v: 5"><b></b></div>
+            </div>
+          </div>
+          <div class="tray suns" role="img" aria-label="남은 해 3, 이 계절의 해 3">
+            <span class="suns-label">해</span>
+            <i class="px" data-px="sun"></i><i class="px" data-px="sun"></i><i class="px" data-px="sun"></i>
+            <span class="stat-num">3<small>/3</small></span>
+          </div>
+        </div>
+
+        <div class="band-row band-tools">
+          <p class="band-hint"><i class="px" data-px="lock"></i>꼭 할 일을 마치면 봄을 보낼 수 있어요</p>
+          <nav class="band-btns" aria-label="맵의 단추">
+            <button type="button" class="clay sm"><i class="px" data-px="scroll"></i><span>지난 이야기</span></button>
+            <button type="button" class="clay sm"><i class="px" data-px="bundle"></i><span>봇짐</span></button>
+            <button type="button" class="clay sm locked" aria-disabled="true"><i class="px" data-px="lock"></i><span>봄을 보낸다</span></button>
+            <button type="button" class="clay sm quiet"><i class="px" data-px="house"></i><span>처음으로</span></button>
+          </nav>
+        </div>
+        <div class="dan" aria-hidden="true"></div>
+      </header>
+
+      <aside class="todo paper" aria-label="할 일 쪽지" style="top: calc(var(--band-h, 8.25rem) + 1rem)">
+        <button type="button" class="todo-head" aria-expanded="true">
+          <span class="t">봄에 할 일</span>
+          <span class="fold">접기 ▲</span>
+        </button>
+        <div class="seg" role="tablist" aria-label="할 일의 묶음">
+          <button type="button" role="tab" class="on" aria-selected="true"><span class="mark must" aria-hidden="true"></span>꼭 할 일 <small>둘 남음</small></button>
+          <button type="button" role="tab" aria-selected="false"><span class="mark extra" aria-hidden="true"></span>덤 <small>4가지</small></button>
+        </div>
+        <ul class="todo-list">
+          <li>
+            <button type="button" class="todo-row on" aria-pressed="true">
+              <span class="check" aria-hidden="true"></span>
+              <span>
+                <span class="tt">돌아온 사람들, 떠나는 스님들</span>
+                <span class="wh">마을 어귀 느티나무 <span class="go" aria-hidden="true">➤</span></span>
+              </span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="todo-row" aria-pressed="false">
+              <span class="check" aria-hidden="true"></span>
+              <span>
+                <span class="tt">볍씨 뿌리기</span>
+                <span class="wh">우리 논</span>
+              </span>
+            </button>
+          </li>
+        </ul>
+        <p class="todo-tip">줄을 누르면 화살표가 길을 알려 줘요.</p>
+      </aside>
+
+      <p class="toast paper" role="status">
+        <span class="season-chip small"><i class="px" data-px="spring"></i>봄</span>
+        <span class="tx">이월, 얼었던 땅이 풀리고 궁궐 공사에 갔던 이웃이 돌아왔다.</span>
+      </p>
+
+      <div class="mini paper">
+        <span class="mini-zone">마을 안</span>
+        <div class="mini-map" role="img" aria-label="작은 지도. 가 본 곳이 채워져요."></div>
+        <p class="mini-key"><span><span class="mark must"></span>꼭 할 일</span><span><span class="mark extra"></span>덤</span></p>
+      </div>
+    </main>
+    <script src="px.js"></script>
+    <script>
+      // 띠의 높이를 재어 맵을 그 아래에 붙인다(게임에서는 캔버스가 남은 칸을 채운다)
+      const fit = () => {
+        const h = document.querySelector('.band').getBoundingClientRect().height;
+        document.documentElement.style.setProperty('--band-h', `${h}px`);
+      };
+      fit();
+      document.fonts.ready.then(fit);
+      addEventListener('resize', fit);
+    </script>
+  </body>
+</html>

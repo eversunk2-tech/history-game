@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>B · 한 해 돌아보기</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Jua&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+    <link rel="stylesheet" href="b.css" />
+    <script src="btn.js"></script>
+    <style>
+      .veil {
+        position: absolute;
+        inset: 0;
+        background: rgba(238, 233, 224, 0.5);
+      }
+
+      .sheet {
+        position: absolute;
+        inset: 1.5rem 1.75rem;
+        display: flex;
+        flex-direction: column;
+        padding: 1.375rem 2rem 1.25rem;
+        border-radius: 1.75rem;
+        box-shadow: var(--sh-3), var(--rim);
+      }
+
+      .rv-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 2rem;
+      }
+
+      .kicker {
+        font-size: 1.0625rem;
+        font-weight: 700;
+        color: var(--ink-3);
+      }
+
+      /* 칭찬 한 줄: 지금 게임의 말("한 해를 끝까지 살았어요" — 다음 화면의 제목)을 이 장의 머리로 올린다 */
+      .praise {
+        position: relative;
+        display: inline-block;
+        margin-top: 0.125rem;
+        font-family: var(--f-title);
+        font-weight: 400;
+        font-size: 2.875rem;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+        isolation: isolate;
+      }
+
+      /* 손으로 그은 황 붓줄(화면에 하나) */
+      .praise .brush {
+        position: absolute;
+        left: -0.375rem;
+        width: calc(100% + 1.125rem);
+        bottom: 0.125rem;
+        height: 1.125rem;
+        z-index: -1;
+      }
+
+      /* 네 장의 길: 지금 장은 먹 동그라미, 남은 장은 점선 동그라미 */
+      .steps {
+        position: relative;
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.25rem;
+      }
+
+      .steps::before {
+        content: '';
+        position: absolute;
+        left: 2.5rem;
+        right: 2.5rem;
+        top: 1.25rem;
+        border-top: 2px dashed rgba(106, 94, 80, 0.45);
+      }
+
+      .steps li {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+        width: 5rem;
+      }
+
+      .steps .n {
+        display: grid;
+        place-items: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 50%;
+        font-weight: 800;
+        font-size: 1.125rem;
+        color: var(--ink-3);
+        background: var(--paper);
+        box-shadow: inset 0 0 0 2px rgba(106, 94, 80, 0.4);
+      }
+
+      .steps .nm {
+        font-size: 0.9375rem;
+        font-weight: 700;
+        color: var(--ink-3);
+        white-space: nowrap;
+      }
+
+      .steps .now .n {
+        color: var(--baek);
+        background: var(--ink);
+        box-shadow:
+          inset 0 2px 0 rgba(255, 255, 255, 0.2),
+          0 3px 0 #000,
+          0 0 0 3px var(--paper),
+          0 0 0 5px var(--hwang);
+      }
+
+      .steps .now .nm {
+        color: var(--ink);
+        font-size: 1rem;
+      }
+
+      .rv-rule {
+        margin: 1rem -2rem 0;
+      }
+
+      .rv-sub {
+        display: flex;
+        align-items: baseline;
+        gap: 1.5rem;
+        margin: 0.875rem 0 0.875rem;
+      }
+
+      .rv-sub h2 {
+        font-family: var(--f-title);
+        font-weight: 400;
+        font-size: 1.625rem;
+      }
+
+      .legend {
+        display: flex;
+        gap: 1.25rem;
+        font-size: 1.0625rem;
+        font-weight: 600;
+        color: var(--ink-3);
+      }
+
+      .legend .dotmark {
+        display: inline-block;
+        width: 0.5rem;
+        height: 0.5rem;
+        margin-right: 0.375rem;
+        border-radius: 50%;
+        background: var(--ink-2);
+        vertical-align: 0.15em;
+      }
+
+      .legend b {
+        font-weight: 800;
+        color: var(--ink-2);
+        margin-right: 0.25rem;
+      }
+
+      /* 네 계절: 봄 → 겨울로 걸어온 길(왼쪽에서 오른쪽). 칸마다 그 계절의 그림 한 조각과 계절 색 도장 */
+      .year-path {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        align-items: start;
+        min-height: 0;
+      }
+
+      .sea {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        border-radius: 1.25rem;
+        box-shadow: var(--sh-2), var(--rim);
+      }
+
+      .sea + .sea::before {
+        content: '';
+        position: absolute;
+        left: -1rem;
+        width: 1rem;
+        top: 5.75rem;
+        border-top: 2px dashed rgba(106, 94, 80, 0.5);
+      }
+
+      .pic {
+        position: relative;
+        height: 5.75rem;
+        border-radius: 1.25rem 1.25rem 0 0;
+        background: var(--img) center 62% / cover no-repeat;
+        box-shadow: inset 0 -1px 0 rgba(43, 36, 29, 0.15);
+      }
+
+      .stamp {
+        position: absolute;
+        left: 0.75rem;
+        bottom: -1.375rem;
+        display: grid;
+        place-items: center;
+        min-width: 3.5rem;
+        height: 3rem;
+        padding: 0 0.625rem;
+        border-radius: 0.625rem;
+        font-family: var(--f-title);
+        font-size: 1.5rem;
+        line-height: 1;
+        color: var(--season-deep);
+        background: rgba(255, 250, 240, 0.94);
+        box-shadow:
+          inset 0 0 0 3px var(--season-deep),
+          inset 0 0 0 5px rgba(255, 250, 240, 0.94),
+          inset 0 0 0 6px var(--season-deep);
+        transform: rotate(-5deg);
+        filter: url(#rough);
+      }
+
+      .sea:nth-child(2) .stamp {
+        transform: rotate(3deg);
+      }
+
+      .sea:nth-child(3) .stamp {
+        transform: rotate(-2deg);
+      }
+
+      .sea:nth-child(4) .stamp {
+        transform: rotate(4deg);
+      }
+
+      .weather {
+        position: absolute;
+        right: 0.5rem;
+        bottom: 0.5rem;
+        max-width: calc(100% - 5rem);
+        padding: 0.25rem 0.625rem;
+        border-radius: 0.625rem;
+        font-size: 0.9375rem;
+        font-weight: 700;
+        line-height: 1.25;
+        color: var(--ink-2);
+        background: rgba(251, 247, 238, 0.92);
+        box-shadow: var(--sh-1);
+      }
+
+      .weather b {
+        display: block;
+        font-size: 1.0625rem;
+        font-weight: 800;
+        color: var(--ink);
+      }
+
+      .picks {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 1.75rem 1rem 0.875rem;
+      }
+
+      .picks li {
+        position: relative;
+        padding-left: 1rem;
+        font-family: var(--f-story);
+        font-weight: 700;
+        font-size: 1.25rem;
+        line-height: 1.4;
+      }
+
+      .picks li::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0.62em;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 50%;
+        background: var(--season-deep);
+      }
+
+      .result {
+        position: relative;
+        margin: -0.125rem 0.625rem 0.75rem;
+        padding: 0.625rem 0.75rem 0.75rem 2rem;
+        border-radius: 0.875rem;
+        font-family: var(--f-story);
+        font-size: 1.1875rem;
+        line-height: 1.5;
+        color: var(--ink);
+        background: var(--season-soft);
+        box-shadow: inset 0 1px 2px rgba(58, 38, 18, 0.12);
+      }
+
+      .result::before {
+        content: '→';
+        position: absolute;
+        left: 0.625rem;
+        top: 0.625rem;
+        font-family: var(--f-ui);
+        font-weight: 800;
+        color: var(--season-deep);
+      }
+
+      .val {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.125rem;
+        margin-left: 0.125rem;
+        padding: 0 0.5rem 0 0.125rem;
+        border-radius: 999px;
+        font-family: var(--f-ui);
+        font-weight: 800;
+        font-size: 1.0625rem;
+        line-height: 1.6;
+        white-space: nowrap;
+        vertical-align: 0.05em;
+        background: var(--paper);
+        box-shadow: inset 0 0 0 1.5px rgba(43, 36, 29, 0.22);
+      }
+
+      .rv-foot {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+        margin-top: auto;
+        padding-top: 0.875rem;
+      }
+
+      /* 덤 미션: 모은 카드 수를 젤리 막대로(10칸 눈금, 숫자 함께) */
+      .bonus {
+        display: flex;
+        align-items: center;
+        gap: 0.875rem;
+        flex: 1;
+        min-width: 0;
+        padding: 0.5rem 1.25rem 0.5rem 0.75rem;
+        border-radius: 1.25rem;
+        background: var(--hanji-2);
+        box-shadow: inset 0 2px 3px rgba(58, 38, 18, 0.16);
+      }
+
+      .bonus-text {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        line-height: 1.3;
+      }
+
+      .bonus-text b {
+        font-family: var(--f-title);
+        font-weight: 400;
+        font-size: 1.25rem;
+      }
+
+      .bonus-text span {
+        font-family: var(--f-story);
+        font-weight: 700;
+        font-size: 1.125rem;
+        color: var(--ink-2);
+      }
+
+      .bonus .jelly {
+        width: 10rem;
+        height: 1rem;
+        margin: 0 0 0 auto;
+        flex: none;
+      }
+
+      .bonus .count {
+        flex: none;
+        font-size: 1.375rem;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .bonus .count small {
+        font-size: 1rem;
+        color: var(--ink-3);
+      }
+
+      .saved {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 1.0625rem;
+        font-weight: 700;
+        color: var(--ink-3);
+        white-space: nowrap;
+      }
+
+      .saved svg {
+        width: 1.25rem;
+        height: 1.25rem;
+      }
+
+      .rv-next {
+        min-width: 10rem;
+      }
+
+      /* 4:3에 가까운 화면(1024×768): 칸이 좁아 줄이 늘어나므로 둘레와 그림 조각을 줄인다(글 크기는 그대로) */
+      @media (max-aspect-ratio: 139/100) {
+        .sheet {
+          inset: 1rem 1.125rem;
+          padding: 1.125rem 1.375rem 1rem;
+        }
+        .rv-rule {
+          margin: 0.75rem -1.375rem 0;
+        }
+        .rv-sub {
+          margin: 0.625rem 0;
+        }
+        .year-path {
+          gap: 0.75rem;
+        }
+        .sea + .sea::before {
+          left: -0.75rem;
+          width: 0.75rem;
+          top: 4.75rem;
+        }
+        .pic {
+          height: 4.75rem;
+        }
+        .picks {
+          gap: 0.375rem;
+          padding: 1.625rem 0.75rem 0.75rem;
+        }
+        .result {
+          margin: -0.125rem 0.5rem 0.625rem;
+          padding: 0.5rem 0.625rem 0.625rem 1.75rem;
+        }
+        .result::before {
+          left: 0.5rem;
+          top: 0.5rem;
+        }
+        .rv-foot {
+          padding-top: 0.625rem;
+        }
+        .bonus .jelly {
+          width: 7rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <filter id="rough">
+        <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="7" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" />
+      </filter>
+    </svg>
+    <main class="screen review season-winter">
+      <img class="scenery" src="../../../src/assets/pictures/bg/s1395/entrance-winter.jpg" alt="" />
+      <div class="veil"></div>
+
+      <section class="sheet paper" aria-label="한 해 돌아보기 1장: 네 계절에 고른 것">
+        <header class="rv-head">
+          <div>
+            <p class="kicker">1395년 느티골 · 농민 집 아이 · 한 해 돌아보기</p>
+            <h1 class="praise">
+              한 해를 끝까지 살았어요
+              <svg class="brush" viewBox="0 0 300 18" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M4 12 C 50 6, 120 5, 180 8 S 262 13, 296 7" stroke="#e9ad2a" stroke-width="9" stroke-linecap="round" fill="none" opacity="0.75" />
+                <path d="M30 14 C 90 10, 170 10, 250 12" stroke="#e9ad2a" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.5" />
+              </svg>
+            </h1>
+          </div>
+          <ol class="steps" aria-label="4장 가운데 1장째: 네 계절">
+            <li class="now" aria-hidden="true"><span class="n">1</span><span class="nm">네 계절</span></li>
+            <li aria-hidden="true"><span class="n">2</span><span class="nm">한 해의 흐름</span></li>
+            <li aria-hidden="true"><span class="n">3</span><span class="nm">올해의 이름</span></li>
+            <li aria-hidden="true"><span class="n">4</span><span class="nm">남길 것</span></li>
+          </ol>
+        </header>
+
+        <div class="dan rv-rule" aria-hidden="true"></div>
+
+        <div class="rv-sub">
+          <h2>네 계절에 고른 것</h2>
+          <p class="legend">
+            <span><span class="dotmark" aria-hidden="true"></span>내가 고른 것</span>
+            <span><b aria-hidden="true">→</b>계절의 끝에 생긴 일</span>
+          </p>
+        </div>
+
+        <ol class="year-path">
+          <li class="sea paper season-spring" aria-label="봄에 고른 것">
+            <figure class="pic" style="--img: url(../../../src/assets/pictures/bg/s1395/paddy-spring.jpg)"><span class="stamp">봄</span></figure>
+            <ul class="picks">
+              <li>돌아온 집의 밀린 논갈이를 거든다</li>
+              <li>낮은 논에 몰아 뿌린다</li>
+            </ul>
+          </li>
+          <li class="sea paper season-summer" aria-label="여름에 고른 것">
+            <figure class="pic" style="--img: url(../../../src/assets/pictures/bg/s1395/paddy-summer.jpg)">
+              <span class="stamp">여름</span>
+              <span class="weather">올해의 날씨<b>평소 같은 해</b></span>
+            </figure>
+            <ul class="picks">
+              <li>하루 쉬며 놀이판에 어울린다</li>
+              <li>온 식구가 매달려 맨다</li>
+            </ul>
+            <p class="result">낮은 논은 물 대기가 쉬웠다. 몰아 뿌린 벼가 고르게 잘 자랐다. <span class="val"><i class="px" data-px="sack" data-size="24"></i>살림 +1</span></p>
+          </li>
+          <li class="sea paper season-autumn" aria-label="가을에 고른 것">
+            <figure class="pic" style="--img: url(../../../src/assets/pictures/bg/s1395/threshing-autumn.jpg)"><span class="stamp">가을</span></figure>
+            <ul class="picks">
+              <li>떠난 집 논까지 함께 돌본다</li>
+              <li>우리 집 쓸 만큼만 바꾼다</li>
+            </ul>
+            <p class="result">한양에서 돌아온 이웃이 우리 집 가을걷이를 거들어 주었다. <span class="val"><i class="px" data-px="body" data-size="24"></i>기력 +1</span></p>
+          </li>
+          <li class="sea paper season-winter" aria-label="겨울에 고른 것">
+            <figure class="pic" style="--img: url(../../../src/assets/pictures/bg/s1395/temple-winter.jpg)"><span class="stamp">겨울</span></figure>
+            <ul class="picks">
+              <li>절에 가서 지낸다</li>
+              <li>겨울 동안 동무에게 글자를 배운다</li>
+            </ul>
+          </li>
+        </ol>
+
+        <footer class="rv-foot">
+          <div class="bonus" role="img" aria-label="덤 미션 생활 카드 열 장: 10장 가운데 7장을 모았어요">
+            <i class="px" data-px="card" data-size="40"></i>
+            <span class="bonus-text">
+              <b>덤 미션 「생활 카드 열 장」</b>
+              <span>생활 카드 10장 가운데 7장을 모았어요.</span>
+            </span>
+            <span class="jelly" style="--v: 7; --max: 10"><b></b></span>
+            <span class="count">7<small>/10</small></span>
+          </div>
+          <p class="saved" role="status">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 L10 17 L19 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            저절로 저장되었어요.
+          </p>
+          <button type="button" class="clay big primary sheen rv-next"><span>다음</span><span aria-hidden="true">▶</span></button>
+        </footer>
+      </section>
+    </main>
+    <script src="px.js"></script>
+  </body>
+</html>

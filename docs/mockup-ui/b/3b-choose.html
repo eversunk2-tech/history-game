@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>B · 대화 — 고르기</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Jua&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+    <link rel="stylesheet" href="b.css" />
+    <script src="btn.js"></script>
+    <style>
+      /* 선택지가 뜨면 두 사람이 양옆으로 비켜서고 한 걸음 물러난 듯 작아진다(무대는 살짝 어두워진다) */
+      .choosing .slot.at-left {
+        left: -9%;
+      }
+      .choosing .slot.at-right {
+        left: 59%;
+      }
+      .choosing .slot img {
+        transform: translateX(-50%) scale(0.95);
+      }
+      .choosing .choices {
+        bottom: 10.5rem;
+      }
+      .choosing .bubble {
+        min-height: 7.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="screen talkscreen choosing season-spring">
+      <!-- 대화 장면에서는 띠를 한 줄로 줄인다: 맵과 같은 한지 띠, 같은 알약(검은 띠로 바뀌지 않는다) -->
+      <header class="band hanji compact">
+        <div class="band-row band-info">
+          <span class="season-chip"><i class="px" data-px="spring"></i>봄</span>
+          <div class="where">
+            <b>1395년 느티골</b>
+            <span>농민 집 아이</span>
+          </div>
+          <div class="tray stats" role="group" aria-label="살림 4, 기력 6, 인심 5. 가장 많으면 10">
+            <div class="stat">
+              <i class="px" data-px="sack"></i>
+              <div class="stat-top"><span class="stat-name">살림</span><span class="stat-num">4</span></div>
+              <div class="jelly" style="--v: 4"><b></b></div>
+            </div>
+            <span class="sep" aria-hidden="true"></span>
+            <div class="stat">
+              <i class="px" data-px="body"></i>
+              <div class="stat-top"><span class="stat-name">기력</span><span class="stat-num">6</span></div>
+              <div class="jelly" style="--v: 6"><b></b></div>
+            </div>
+            <span class="sep" aria-hidden="true"></span>
+            <div class="stat">
+              <i class="px" data-px="trust"></i>
+              <div class="stat-top"><span class="stat-name">인심</span><span class="stat-num">5</span></div>
+              <div class="jelly" style="--v: 5"><b></b></div>
+            </div>
+          </div>
+          <div class="tray suns" role="img" aria-label="남은 해 3, 이 계절의 해 3">
+            <span class="suns-label">해</span>
+            <i class="px" data-px="sun"></i><i class="px" data-px="sun"></i><i class="px" data-px="sun"></i>
+            <span class="stat-num">3<small>/3</small></span>
+          </div>
+        </div>
+        <div class="dan" aria-hidden="true"></div>
+      </header>
+
+      <div class="stage" style="top: var(--band-h, 4.75rem)" role="dialog" aria-label="대화 장면">
+        <img class="scenery" src="../../../src/assets/pictures/bg/s1395/paddy-spring.jpg" alt="" />
+        <div class="talk-shade"></div>
+        <div class="slot at-left"><img src="../../../src/assets/pictures/char/s1395/father-plain.webp" alt="아버지" /></div>
+        <div class="slot at-right quiet"><img src="../../../src/assets/pictures/char/s1395/mother-plain.webp" alt="어머니" /></div>
+
+        <button type="button" class="clay talk-later"><span aria-hidden="true">←</span><span>나중에 할게요</span></button>
+
+        <div class="bookmark" aria-label="꼭 할 일, 볍씨 뿌리기">
+          <span><span class="mark must" aria-hidden="true"></span><small>꼭 할 일</small>볍씨 뿌리기</span>
+        </div>
+
+        <div class="talk-dim"></div>
+
+        <!-- 선택지: 큰 점토 카드 둘. 고르기 전에는 어느 것도 칠하지 않는다 -->
+        <ul class="choices" aria-label="어떻게 할까요? 화살표로 고르고 Enter로 정해요.">
+          <li><span class="choices-head">어떻게 할까요?</span></li>
+          <li>
+            <button type="button" class="choice paper"><span class="ring" aria-hidden="true"></span><span>낮은 논에 몰아 뿌린다</span></button>
+          </li>
+          <li>
+            <button type="button" class="choice paper"><span class="ring" aria-hidden="true"></span><span>높은 논에도 나눠 뿌린다</span></button>
+          </li>
+        </ul>
+
+        <!-- 고르는 동안 대사 창에는 마지막 말이 남는다(눌러도 넘어가지 않으므로 손가락 안내가 없다) -->
+        <div class="bubble paper" style="--tail: 14%">
+          <span class="ribbon"><span>아버지</span></span>
+          <span class="say">높은 논은 물 대기가 힘들어 덜 거두는데… 네 생각은 어떠냐?</span>
+        </div>
+      </div>
+    </main>
+    <script src="px.js"></script>
+    <script>
+      const fit = () => {
+        const h = document.querySelector('.band').getBoundingClientRect().height;
+        document.documentElement.style.setProperty('--band-h', `${h}px`);
+      };
+      fit();
+      document.fonts.ready.then(fit);
+      addEventListener('resize', fit);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>시안 C · 두루마리 장면 — 조선에서 한 해 살기</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Hahmlet:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="c.css" />
+    <script>
+      // ?solo=1|2|2b|3|3b|4 — 한 화면만 창 가득(1024×768 점검과 찍기용). ?still — 움직임을 멈춘다.
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var root = document.documentElement;
+        if (q.get('solo')) {
+          root.classList.add('solo');
+          root.dataset.solo = q.get('solo');
+        }
+        if (q.has('still')) root.classList.add('still');
+        document.addEventListener('DOMContentLoaded', function () {
+          var on = document.getElementById('s-' + root.dataset.solo);
+          if (on) on.classList.add('on');
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <!-- 게임의 작은 그림 표시(src/ui/icons.tsx)를 그대로 옮겼다 -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-living" viewBox="0 0 32 32">
+          <g stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">
+            <path d="M11 9 Q16 12 21 9 Q27 16 25 25 Q16 29 7 25 Q5 16 11 9 Z" fill="#d9b673" />
+            <path d="M11 9 L9 4 M21 9 L23 4 M11 9 Q16 6 21 9" fill="none" />
+          </g>
+        </symbol>
+        <symbol id="i-body" viewBox="0 0 32 32">
+          <g stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">
+            <circle cx="16" cy="8" r="4.2" fill="#f0c9a0" />
+            <path d="M9 27 L11.5 16 Q16 13.5 20.5 16 L23 27 Z" fill="#e8a25a" />
+            <path d="M11.5 16.5 L5.5 8 M20.5 16.5 L26.5 8" fill="none" />
+          </g>
+        </symbol>
+        <symbol id="i-trust" viewBox="0 0 32 32">
+          <g stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">
+            <rect x="3" y="12" width="15" height="9" rx="4.5" fill="#e9c9a5" transform="rotate(20 10 16)" />
+            <rect x="14" y="12" width="15" height="9" rx="4.5" fill="#f3ddc2" transform="rotate(-20 22 16)" />
+          </g>
+        </symbol>
+        <symbol id="i-sun" viewBox="0 0 32 32">
+          <g stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">
+            <circle cx="16" cy="16" r="6.5" fill="#f2b443" />
+            <path d="M16 3 V6.5 M16 25.5 V29 M3 16 H6.5 M25.5 16 H29 M6.8 6.8 L9.3 9.3 M22.7 22.7 L25.2 25.2 M25.2 6.8 L22.7 9.3 M9.3 22.7 L6.8 25.2" fill="none" />
+          </g>
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 32 32">
+          <g stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">
+            <path d="M10 15 V11 a6 6 0 0 1 12 0 V15" fill="none" />
+            <rect x="7" y="15" width="18" height="12" rx="2.5" fill="currentColor" fill-opacity="0.15" />
+            <path d="M16 19.5 V23" fill="none" />
+          </g>
+        </symbol>
+        <symbol id="i-caret" viewBox="0 0 16 16">
+          <path d="M3.5 6 L8 10.5 L12.5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 20 20">
+          <path d="M4 10.5 L8.2 14.5 L16 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <!-- ══ 견본 ══════════════════════════════════════════════ -->
+    <header class="sheet">
+      <p class="sheet-kicker">「조선에서 한 해 살기」 디자인 시안 C</p>
+      <h1>두루마리 장면</h1>
+      <p class="sheet-line">그림이 주인공이고 UI는 한지 띠처럼 얇게 — 느티골에 들어가 있는 느낌.</p>
+      <div class="sheet-rule"></div>
+      <div class="sheet-grid">
+        <div class="sheet-style">
+          <h2>스타일</h2>
+          <p><b>주</b> 에디토리얼·헤리티지<br />한지 띠, 먹 글자, 세리프 제목, 오방색 점·선</p>
+          <p style="margin-top: 0.5rem"><b>보조</b> 이머시브<br />화면 가득한 장면, 장면의 빛, 고른 자리에 퍼지는 빛</p>
+        </div>
+        <div>
+          <h2>색(오방색은 점·선·작은 면에만)</h2>
+          <div class="swatches">
+            <span class="sw"><i style="background: #f4ecd9"></i><b>한지</b>#f4ecd9</span>
+            <span class="sw"><i style="background: #fbf6e9"></i><b>밝은 한지</b>#fbf6e9</span>
+            <span class="sw"><i style="background: #2e2925"></i><b>먹</b>#2e2925</span>
+            <span class="sw"><i style="background: #5c5348"></i><b>옅은 먹</b>#5c5348</span>
+            <span class="sw"><i style="background: #1c1815"></i><b>먹 띠</b>#1c1815</span>
+            <span class="sw"><i style="background: #b5332e"></i><b>주홍</b>#b5332e</span>
+            <span class="sw"><i style="background: #d9a521"></i><b>황(빛)</b>#d9a521</span>
+            <span class="sw"><i style="background: #2f5d8a"></i><b>청(초점)</b>#2f5d8a</span>
+            <span class="sw"><i style="background: #7fa650"></i><b>봄</b>#7fa650</span>
+            <span class="sw"><i style="background: #2f8a76"></i><b>여름</b>#2f8a76</span>
+            <span class="sw"><i style="background: #c07f24"></i><b>가을</b>#c07f24</span>
+            <span class="sw"><i style="background: #64809c"></i><b>겨울</b>#64809c</span>
+          </div>
+        </div>
+        <div>
+          <h2>글꼴(한 화면에 셋까지)</h2>
+          <ul class="fonts">
+            <li><span>제목 Hahmlet</span><b class="f1">조선에서 한 해 살기</b></li>
+            <li><span>이야기 고운바탕</span><b class="f2">우리 논에 물이 찰랑인다.</b></li>
+            <li><span>정보·단추 Pretendard</span><b class="f3">살림 4 · 기력 6 · 인심 5 · 해 3/3</b></li>
+          </ul>
+        </div>
+      </div>
+    </header>
+
+    <!-- ══ 1. 제목 ═══════════════════════════════════════════ -->
+    <p class="cap"><span class="cap-n">화면 1</span><b>제목</b><span>그림이 화면 가득. 비어 있는 아침 하늘에 큰 세리프 제목, 아래 한지 띠 하나에 단추를 모았다. 해 쪽의 무리가 숨 쉬듯 커진다.</span></p>
+    <main class="frame f-title season-spring" id="s-1" aria-label="화면 1 제목">
+      <div class="tt-sky"></div>
+      <div class="tt-pic">
+        <img src="../assets/bg-title-dawn-1376.jpg" alt="이른 봄 아침의 느티골 어귀. 왼쪽 산 너머로 해가 뜨고, 오른쪽에 큰 느티나무가 서 있다." />
+        <span class="tt-halo" aria-hidden="true"></span>
+      </div>
+      <div class="tt-light" aria-hidden="true"></div>
+
+      <header class="tt-head">
+        <p class="tt-kicker">조선 시대 마을 느티골 이야기</p>
+        <h1 class="tt-name">조선에서<br />한 해 살기</h1>
+        <p class="tt-lead">그때 사람이 되어 봄, 여름, 가을, 겨울을 살아 보아요.<br />내가 고르는 대로 한 해가 흘러가요.</p>
+      </header>
+
+      <button type="button" class="tt-build" aria-label="판 dev. 이 기기의 정보 보기"><span>판 dev · 이 기기</span></button>
+
+      <nav class="tt-band texed" aria-label="시작">
+        <button type="button" class="btn-go">
+          <span class="go-main">이어 하기 <i aria-hidden="true">▶</i></span>
+          <span class="go-sub">1395년 봄 · 농민 집 아이</span>
+        </button>
+        <button type="button" class="btn-paper">처음부터</button>
+        <span class="tt-rule" aria-hidden="true"></span>
+        <p class="tt-soon"><b>수첩 · 선생님 자료</b><span>준비 중이에요</span></p>
+        <div class="tt-util">
+          <button type="button" class="btn-link">홈 화면에 추가</button>
+          <button type="button" class="btn-link">모두 지우고 처음부터</button>
+        </div>
+      </nav>
+    </main>
+
+    <!-- ══ 2. 맵 ═════════════════════════════════════════════ -->
+    <p class="cap"><span class="cap-n">화면 2</span><b>맵</b><span>위 띠는 얇은 반투명 한지(지금 높이의 절반). 수치는 작은 숫자로 접어 두고, 쪽지·작은 지도는 가장자리에, 계절 글은 영화 자막처럼.</span></p>
+    <main class="frame f-map season-spring" id="s-2" aria-label="화면 2 맵">
+      <div class="mp-pic" role="img" aria-label="느티골 맵(도트). 가려는 곳을 누르면 걸어가요."></div>
+
+      <header class="mb texed">
+        <div class="mb-info">
+          <p class="mb-season"><i class="sdot" aria-hidden="true"></i>봄</p>
+          <p class="mb-where"><b>1395년 느티골</b><span>농민 집 아이</span></p>
+          <button type="button" class="mb-stats" aria-expanded="false" aria-label="살림 4, 기력 6, 인심 5. 가장 많으면 10. 눌러서 자세히 보기">
+            <span class="st"><svg class="icon"><use href="#i-living" /></svg><span>살림</span><b>4</b></span>
+            <span class="st"><svg class="icon"><use href="#i-body" /></svg><span>기력</span><b>6</b></span>
+            <span class="st"><svg class="icon"><use href="#i-trust" /></svg><span>인심</span><b>5</b></span>
+            <svg class="mb-caret" aria-hidden="true"><use href="#i-caret" /></svg>
+          </button>
+          <p class="mb-sun" role="img" aria-label="남은 해 3, 이 계절의 해 3">
+            <span>해</span>
+            <svg><use href="#i-sun" /></svg><svg><use href="#i-sun" /></svg><svg><use href="#i-sun" /></svg>
+            <b>3</b><small>/3</small>
+          </p>
+        </div>
+        <nav class="mb-tools" aria-label="맵의 단추">
+          <button type="button" class="mb-btn">지난 이야기</button>
+          <button type="button" class="mb-btn">봇짐</button>
+          <button type="button" class="mb-btn locked" aria-disabled="true" aria-describedby="why-2">
+            <svg aria-hidden="true"><use href="#i-lock" /></svg>봄을 보낸다
+          </button>
+          <button type="button" class="mb-btn quiet">처음으로</button>
+          <span id="why-2" class="vh">꼭 할 일을 마치면 봄을 보낼 수 있어요</span>
+        </nav>
+      </header>
+
+      <aside class="todo shut texed" aria-label="할 일 쪽지">
+        <button type="button" class="todo-head" aria-expanded="false">
+          <span class="todo-ttl"><i class="mk must" aria-hidden="true"></i>봄에 할 일</span>
+          <span class="todo-going"><i aria-hidden="true">➤</i>돌아온 사람들, 떠나는 스님들</span>
+          <span class="todo-fold">펴기 <svg class="icon" style="width: 0.875rem; height: 0.875rem" aria-hidden="true"><use href="#i-caret" /></svg></span>
+        </button>
+      </aside>
+
+      <figure class="mini texed">
+        <img src="img/minimap.png" alt="작은 지도. 가 본 곳이 채워져요." />
+        <figcaption>마을 안</figcaption>
+      </figure>
+
+      <p class="mp-sub" role="status"><span class="mp-sub-k">봄</span>이월, 얼었던 땅이 풀리고<br />궁궐 공사에 갔던 이웃이 돌아왔다.</p>
+    </main>
+
+    <!-- ══ 2b. 맵(펼친 꼴) ═══════════════════════════════════ -->
+    <p class="cap"><span class="cap-n">화면 2-2</span><b>맵 — 펼친 꼴</b><span>수치를 누르면 이름·뜻·열 칸이 잠깐 뜬다. 할 일 쪽지를 펴면 꼭 할 일 / 덤 두 묶음. 화살표가 가리키는 줄이 가장 밝다.</span></p>
+    <main class="frame f-map season-spring" id="s-2b" aria-label="화면 2-2 맵, 펼친 꼴">
+      <div class="mp-pic" role="img" aria-label="느티골 맵(도트)"></div>
+
+      <header class="mb texed">
+        <div class="mb-info">
+          <p class="mb-season"><i class="sdot" aria-hidden="true"></i>봄</p>
+          <p class="mb-where"><b>1395년 느티골</b><span>농민 집 아이</span></p>
+          <button type="button" class="mb-stats" aria-expanded="true" aria-label="살림 4, 기력 6, 인심 5. 닫기">
+            <span class="st"><svg class="icon"><use href="#i-living" /></svg><span>살림</span><b>4</b></span>
+            <span class="st"><svg class="icon"><use href="#i-body" /></svg><span>기력</span><b>6</b></span>
+            <span class="st"><svg class="icon"><use href="#i-trust" /></svg><span>인심</span><b>5</b></span>
+            <svg class="mb-caret" aria-hidden="true"><use href="#i-caret" /></svg>
+          </button>
+          <p class="mb-sun" role="img" aria-label="남은 해 3, 이 계절의 해 3">
+            <span>해</span>
+            <svg><use href="#i-sun" /></svg><svg><use href="#i-sun" /></svg><svg><use href="#i-sun" /></svg>
+            <b>3</b><small>/3</small>
+          </p>
+        </div>
+        <nav class="mb-tools" aria-label="맵의 단추">
+          <button type="button" class="mb-btn">지난 이야기</button>
+          <button type="button" class="mb-btn">봇짐</button>
+          <button type="button" class="mb-btn locked" aria-disabled="true"><svg aria-hidden="true"><use href="#i-lock" /></svg>봄을 보낸다</button>
+          <button type="button" class="mb-btn quiet">처음으로</button>
+        </nav>
+      </header>
+
+      <div class="statpop" role="dialog" aria-label="살림·기력·인심">
+        <ul>
+          <li class="sp-row">
+            <svg><use href="#i-living" /></svg>
+            <span class="sp-name"><b>살림</b><small>곡식과 재물</small></span>
+            <b class="sp-num">4<small>/10</small></b>
+            <span class="cells" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          </li>
+          <li class="sp-row">
+            <svg><use href="#i-body" /></svg>
+            <span class="sp-name"><b>기력</b><small>몸과 마음</small></span>
+            <b class="sp-num">6<small>/10</small></b>
+            <span class="cells" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></span>
+          </li>
+          <li class="sp-row">
+            <svg><use href="#i-trust" /></svg>
+            <span class="sp-name"><b>인심</b><small>집안과 이웃의 믿음</small></span>
+            <b class="sp-num">5<small>/10</small></b>
+            <span class="cells" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></span>
+          </li>
+        </ul>
+        <p class="sp-foot">숫자가 클수록 넉넉해요. 가장 많으면 10이에요.</p>
+      </div>
+
+      <aside class="todo open texed" aria-label="할 일 쪽지">
+        <button type="button" class="todo-head" aria-expanded="true">
+          <span class="todo-ttl"><i class="mk must" aria-hidden="true"></i>봄에 할 일</span>
+          <span class="todo-fold">접기 <svg class="icon" style="width: 0.875rem; height: 0.875rem; transform: rotate(180deg)" aria-hidden="true"><use href="#i-caret" /></svg></span>
+        </button>
+        <div class="todo-tabs" role="tablist" aria-label="할 일의 묶음">
+          <button type="button" role="tab" class="todo-tab on" aria-selected="true"><i class="mk must" aria-hidden="true"></i>꼭 할 일 <span>둘 남음</span></button>
+          <button type="button" role="tab" class="todo-tab" aria-selected="false"><i class="mk extra" aria-hidden="true"></i>덤 <span>4가지</span></button>
+        </div>
+        <ul class="todo-list">
+          <li>
+            <button type="button" class="todo-row on" aria-pressed="true">
+              <i class="mk must" aria-hidden="true"></i>
+              <span><b>돌아온 사람들, 떠나는 스님들</b><small>마을 어귀 느티나무 <i aria-hidden="true">➤</i></small></span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="todo-row" aria-pressed="false">
+              <i class="mk must" aria-hidden="true"></i>
+              <span><b>볍씨 뿌리기</b><small>우리 논</small></span>
+            </button>
+          </li>
+        </ul>
+        <p class="todo-tip">줄을 누르면 화살표가 길을 알려 줘요.</p>
+      </aside>
+
+      <figure class="mini texed">
+        <img src="img/minimap.png" alt="작은 지도. 가 본 곳이 채워져요." />
+        <figcaption>마을 안</figcaption>
+      </figure>
+    </main>
+
+    <!-- ══ 3. 대화 ═══════════════════════════════════════════ -->
+    <p class="cap"><span class="cap-n">화면 3</span><b>대화</b><span>위아래 먹 띠로 장면을 영화처럼. 위 띠는 맵의 띠와 같은 자리·같은 글꼴에 불만 꺼진 것이고, 일의 표시가 띠 안에 들어앉는다. 화면 어디를 눌러도 넘어간다는 것을 가장자리에 연하게.</span></p>
+    <main class="frame f-talk season-spring" id="s-3" aria-label="화면 3 대화">
+      <img class="tk-bg" src="../../../src/assets/pictures/bg/s1395/paddy-spring.jpg" alt="" />
+      <div class="tk-light" aria-hidden="true"></div>
+      <div class="tk-cast">
+        <img class="fig left" src="../../../src/assets/pictures/char/s1395/father-plain.webp" alt="아버지" />
+        <img class="fig right quiet" src="../../../src/assets/pictures/char/s1395/mother-plain.webp" alt="어머니" />
+      </div>
+      <div class="tk-shade" aria-hidden="true"></div>
+
+      <header class="mb dark">
+        <div class="mb-info">
+          <p class="mb-season"><i class="sdot" aria-hidden="true"></i>봄</p>
+          <p class="mb-where"><b>1395년 느티골</b><span>농민 집 아이</span></p>
+          <div class="mb-stats" role="img" aria-label="살림 4, 기력 6, 인심 5">
+            <span class="st"><svg class="icon"><use href="#i-living" /></svg><span>살림</span><b>4</b></span>
+            <span class="st"><svg class="icon"><use href="#i-body" /></svg><span>기력</span><b>6</b></span>
+            <span class="st"><svg class="icon"><use href="#i-trust" /></svg><span>인심</span><b>5</b></span>
+          </div>
+          <p class="mb-sun" role="img" aria-label="남은 해 3, 이 계절의 해 3">
+            <span>해</span>
+            <svg><use href="#i-sun" /></svg><svg><use href="#i-sun" /></svg><svg><use href="#i-sun" /></svg>
+            <b>3</b><small>/3</small>
+          </p>
+        </div>
+        <div class="mb-tools">
+          <p class="tk-task"><i class="mk must" aria-hidden="true"></i>꼭 할 일 <b>볍씨 뿌리기</b></p>
+          <button type="button" class="tk-later"><span aria-hidden="true">←</span> 나중에 할게요</button>
+        </div>
+      </header>
+
+      <button type="button" class="tk-box">
+        <span class="tk-name">아버지</span>
+        <span class="tk-line" aria-live="polite" style="display: block">냇가 낮은 논은 물 대기가 쉬워 벼가 잘된다. 다 거기 뿌릴까 싶다.</span>
+        <span class="tk-hint" aria-hidden="true">화면을 누르거나 <kbd>→</kbd> <kbd>Space</kbd><span class="tk-next">▶</span></span>
+      </button>
+    </main>
+
+    <!-- ══ 3b. 대화(선택지) ══════════════════════════════════ -->
+    <p class="cap"><span class="cap-n">화면 3-2</span><b>대화 — 선택지</b><span>선 사람은 양옆으로 비켜서고, 장면 위에 한지 쪽지 둘이 뜬다. 첫째 쪽지를 누르는 순간: 고른 자리에 빛이 퍼진다.</span></p>
+    <main class="frame f-talk choose season-spring" id="s-3b" aria-label="화면 3-2 대화, 선택지">
+      <img class="tk-bg" src="../../../src/assets/pictures/bg/s1395/paddy-spring.jpg" alt="" />
+      <div class="tk-light" aria-hidden="true"></div>
+      <div class="tk-cast">
+        <img class="fig left quiet" src="../../../src/assets/pictures/char/s1395/father-plain.webp" alt="아버지" />
+        <img class="fig right quiet" src="../../../src/assets/pictures/char/s1395/mother-plain.webp" alt="어머니" />
+      </div>
+      <div class="tk-shade" aria-hidden="true"></div>
+      <div class="tk-dim" aria-hidden="true"></div>
+
+      <header class="mb dark">
+        <div class="mb-info">
+          <p class="mb-season"><i class="sdot" aria-hidden="true"></i>봄</p>
+          <p class="mb-where"><b>1395년 느티골</b><span>농민 집 아이</span></p>
+          <div class="mb-stats" role="img" aria-label="살림 4, 기력 6, 인심 5">
+            <span class="st"><svg class="icon"><use href="#i-living" /></svg><span>살림</span><b>4</b></span>
+            <span class="st"><svg class="icon"><use href="#i-body" /></svg><span>기력</span><b>6</b></span>
+            <span class="st"><svg class="icon"><use href="#i-trust" /></svg><span>인심</span><b>5</b></span>
+          </div>
+          <p class="mb-sun" role="img" aria-label="남은 해 3, 이 계절의 해 3">
+            <span>해</span>
+            <svg><use href="#i-sun" /></svg><svg><use href="#i-sun" /></svg><svg><use href="#i-sun" /></svg>
+            <b>3</b><small>/3</small>
+          </p>
+        </div>
+        <div class="mb-tools">
+          <p class="tk-task"><i class="mk must" aria-hidden="true"></i>꼭 할 일 <b>볍씨 뿌리기</b></p>
+          <button type="button" class="tk-later"><span aria-hidden="true">←</span> 나중에 할게요</button>
+        </div>
+      </header>
+
+      <ul class="slips" aria-label="어떻게 할까요? 화살표로 고르고 Enter로 정해요.">
+        <li><span class="slip-glow" aria-hidden="true"></span><button type="button" class="slip lit"><span class="slip-n">1</span>낮은 논에 몰아 뿌린다</button></li>
+        <li><button type="button" class="slip"><span class="slip-n">2</span>높은 논에도 나눠 뿌린다</button></li>
+      </ul>
+
+      <div class="tk-box" style="cursor: default">
+        <span class="tk-name">아버지</span>
+        <span class="tk-line" style="display: block">높은 논은 물 대기가 힘들어 덜 거두는데… 네 생각은 어떠냐?</span>
+      </div>
+    </main>
+
+    <!-- ══ 4. 한 해 돌아보기 ═════════════════════════════════ -->
+    <p class="cap"><span class="cap-n">화면 4</span><b>한 해 돌아보기</b><span>네 계절의 채색화를 안개로 이은 두루마리 한 장. 그림 아래에 계절마다 고른 것을 적고, 누른 계절(여기서는 여름)에 빛이 퍼진다. 끝에는 맺음 글과 도장.</span></p>
+    <main class="frame f-review season-winter" id="s-4" aria-label="화면 4 한 해 돌아보기">
+      <div class="rv-light" aria-hidden="true"></div>
+
+      <header class="rv-head">
+        <div>
+          <p class="rv-kicker">1395년 느티골 · 농민 집 아이 · 한 해 돌아보기</p>
+          <h1 class="rv-title">네 계절에 고른 것</h1>
+        </div>
+        <ol class="rv-steps" aria-label="네 장 가운데 첫째 장: 네 계절">
+          <li class="now"><span>1</span>네 계절</li>
+          <li><span>2</span>한 해의 흐름</li>
+          <li><span>3</span>올해의 이름</li>
+          <li><span>4</span>남길 것</li>
+        </ol>
+      </header>
+
+      <div class="scroll">
+        <span class="rod" aria-hidden="true"></span>
+        <div class="scroll-paper">
+          <div class="scroll-pics">
+            <figure class="pic season-spring">
+              <img src="../../../src/assets/pictures/bg/s1395/paddy-spring.jpg" alt="봄의 논" style="object-position: 50% 62%" />
+              <figcaption>논</figcaption>
+            </figure>
+            <figure class="pic season-summer lit">
+              <img src="../../../src/assets/pictures/bg/s1395/stream-summer.jpg" alt="여름의 냇가 놀이판" style="object-position: 62% 50%" />
+              <figcaption>냇가</figcaption>
+            </figure>
+            <figure class="pic season-autumn">
+              <img src="../../../src/assets/pictures/bg/s1395/threshing-autumn.jpg" alt="가을의 타작 마당" style="object-position: 40% 62%" />
+              <figcaption>타작 마당</figcaption>
+            </figure>
+            <figure class="pic season-winter">
+              <img src="../../../src/assets/pictures/bg/s1395/temple-winter.jpg" alt="겨울의 뒷산 절" style="object-position: 52% 55%" />
+              <figcaption>뒷산 절</figcaption>
+            </figure>
+          </div>
+
+          <div class="scroll-cols">
+            <section class="col season-spring" aria-label="봄에 고른 것">
+              <h2 class="col-h"><i class="sdot" aria-hidden="true"></i>봄</h2>
+              <ul class="picks">
+                <li>돌아온 집의 밀린 논갈이를 거든다</li>
+                <li>낮은 논에 몰아 뿌린다</li>
+              </ul>
+            </section>
+            <section class="col season-summer lit" aria-label="여름에 고른 것" aria-current="true">
+              <h2 class="col-h"><i class="sdot" aria-hidden="true"></i>여름</h2>
+              <p class="col-weather">올해의 날씨 · <b>평소 같은 해</b></p>
+              <ul class="picks">
+                <li>하루 쉬며 놀이판에 어울린다</li>
+                <li>온 식구가 매달려 맨다</li>
+              </ul>
+              <p class="result"><i aria-hidden="true">→</i>낮은 논은 물 대기가 쉬웠다. 몰아 뿌린 벼가 고르게 잘 자랐다. <b>(살림 +1)</b></p>
+            </section>
+            <section class="col season-autumn" aria-label="가을에 고른 것">
+              <h2 class="col-h"><i class="sdot" aria-hidden="true"></i>가을</h2>
+              <ul class="picks">
+                <li>떠난 집 논까지 함께 돌본다</li>
+                <li>우리 집 쓸 만큼만 바꾼다</li>
+              </ul>
+              <p class="result"><i aria-hidden="true">→</i>한양에서 돌아온 이웃이 우리 집 가을걷이를 거들어 주었다. <b>(기력 +1)</b></p>
+            </section>
+            <section class="col season-winter" aria-label="겨울에 고른 것">
+              <h2 class="col-h"><i class="sdot" aria-hidden="true"></i>겨울</h2>
+              <ul class="picks">
+                <li>절에 가서 지낸다</li>
+                <li>겨울 동안 동무에게 글자를 배운다</li>
+              </ul>
+              <p class="side">덤 미션 「생활 카드 열 장」 — 생활 카드 10장 가운데 7장을 모았어요.</p>
+            </section>
+          </div>
+
+          <div class="colophon">
+            <p>한 해를 끝까지 살았어요.</p>
+            <span class="seal" aria-hidden="true">한 해<br />살기</span>
+          </div>
+        </div>
+        <span class="rod" aria-hidden="true"></span>
+      </div>
+
+      <footer class="rv-foot">
+        <p class="rv-legend"><span><i>·</i> 내가 고른 것</span><span><i class="to">→</i> 계절의 끝에 생긴 일</span></p>
+        <p class="rv-saved" role="status"><svg aria-hidden="true"><use href="#i-check" /></svg>저절로 저장되었어요.</p>
+        <button type="button" class="btn-go next">다음 <span class="go-arrow" aria-hidden="true">▶</span></button>
+      </footer>
+    </main>
+
+    <p class="sheet-foot">
+      그림: 제목 — 제미나이로 만든 이른 아침의 느티골(docs/mockup-ui/assets), 대화·돌아보기 — 지금 게임의 채색화(src/assets/pictures), 맵 — 지금 게임의 도트 맵(docs/mockup-ui/now/map-clean.jpg). 한지 결 — 제미나이로 만든 타일.
+      한 화면만 크게 보려면 주소 뒤에 ?solo=1 (2, 2b, 3, 3b, 4)을 붙여요.
+    </p>
+  </body>
+</html>

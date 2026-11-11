@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>B · 제목</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Jua&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+    <link rel="stylesheet" href="b.css" />
+    <script src="btn.js"></script>
+    <style>
+      /* 하늘: 그림 맨 윗줄의 빛깔을 위로 이어 그린다(왼쪽은 해 뜨는 쪽이라 따뜻하고, 오른쪽은 푸른 기가 돈다) */
+      .title {
+        background:
+          linear-gradient(to right, #ece6dc 0%, #efe8de 35%, #e6e7e3 65%, #dde5e9 100%);
+      }
+
+      /* 그림: 너비에 맞춰 아래에 붙이고, 윗가장자리를 하늘에 녹인다 */
+      .title-art {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        aspect-ratio: 1376 / 612;
+        background: url(../assets/bg-title-dawn-1376.jpg) center bottom / cover no-repeat;
+        -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 9%);
+        mask-image: linear-gradient(to bottom, transparent 0, #000 9%);
+      }
+
+      /* 해가 왼쪽 위에서 뜬다: 빛은 그쪽에서 온다(단추의 그림자가 오른쪽 아래로 조금 기운 까닭) */
+      .title-glow {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 46%;
+        height: 72%;
+        background: radial-gradient(ellipse at 40% 62%, rgba(255, 236, 200, 0.55), rgba(255, 236, 200, 0) 60%);
+        pointer-events: none;
+      }
+
+      .title-text {
+        position: absolute;
+        top: 3.25rem;
+        left: 4.25rem;
+        width: 32rem;
+      }
+
+      .kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.625rem;
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: var(--ink-2);
+        letter-spacing: 0.01em;
+      }
+
+      .title-name {
+        margin-top: 0.875rem;
+        font-family: var(--f-title);
+        font-weight: 400;
+        font-size: 5.5rem;
+        line-height: 1.02;
+        letter-spacing: -0.02em;
+        color: var(--ink);
+        text-shadow: 0 2px 0 rgba(255, 252, 245, 0.7);
+      }
+
+      .title-name .line2 {
+        display: block;
+        padding-left: 2.25rem;
+      }
+
+      .title-rule {
+        width: 8rem;
+        margin: 1.25rem 0 1.125rem 0.25rem;
+        border-radius: 1px;
+      }
+
+      .title-lead {
+        font-family: var(--f-story);
+        font-weight: 700;
+        font-size: 1.375rem;
+        line-height: 1.7;
+        color: var(--ink-2);
+        max-width: 27rem;
+      }
+
+      /* 아래 왼쪽: 엄지가 닿는 자리에 단추 둘 */
+      .title-actions {
+        position: absolute;
+        left: 4.25rem;
+        bottom: 6.25rem;
+        display: flex;
+        align-items: flex-end;
+        gap: 1rem;
+      }
+
+      .resume {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+        min-width: 21rem;
+        padding: 0.625rem 2rem 0.75rem 1.75rem;
+      }
+
+      .resume .go {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        font-size: 1.875rem;
+      }
+
+      .resume .go .tri {
+        font-size: 1.125rem;
+      }
+
+      .resume .saved {
+        font-family: var(--f-ui);
+        font-size: 1.0625rem;
+        font-weight: 700;
+        color: var(--btn-on);
+      }
+
+      .restart {
+        min-height: 4.5rem;
+        font-size: 1.5rem;
+        padding: 0 1.75rem;
+      }
+
+      .title-small {
+        position: absolute;
+        left: 4.25rem;
+        bottom: 1.5rem;
+        display: flex;
+        gap: 0.75rem;
+      }
+
+      /* 자주 누르지 않는 둘은 조용하게: 얕은 점토(3px), 정보 글꼴 */
+      .title-small .clay {
+        --press: 3px;
+        --edge: #d8c9a8;
+        font-family: var(--f-ui);
+        font-weight: 700;
+        font-size: 1.0625rem;
+        color: var(--ink-2);
+        background:
+          linear-gradient(to bottom, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 48%),
+          rgba(251, 247, 238, 0.9);
+      }
+
+      /* 위 오른쪽: 준비 중인 둘을 작은 잠긴 스티커로 모은다 */
+      .soon {
+        position: absolute;
+        top: 1.75rem;
+        right: 2rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .soon-label {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--ink-3);
+        margin-right: 0.125rem;
+      }
+
+      .sticker {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        height: 3.5rem;
+        padding: 0 1rem 0 0.5rem;
+        border-radius: 1rem;
+        border: 0;
+        font-family: var(--f-title);
+        font-size: 1.1875rem;
+        color: var(--ink-2);
+        background: rgba(251, 247, 238, 0.78);
+        box-shadow:
+          inset 0 0 0 2px rgba(255, 255, 255, 0.7),
+          0 0 0 1.5px rgba(106, 94, 80, 0.35),
+          1px 0.375rem 0.75rem -0.375rem rgba(58, 38, 18, 0.35);
+        cursor: default;
+      }
+
+      .sticker:nth-child(2) {
+        transform: rotate(-2.5deg);
+      }
+
+      .sticker:nth-child(3) {
+        transform: rotate(2deg);
+      }
+
+      .sticker small {
+        font-family: var(--f-ui);
+        font-size: 0.9375rem;
+        font-weight: 700;
+        color: var(--ink-3);
+        padding: 0.125rem 0.5rem;
+        border-radius: 999px;
+        border: 1.5px dashed rgba(106, 94, 80, 0.6);
+        margin-left: 0.125rem;
+      }
+
+      /* 판 번호: 누를 자리는 56px, 보이는 알약은 작게 */
+      .build {
+        position: absolute;
+        right: 0.75rem;
+        bottom: 0.625rem;
+        display: inline-flex;
+        align-items: center;
+        min-height: 3.5rem;
+        padding: 0 0.5rem;
+        border: 0;
+        background: none;
+      }
+
+      .build span {
+        display: inline-flex;
+        align-items: center;
+        height: 2.25rem;
+        padding: 0 0.875rem;
+        border-radius: 999px;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: var(--ink-2);
+        background: rgba(251, 247, 238, 0.86);
+        box-shadow: var(--sh-1);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="screen title season-spring">
+      <div class="title-art" role="img" aria-label="이른 봄 아침, 해가 뜨는 느티골 어귀와 큰 느티나무"></div>
+      <div class="title-glow"></div>
+
+      <div class="title-text">
+        <p class="kicker">조선 시대 마을 느티골 이야기</p>
+        <h1 class="title-name">조선에서<span class="line2">한 해 살기</span></h1>
+        <div class="dan title-rule" aria-hidden="true"></div>
+        <p class="title-lead">그때 사람이 되어 봄, 여름, 가을, 겨울을 살아 보아요. 내가 고르는 대로 한 해가 흘러가요.</p>
+      </div>
+
+      <div class="soon" aria-label="준비 중인 것">
+        <span class="soon-label">곧 열려요</span>
+        <button type="button" class="sticker" disabled><i class="px" data-px="lock"></i>수첩 <small>준비 중</small></button>
+        <button type="button" class="sticker" disabled><i class="px" data-px="lock"></i>선생님 자료 <small>준비 중</small></button>
+      </div>
+
+      <div class="title-actions">
+        <button type="button" class="clay big primary sheen resume">
+          <span class="go">이어 하기 <span class="tri" aria-hidden="true">▶</span></span>
+          <span class="saved">1395년 봄 · 농민 집 아이</span>
+        </button>
+        <button type="button" class="clay big restart">처음부터</button>
+      </div>
+
+      <div class="title-small">
+        <button type="button" class="clay sm quiet">모두 지우고 처음부터</button>
+        <button type="button" class="clay sm quiet">홈 화면에 추가</button>
+      </div>
+
+      <button type="button" class="build tnum" aria-label="판 20261111-2e1f6db. 이 기기의 정보 보기"><span>판 20261111-2e1f6db · 이 기기</span></button>
+    </main>
+    <script src="px.js"></script>
+  </body>
+</html>

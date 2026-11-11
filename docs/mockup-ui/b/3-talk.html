@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>B · 대화</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Jua&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+    <link rel="stylesheet" href="b.css" />
+    <script src="btn.js"></script>
+  </head>
+  <body>
+    <main class="screen talkscreen season-spring">
+      <!-- 대화 장면에서는 띠를 한 줄로 줄인다: 맵과 같은 한지 띠, 같은 알약(검은 띠로 바뀌지 않는다) -->
+      <header class="band hanji compact">
+        <div class="band-row band-info">
+          <span class="season-chip"><i class="px" data-px="spring"></i>봄</span>
+          <div class="where">
+            <b>1395년 느티골</b>
+            <span>농민 집 아이</span>
+          </div>
+          <div class="tray stats" role="group" aria-label="살림 4, 기력 6, 인심 5. 가장 많으면 10">
+            <div class="stat">
+              <i class="px" data-px="sack"></i>
+              <div class="stat-top"><span class="stat-name">살림</span><span class="stat-num">4</span></div>
+              <div class="jelly" style="--v: 4"><b></b></div>
+            </div>
+            <span class="sep" aria-hidden="true"></span>
+            <div class="stat">
+              <i class="px" data-px="body"></i>
+              <div class="stat-top"><span class="stat-name">기력</span><span class="stat-num">6</span></div>
+              <div class="jelly" style="--v: 6"><b></b></div>
+            </div>
+            <span class="sep" aria-hidden="true"></span>
+            <div class="stat">
+              <i class="px" data-px="trust"></i>
+              <div class="stat-top"><span class="stat-name">인심</span><span class="stat-num">5</span></div>
+              <div class="jelly" style="--v: 5"><b></b></div>
+            </div>
+          </div>
+          <div class="tray suns" role="img" aria-label="남은 해 3, 이 계절의 해 3">
+            <span class="suns-label">해</span>
+            <i class="px" data-px="sun"></i><i class="px" data-px="sun"></i><i class="px" data-px="sun"></i>
+            <span class="stat-num">3<small>/3</small></span>
+          </div>
+        </div>
+        <div class="dan" aria-hidden="true"></div>
+      </header>
+
+      <div class="stage" style="top: var(--band-h, 4.75rem)" role="dialog" aria-label="대화 장면">
+        <img class="scenery" src="../../../src/assets/pictures/bg/s1395/paddy-spring.jpg" alt="" />
+        <div class="talk-shade"></div>
+        <div class="slot at-left"><img src="../../../src/assets/pictures/char/s1395/father-plain.webp" alt="아버지" /></div>
+        <div class="slot at-right quiet"><img src="../../../src/assets/pictures/char/s1395/mother-plain.webp" alt="어머니" /></div>
+
+        <button type="button" class="clay talk-later"><span aria-hidden="true">←</span><span>나중에 할게요</span></button>
+
+        <div class="bookmark" aria-label="꼭 할 일, 볍씨 뿌리기">
+          <span><span class="mark must" aria-hidden="true"></span><small>꼭 할 일</small>볍씨 뿌리기</span>
+        </div>
+
+        <!-- 대사 창 전체가 단추다. 창 밖(그림) 어디를 눌러도 넘어간다 -->
+        <button type="button" class="bubble paper" style="--tail: 24%">
+          <span class="ribbon"><span>아버지</span></span>
+          <span class="say">냇가 낮은 논은 물 대기가 쉬워 벼가 잘된다. 다 거기 뿌릴까 싶다.</span>
+          <span class="next-row">
+            <!-- 첫 몇 창에만 보인다 -->
+            <span class="tap-hint">
+              <span class="tap-hand"><i class="px" data-px="hand" data-size="40"></i></span>
+              <span>아무 곳이나 눌러요</span>
+              <span class="dot" aria-hidden="true">·</span>
+              <kbd>→</kbd>
+              <span class="dot" aria-hidden="true">·</span>
+              <kbd>Space</kbd>
+            </span>
+            <span class="next-go">다음 <span class="tri" aria-hidden="true">▼</span></span>
+          </span>
+        </button>
+      </div>
+    </main>
+    <script src="px.js"></script>
+    <script>
+      const fit = () => {
+        const h = document.querySelector('.band').getBoundingClientRect().height;
+        document.documentElement.style.setProperty('--band-h', `${h}px`);
+      };
+      fit();
+      document.fonts.ready.then(fit);
+      addEventListener('resize', fit);
+    </script>
+  </body>
+</html>

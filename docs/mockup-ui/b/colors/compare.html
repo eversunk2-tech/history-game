@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>B · 주 단추 색 견줌</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Jua&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+    <link rel="stylesheet" href="../b.css" />
+    <style>
+      /* 견줌 한 장: 1180×820 화면과 같은 크기(1rem = 17.08px)로 부품만 모은다 */
+      :root {
+        font-size: 17.0833px;
+      }
+
+      html,
+      body {
+        height: auto;
+        overflow: auto;
+      }
+
+      body {
+        width: 1580px;
+        padding: 1.5rem 1.75rem 1.75rem;
+      }
+
+      .head {
+        display: flex;
+        align-items: baseline;
+        gap: 1.25rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 3px double var(--ink);
+      }
+
+      .head h1 {
+        font-family: var(--f-title);
+        font-weight: 400;
+        font-size: 2rem;
+      }
+
+      .head p {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--ink-3);
+      }
+
+      .cols {
+        display: grid;
+        grid-template-columns: 13rem 33rem 19rem 1fr;
+        gap: 1rem;
+        margin-top: 0.75rem;
+        font-size: 0.875rem;
+        font-weight: 800;
+        color: var(--ink-3);
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 13rem 33rem 19rem 1fr;
+        gap: 1rem;
+        align-items: stretch;
+        padding: 0.875rem 0;
+        border-bottom: 1px solid rgba(43, 36, 29, 0.18);
+      }
+
+      .row.now {
+        opacity: 0.92;
+      }
+
+      .who {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+        padding-top: 0.25rem;
+      }
+
+      .who .no {
+        font-size: 0.875rem;
+        font-weight: 800;
+        color: var(--ink-3);
+      }
+
+      .who b {
+        font-family: var(--f-title);
+        font-weight: 400;
+        font-size: 1.75rem;
+        line-height: 1.1;
+      }
+
+      .who .chip {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9375rem;
+        font-weight: 700;
+        color: var(--ink-2);
+      }
+
+      .who .chip i {
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 0.5rem;
+        background: var(--btn);
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2), 0 3px 0 var(--btn-edge);
+      }
+
+      .who .note {
+        font-size: 0.875rem;
+        font-weight: 600;
+        line-height: 1.4;
+        color: var(--ink-3);
+      }
+
+      .who .pick {
+        align-self: flex-start;
+        margin-top: 0.125rem;
+        padding: 0.125rem 0.625rem;
+        border-radius: 999px;
+        font-size: 0.875rem;
+        font-weight: 800;
+        color: var(--ink);
+        background: var(--hwang-soft);
+        box-shadow: inset 0 0 0 1.5px var(--hwang-edge);
+      }
+
+      /* 칸 1: 제목 그림 위의 두 단추(제목 화면의 왼쪽 아래와 같은 자리) */
+      .cell-title {
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+        gap: 1rem;
+        padding: 1.25rem 1.25rem 1rem;
+        border-radius: 1rem;
+        background: url(../../assets/bg-title-dawn-1376.jpg) -40px -255px / 1180px 525px no-repeat;
+        box-shadow: var(--sh-1), 0 0 0 1px rgba(43, 36, 29, 0.12);
+        overflow: hidden;
+      }
+
+      .resume {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+        min-width: 18rem;
+        padding: 0.625rem 1.75rem 0.75rem 1.5rem;
+      }
+
+      .resume .go {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        font-size: 1.875rem;
+      }
+
+      .resume .go .tri {
+        font-size: 1.125rem;
+      }
+
+      .resume .saved {
+        font-family: var(--f-ui);
+        font-size: 1.0625rem;
+        font-weight: 700;
+        color: var(--btn-on);
+      }
+
+      .restart {
+        min-height: 4.5rem;
+        font-size: 1.5rem;
+        padding: 0 1.5rem;
+      }
+
+      /* 칸 2: 종이 위의 "다음 ▶"과 다른 주 단추들 */
+      .cell-paper {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        border-radius: 1rem;
+        box-shadow: var(--sh-2), var(--rim);
+      }
+
+      .cell-paper .line {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .cell-paper .jelly {
+        width: 7rem;
+        height: 1rem;
+        margin: 0;
+      }
+
+      .cell-paper .count {
+        font-weight: 800;
+        font-size: 1.125rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .cell-paper .count small {
+        color: var(--ink-3);
+        font-size: 0.875rem;
+      }
+
+      /* 칸 3: 어둡힌 대화 장면 위의 선택 카드(위는 고른 것) */
+      .cell-choose {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem 0.75rem;
+        border-radius: 1rem;
+        background:
+          linear-gradient(rgba(24, 18, 12, 0.4), rgba(24, 18, 12, 0.4)),
+          url(../../../../src/assets/pictures/bg/s1395/paddy-spring.jpg) center 60% / cover;
+      }
+
+      .cell-choose .choice {
+        min-height: 4.25rem;
+        font-size: 1.3125rem;
+      }
+    </style>
+  </head>
+  <body class="hanji">
+    <header class="head">
+      <h1>주 단추 색 견줌</h1>
+      <p>시안 B 「단청 그림책」 · 처음(주홍)과 후보 셋 · 같은 부품, 1180×820 화면과 같은 크기</p>
+    </header>
+    <div class="cols" aria-hidden="true">
+      <span>후보</span><span>제목 — 이어 하기 · 처음부터</span><span>다음 ▶ · 봄을 보낸다 ▶ · 대화의 다음 ▼</span><span>고르기 — 고른 선택 카드(위)</span>
+    </div>
+
+    <section class="row now">
+      <div class="who">
+        <span class="no">처음</span>
+        <b>주홍</b>
+        <span class="chip"><i></i>#c4462a · 흰 글자 4.7:1</span>
+        <span class="note">“꼭 할 일”의 붉은 네모와 같은 색이라 뜻이 겹친다.</span>
+      </div>
+      <div class="cell-title">
+        <button type="button" class="clay big primary resume"><span class="go">이어 하기 <span class="tri" aria-hidden="true">▶</span></span><span class="saved">1395년 봄 · 농민 집 아이</span></button>
+        <button type="button" class="clay big restart">처음부터</button>
+      </div>
+      <div class="cell-paper paper">
+        <div class="line">
+          <button type="button" class="clay big primary"><span>다음</span><span aria-hidden="true">▶</span></button>
+          <span class="jelly" style="--v: 7"><b></b></span><span class="count">7<small>/10</small></span>
+        </div>
+        <div class="line">
+          <button type="button" class="clay sm primary"><span>봄을 보낸다</span><span aria-hidden="true">▶</span></button>
+          <span class="next-go">다음 <span aria-hidden="true">▼</span></span>
+        </div>
+      </div>
+      <div class="cell-choose">
+        <button type="button" class="choice paper is-pressed"><span class="ring" aria-hidden="true"></span><span>낮은 논에 몰아 뿌린다</span></button>
+        <button type="button" class="choice paper"><span class="ring" aria-hidden="true"></span><span>높은 논에도 나눠 뿌린다</span></button>
+      </div>
+    </section>
+
+    <section class="row" data-btn="1">
+      <div class="who">
+        <span class="no">후보 1</span>
+        <b>쪽빛</b>
+        <span class="chip"><i></i>#2e5591 · 흰 글자 7.2:1</span>
+        <span class="note">초점 테: 청 → 먹. 화면의 유일한 찬 색.</span>
+        <span class="pick">권함</span>
+      </div>
+      <div class="cell-title">
+        <button type="button" class="clay big primary resume"><span class="go">이어 하기 <span class="tri" aria-hidden="true">▶</span></span><span class="saved">1395년 봄 · 농민 집 아이</span></button>
+        <button type="button" class="clay big restart">처음부터</button>
+      </div>
+      <div class="cell-paper paper">
+        <div class="line">
+          <button type="button" class="clay big primary"><span>다음</span><span aria-hidden="true">▶</span></button>
+          <span class="jelly" style="--v: 7"><b></b></span><span class="count">7<small>/10</small></span>
+        </div>
+        <div class="line">
+          <button type="button" class="clay sm primary"><span>봄을 보낸다</span><span aria-hidden="true">▶</span></button>
+          <span class="next-go">다음 <span aria-hidden="true">▼</span></span>
+        </div>
+      </div>
+      <div class="cell-choose">
+        <button type="button" class="choice paper is-pressed"><span class="ring" aria-hidden="true"></span><span>낮은 논에 몰아 뿌린다</span></button>
+        <button type="button" class="choice paper"><span class="ring" aria-hidden="true"></span><span>높은 논에도 나눠 뿌린다</span></button>
+      </div>
+    </section>
+
+    <section class="row" data-btn="2">
+      <div class="who">
+        <span class="no">후보 2</span>
+        <b>송화(치자)</b>
+        <span class="chip"><i></i>#efb22c · 먹 글자 8.1:1</span>
+        <span class="note">젤리 막대: 황 → 뇌록. 단추 몸이 한지와 밝기가 비슷해(1.7:1) 아래 테가 모양을 맡는다.</span>
+      </div>
+      <div class="cell-title">
+        <button type="button" class="clay big primary resume"><span class="go">이어 하기 <span class="tri" aria-hidden="true">▶</span></span><span class="saved">1395년 봄 · 농민 집 아이</span></button>
+        <button type="button" class="clay big restart">처음부터</button>
+      </div>
+      <div class="cell-paper paper">
+        <div class="line">
+          <button type="button" class="clay big primary"><span>다음</span><span aria-hidden="true">▶</span></button>
+          <span class="jelly" style="--v: 7"><b></b></span><span class="count">7<small>/10</small></span>
+        </div>
+        <div class="line">
+          <button type="button" class="clay sm primary"><span>봄을 보낸다</span><span aria-hidden="true">▶</span></button>
+          <span class="next-go">다음 <span aria-hidden="true">▼</span></span>
+        </div>
+      </div>
+      <div class="cell-choose">
+        <button type="button" class="choice paper is-pressed"><span class="ring" aria-hidden="true"></span><span>낮은 논에 몰아 뿌린다</span></button>
+        <button type="button" class="choice paper"><span class="ring" aria-hidden="true"></span><span>높은 논에도 나눠 뿌린다</span></button>
+      </div>
+    </section>
+
+    <section class="row" data-btn="3">
+      <div class="who">
+        <span class="no">후보 3</span>
+        <b>먹(옻칠)</b>
+        <span class="chip"><i></i>#3a2f27 · 한지 글자 11.8:1</span>
+        <span class="note">지금 게임의 어두운 단추와 가장 가깝다. 글자(먹)와 같은 빛깔이라 덜 튄다.</span>
+      </div>
+      <div class="cell-title">
+        <button type="button" class="clay big primary resume"><span class="go">이어 하기 <span class="tri" aria-hidden="true">▶</span></span><span class="saved">1395년 봄 · 농민 집 아이</span></button>
+        <button type="button" class="clay big restart">처음부터</button>
+      </div>
+      <div class="cell-paper paper">
+        <div class="line">
+          <button type="button" class="clay big primary"><span>다음</span><span aria-hidden="true">▶</span></button>
+          <span class="jelly" style="--v: 7"><b></b></span><span class="count">7<small>/10</small></span>
+        </div>
+        <div class="line">
+          <button type="button" class="clay sm primary"><span>봄을 보낸다</span><span aria-hidden="true">▶</span></button>
+          <span class="next-go">다음 <span aria-hidden="true">▼</span></span>
+        </div>
+      </div>
+      <div class="cell-choose">
+        <button type="button" class="choice paper is-pressed"><span class="ring" aria-hidden="true"></span><span>낮은 논에 몰아 뿌린다</span></button>
+        <button type="button" class="choice paper"><span class="ring" aria-hidden="true"></span><span>높은 논에도 나눠 뿌린다</span></button>
+      </div>
+    </section>
+    <script src="../px.js"></script>
+  </body>
+</html>
