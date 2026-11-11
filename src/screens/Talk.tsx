@@ -1,5 +1,6 @@
 // 대화 장면(미연시 구도) — 맵의 무대 위에 얹힌다. 위쪽 띠는 맵 화면의 것이 그대로 보인다.
-// 승인된 시안(docs/mockup-vn/)의 구도: 화면 가득 배경, 만난 사람이 서고(두 명까지), 아래 너비 가득 어두운 반투명 대화창.
+// 승인된 시안(docs/mockup-vn/)의 구도: 화면 가득 배경, 만난 사람이 서고(두 명까지), 아래 너비 가득 대화창.
+// 대화창은 3판 다듬기 ㉠(시안 B)부터 둥근 한지 말풍선이다: 말하는 사람 쪽으로 꼬리, 뇌록 리본에 이름, 고운바탕 대사, "다음 ▼" 알약.
 //
 // 차례(spec 9.3):
 //   여는 대화(한 창씩) → 선택지 → (일 놀이) → 일을 마친다(commitTalk) → 결과 대화 → 수치 변화 → 배움 쪽지와 새 카드 → 맵으로.
@@ -38,10 +39,11 @@ import {
 import { STATS, type Deed, type GameState, type Happening, type Line, type Mission, type Person, type Season, type SituationPack } from '../engine/types';
 import { PLAYS } from '../plays';
 import { closeTalk, commitTalk, game, pack, playNo } from '../state/store';
-import { NEXT_HINT, freeTap, isNextArrow, nextHint, stepAdvances } from '../ui/advance';
+import { NEXT_HINT, freeTap, hintParts, isNextArrow, nextHint, stepAdvances } from '../ui/advance';
 import { focusInto, useModalKeys } from '../ui/focus';
 import { TapGate } from '../ui/taps';
 import { LockIcon, SunIcon } from '../ui/icons';
+import { Icon } from '../ui/PxIcon';
 import { spotLabel } from '../ui/where';
 import { changeWords, josa, ro, type ChangeWords } from '../ui/words';
 
@@ -154,19 +156,28 @@ function changeRows(deed: Deed): ChangeWords[] {
   );
 }
 
-/** 대화창 오른쪽 아래의 "다음 ▼". 판마다 처음 몇 창에는 그 곁에 넘기는 법을 알리는 한 줄이 붙는다(글과 겹치지 않게 창 안의 흐름에 놓인다 — talk.css). */
-function NextMark({ hint }: { hint: boolean }): JSX.Element {
+/** 선 자리마다 말풍선 꼬리의 자리(창 너비에 대한 몫 — 서 있는 칸의 가운데) */
+const TAIL_AT: Record<Side, string> = { left: '28%', center: '50%', right: '72%' };
+
+/**
+ * 대화창 오른쪽 아래 줄: "다음 ▼"(옅은 쪽빛 알약). 판마다 처음 몇 창에는 그 곁에 손가락 도트와 넘기는 법 알림이 붙는다
+ * (글과 겹치지 않게 창 안의 흐름에 놓인다 — talk.css). 알림의 글은 NEXT_HINT 그대로이고, 글쇠(→·Space)만 자판 꼴로 보인다.
+ */
+function NextMark({ hint, label = '다음' }: { hint: boolean; label?: string }): JSX.Element {
   return (
-    <>
+    <span class="talk-next-row" aria-hidden="true">
       {hint && (
-        <span class="talk-hint" aria-hidden="true">
-          {NEXT_HINT}
+        <span class="talk-hint" data-hint={NEXT_HINT}>
+          <span class="talk-hand">
+            <Icon name="hand" size={2.5} />
+          </span>
+          {hintParts(NEXT_HINT).map((part, index) => (part.key ? <kbd key={index}>{part.text}</kbd> : <span key={index}>{part.text}</span>))}
         </span>
       )}
-      <span class="talk-next" aria-hidden="true">
-        다음 ▼
+      <span class="talk-next">
+        {label} <span class="talk-next-tri">▼</span>
       </span>
-    </>
+    </span>
   );
 }
 
@@ -346,6 +357,10 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
   const line: Line | null = at >= 0 && at < lines.length ? lines[at] : null;
   const speaker = line?.who;
   const nameOf = (who: string): string => people[who]?.label ?? who;
+  // 말하는 사람이 무대에 서 있으면 말풍선의 꼬리가 그 사람을 가리킨다
+  const speakerAt = speaker !== undefined ? cast.findIndex((member) => member.who === speaker) : -1;
+  const tail = speakerAt >= 0 ? { '--tail': TAIL_AT[sides[speakerAt]] } : undefined;
+  const boxClass = (still = false): string => `talk-box${still ? ' still' : ''}${speaker ? ' says' : ''}${tail ? ' tail' : ''}`;
   // 일 놀이와 쪽지가 뜰 때는 사람을 세우지 않는다(쪽지가 얼굴을 가린다)
   const showsFigures = step.kind !== 'play' && step.kind !== 'note';
 
@@ -459,8 +474,12 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
 
       {/* 대화창: 말과 이야기 줄, 선택지를 고르는 동안에는 마지막 줄이 남아 있다 */}
       {(step.kind === 'open' || step.kind === 'result') && line && (
-        <button type="button" class={`talk-box${speaker ? ' says' : ''}`} data-autofocus>
-          {speaker && <span class="talk-name">{nameOf(speaker)}</span>}
+        <button type="button" class={boxClass()} style={tail} data-autofocus>
+          {speaker && (
+            <span class="talk-name ribbon">
+              <span>{nameOf(speaker)}</span>
+            </span>
+          )}
           <span class="talk-text" aria-live="polite">
             {line.text}
           </span>
@@ -474,8 +493,12 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
         </button>
       )}
       {step.kind === 'choose' && snap.stuck === null && (
-        <div class={`talk-box still${speaker ? ' says' : ''}`}>
-          {speaker && <span class="talk-name">{nameOf(speaker)}</span>}
+        <div class={boxClass(true)} style={tail}>
+          {speaker && (
+            <span class="talk-name ribbon">
+              <span>{nameOf(speaker)}</span>
+            </span>
+          )}
           <span class="talk-text">{line ? line.text : '어떻게 할까?'}</span>
         </div>
       )}
@@ -485,9 +508,7 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
           <span class="talk-text" aria-live="polite">
             {snap.stuck}
           </span>
-          <span class="talk-next" aria-hidden="true">
-            돌아가기 ▼
-          </span>
+          <NextMark hint={false} label="돌아가기" />
         </button>
       )}
       {step.kind === 'blocked' && (
@@ -495,14 +516,14 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
           <span class="talk-text" aria-live="polite">
             {snap.blocked}
           </span>
-          <span class="talk-next" aria-hidden="true">
-            돌아가기 ▼
-          </span>
+          <NextMark hint={false} label="돌아가기" />
         </button>
       )}
       {step.kind === 'change' && deed && (
         <button type="button" class="talk-box says" data-autofocus>
-          <span class="talk-name">달라진 것</span>
+          <span class="talk-name ribbon">
+            <span>달라진 것</span>
+          </span>
           <span class="talk-changes" aria-live="polite">
             {rows.map((row) => (
               <span key={row.stat} class="talk-change">

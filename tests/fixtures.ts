@@ -468,6 +468,17 @@ const missions: Mission[] = [
 
 export const testPack: SituationPack = { situation: testSituation, missions, happenings: [...spring, ...summer] };
 
+/**
+ * 누가 될까 뽑기(drawHero)의 견본: ① 1395년이 다 만들어졌을 때의 집과 모습(네 집 · 모습 여섯).
+ * 양반 집 아들은 남자아이, 양반 집 딸은 여자아이, 농민 집·노비 집은 두 모습(spec.md 3.1의 2번).
+ */
+export const FOUR_HOUSES: readonly { id: RoleId; looks: Look[] }[] = [
+  { id: 'son', looks: ['boy'] },
+  { id: 'daughter', looks: ['girl'] },
+  { id: 'farmer', looks: ['boy', 'girl'] },
+  { id: 'nobi', looks: ['boy', 'girl'] },
+];
+
 // ── 검사기에 넘길 곁 자료 ────────────────────────────────────────
 
 const SPOTS = ['tree', 'neighbor', 'yard', 'yard2', 'templeRoad', 'paddy', 'paddyEdge', 'well', 'temple', 'granny', 'woods', 'school'];

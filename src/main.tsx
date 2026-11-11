@@ -1,5 +1,5 @@
 import { render } from 'preact';
-import 'pretendard/dist/web/variable/pretendardvariable.css';
+import './styles/fonts.css';
 import './styles/base.css';
 import './styles/layout.css';
 import './styles/screens.css';

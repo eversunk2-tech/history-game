@@ -30,9 +30,10 @@ import {
   sunsFor,
 } from '../src/engine/game';
 import { judgeWish, pickEnding, reviewYear, summarizeSeason } from '../src/engine/review';
-import { dealRoles, drawValues, mulberry32, rollDraw, subSeed } from '../src/engine/rng';
+import { UNLIVED_WEIGHT, drawHero, drawValues, layCards, mulberry32, rollDraw, subSeed, type Hero } from '../src/engine/rng';
 import { SEASONS, STATS, type Facts, type GameState, type Happening, type Mission, type SituationPack } from '../src/engine/types';
-import { deepFreeze, doAll, movesOf, playSeasonRandom, playYearRandom, seedFor, testPack, withStats } from './fixtures';
+import { getPack } from '../src/content';
+import { FOUR_HOUSES, deepFreeze, doAll, movesOf, playSeasonRandom, playYearRandom, seedFor, testPack, withStats } from './fixtures';
 
 const facts = (over: Partial<Facts> = {}): Facts => ({
   role: 'farmer',
@@ -660,23 +661,133 @@ describe('뽑기와 씨앗', () => {
     expect(rollDraw('war', 1)).toBeNull(); // 3바퀴에서 더한다
     expect(drawValues('none')).toEqual([]);
   });
+});
 
-  it('태어날 집 뽑기: 뒤집은 패에는 언제나 할 수 있는 집이 온다(역할 목록은 이야기가 정한다)', () => {
-    const all = testPack.situation.roles.map((r) => r.id);
-    const playable = playableRoles(testPack);
-    const seen = new Set<string>();
-    for (let seed = 0; seed < 300; seed++) {
-      for (let picked = 0; picked < all.length; picked++) {
-        const dealt = dealRoles(all, playable, seed, picked);
-        expect(playable).toContain(dealt[picked]);
-        expect([...dealt].sort()).toEqual([...all].sort()); // 집마다 한 번씩
-        expect(dealRoles(all, playable, seed, picked)).toEqual(dealt);
-        seen.add(dealt[picked]);
+// 누가 될까(spec.md 3.1·3.9): 태어날 집과 모습을 함께 뽑는다. 다시 하는 판도 뽑고, 아직 살아 보지 않은 것이 세 배 더 잘 나온다.
+// (옛 dealRoles — "뒤집은 패에 할 수 있는 집이 온다" — 의 시험은 이것으로 갈음한다: 뽑는 셈은 drawHero 한 곳이고, 패는 layCards가 놓는다.)
+describe('누가 될까 — 집과 모습 뽑기(drawHero)', () => {
+  const ALL = FOUR_HOUSES.map((r) => r.id);
+  const N = 30000;
+  /** 씨앗 0..N-1에서 (집/모습)마다 나온 몫 */
+  const shares = (roles: typeof FOUR_HOUSES, playable: readonly string[], lived: readonly Hero[] = []): Record<string, number> => {
+    const count: Record<string, number> = {};
+    for (let seed = 0; seed < N; seed++) {
+      const hero = drawHero(roles, playable, seed, lived);
+      const key = `${hero.role}/${hero.look}`;
+      count[key] = (count[key] ?? 0) + 1;
+    }
+    return Object.fromEntries(Object.entries(count).map(([key, n]) => [key, n / N]));
+  };
+  const near = (got: Record<string, number>, want: Record<string, number>): void => {
+    expect(Object.keys(got).sort()).toEqual(Object.keys(want).sort());
+    for (const [key, p] of Object.entries(want)) expect(Math.abs((got[key] ?? 0) - p), `${key}: ${got[key]} ≈ ${p}`).toBeLessThan(0.02);
+  };
+
+  it('① 같은 씨앗·같은 기록이면 언제나 같은 아이다(기록이 달라지면 달라질 수 있다)', () => {
+    const lived: Hero[] = [{ role: 'farmer', look: 'boy' }];
+    let changed = 0;
+    for (let seed = 0; seed < 500; seed++) {
+      const a = drawHero(FOUR_HOUSES, ALL, seed, lived);
+      expect(drawHero(FOUR_HOUSES, ALL, seed, lived)).toEqual(a);
+      expect(drawHero(structuredClone(FOUR_HOUSES), [...ALL], seed, structuredClone(lived))).toEqual(a);
+      if (JSON.stringify(drawHero(FOUR_HOUSES, ALL, seed, [])) !== JSON.stringify(a)) changed++;
+    }
+    expect(changed).toBeGreaterThan(0);
+  });
+
+  it('② 할 수 있는 집과 그 집이 될 수 있는 모습만 나온다(준비 중인 집, 양반 집 아들의 여자아이 모습은 안 나온다)', () => {
+    for (let seed = 0; seed < 3000; seed++) {
+      const hero = drawHero(FOUR_HOUSES, ['farmer', 'son'], seed, []);
+      expect(['farmer', 'son']).toContain(hero.role);
+      expect(FOUR_HOUSES.find((r) => r.id === hero.role)?.looks).toContain(hero.look);
+    }
+    expect(() => drawHero(FOUR_HOUSES, [], 1, [])).toThrow();
+    expect(() => drawHero(FOUR_HOUSES, ['없는 집'], 1, [])).toThrow();
+  });
+
+  it('③ 씨앗 30,000개: 집이 고르게, 한 집 안에서 남녀가 고르게 나온다(양반 집 아들·딸 1/4씩, 농민·노비 집의 남녀 1/8씩 — ±2%p)', () => {
+    const got = shares(FOUR_HOUSES, ALL);
+    near(got, { 'son/boy': 1 / 4, 'daughter/girl': 1 / 4, 'farmer/boy': 1 / 8, 'farmer/girl': 1 / 8, 'nobi/boy': 1 / 8, 'nobi/girl': 1 / 8 });
+    // 남자아이 1/2, 여자아이 1/2
+    const boys = Object.entries(got).reduce((sum, [key, p]) => sum + (key.endsWith('/boy') ? p : 0), 0);
+    expect(Math.abs(boys - 0.5)).toBeLessThan(0.02);
+  });
+
+  it('④ 살아 본 (집, 모습)은 무게 1, 아직 살아 보지 않은 것은 3(UNLIVED_WEIGHT)', () => {
+    expect(UNLIVED_WEIGHT).toBe(3);
+    // 농민 집만 할 수 있을 때 남자아이 모습으로 깼다 → 여자아이 3/4, 남자아이 1/4
+    near(shares(FOUR_HOUSES, ['farmer'], [{ role: 'farmer', look: 'boy' }]), { 'farmer/boy': 1 / 4, 'farmer/girl': 3 / 4 });
+    // 네 집에서 양반 집 아들·농민 집 여자아이로 깼다: 무게 .25·1, .25·3, .125·3, .125·1, .125·3, .125·3 (합 2.25)
+    const lived: Hero[] = [
+      { role: 'son', look: 'boy' },
+      { role: 'farmer', look: 'girl' },
+      { role: 'son', look: 'boy' }, // 같은 것을 두 번 살아도 무게는 1
+    ];
+    near(shares(FOUR_HOUSES, ALL, lived), {
+      'son/boy': 0.25 / 2.25,
+      'daughter/girl': 0.75 / 2.25,
+      'farmer/boy': 0.375 / 2.25,
+      'farmer/girl': 0.125 / 2.25,
+      'nobi/boy': 0.375 / 2.25,
+      'nobi/girl': 0.375 / 2.25,
+    });
+  });
+
+  it('⑤ 다 살아 봤으면 다시 고르게 나온다(③과 같은 몫)', () => {
+    const all: Hero[] = FOUR_HOUSES.flatMap((r) => r.looks.map((look) => ({ role: r.id, look })));
+    near(shares(FOUR_HOUSES, ALL, all), { 'son/boy': 1 / 4, 'daughter/girl': 1 / 4, 'farmer/boy': 1 / 8, 'farmer/girl': 1 / 8, 'nobi/boy': 1 / 8, 'nobi/girl': 1 / 8 });
+  });
+
+  it('⑥ 지금의 ①(농민 집만 만들어졌다): 늘 농민 집이고 모습은 반반. 날씨 뽑기와 얽히지 않는다', () => {
+    const real = getPack('s1395') as SituationPack;
+    const playable = playableRoles(real);
+    expect(playable).toEqual(['farmer']);
+    const joint: Record<string, number> = {};
+    for (let seed = 0; seed < N; seed++) {
+      const hero = drawHero(real.situation.roles, playable, seed, []);
+      expect(hero.role).toBe('farmer');
+      const key = `${hero.look}/${rollDraw('weather', seed)}`;
+      joint[key] = (joint[key] ?? 0) + 1;
+    }
+    const girls = Object.entries(joint).reduce((sum, [key, n]) => sum + (key.startsWith('girl/') ? n : 0), 0) / N;
+    expect(Math.abs(girls - 0.5)).toBeLessThan(0.02);
+    // 모습과 날씨가 따로 논다: 칸마다 (모습의 몫 × 날씨의 몫)과 ±2%p 안
+    for (const look of ['boy', 'girl']) {
+      for (const [weather, p] of [['drought', 0.3], ['normal', 0.5], ['bumper', 0.2]] as const) {
+        expect(Math.abs((joint[`${look}/${weather}`] ?? 0) / N - 0.5 * p), `${look}/${weather}`).toBeLessThan(0.02);
       }
     }
-    expect([...seen].sort()).toEqual([...playable].sort());
-    expect(() => dealRoles(all, [], 1, 0)).toThrow();
-    expect(() => dealRoles(all, playable, 1, all.length)).toThrow();
+  });
+
+  it("씨앗 갈래는 'hero'로 고정이다: 같은 씨앗이면 판이 바뀌어도 같은 아이(?seed=로 다시 보는 판, 깬 기록의 씨앗이 그대로 맞는다)", () => {
+    // 갈래 이름이 바뀌면(예: 'heroes') 같은 ?seed=에서 다른 아이가 나온다. 첫 난수 하나로 정해지는지 직접 셈해 견준다:
+    // 농민 집만 할 수 있을 때 두 모습의 무게가 같으므로, mulberry32(subSeed(seed, 'hero'))의 첫 수가 0.5 아래면 남자아이다.
+    const real = getPack('s1395') as SituationPack;
+    for (let seed = 0; seed < 500; seed++) {
+      const first = mulberry32(subSeed(seed, 'hero'))();
+      expect(drawHero(real.situation.roles, ['farmer'], seed, []).look, `씨앗 ${seed}`).toBe(first < 0.5 ? 'boy' : 'girl');
+    }
+    // 못 박아 둔 답(2026-11-11 — 크롬에서 패를 뒤집어 본 것과 같다)
+    const looks = Array.from({ length: 12 }, (_, i) => drawHero(real.situation.roles, ['farmer'], i + 1, []).look);
+    expect(looks).toEqual(['girl', 'boy', 'boy', 'boy', 'girl', 'boy', 'boy', 'girl', 'girl', 'girl', 'boy', 'girl']);
+  });
+
+  it('패 놓기(layCards): 뒤집은 패에 뽑힌 집이 오고, 나머지 패에는 다른 집이 한 번씩 씨앗으로 섞여 놓인다', () => {
+    const arrangements = new Set<string>();
+    for (let seed = 0; seed < 300; seed++) {
+      for (let picked = 0; picked < ALL.length; picked++) {
+        const laid = layCards(ALL, 'farmer', seed, picked);
+        expect(laid[picked]).toBe('farmer');
+        expect([...laid].sort()).toEqual([...ALL].sort());
+        expect(layCards(ALL, 'farmer', seed, picked)).toEqual(laid);
+        arrangements.add(laid.join(','));
+      }
+    }
+    // 섞인다(나머지 셋의 차례 6가지 × 뒤집은 자리 4가지가 모두 나온다)
+    expect(arrangements.size).toBe(24);
+    expect(() => layCards(ALL, '없는 집', 1, 0)).toThrow();
+    expect(() => layCards(ALL, 'farmer', 1, ALL.length)).toThrow();
+    expect(() => layCards(ALL, 'farmer', 1, -1)).toThrow();
   });
 });
 

@@ -15,6 +15,23 @@ type KeyLike = Pick<KeyboardEvent, 'key' | 'repeat' | 'altKey' | 'ctrlKey' | 'me
 /** 넘기는 법 알림(docs/spec-3판.md 9.2 — 30자 안) */
 export const NEXT_HINT = '화면 어디를 눌러도 넘어가요(→·Space 키도 돼요)';
 
+/** 알림 글의 한 조각: 자판 꼴(kbd)로 보일 글쇠(→, Space)인가, 그냥 글인가 */
+export interface HintPart {
+  text: string;
+  key: boolean;
+}
+
+/**
+ * 알림 글을 그냥 글과 글쇠(→, Space)로 나눈다 — 대사 창은 글쇠만 작은 자판 꼴로 보인다(spec.md 2.3).
+ * 글자는 하나도 바뀌지 않는다: 조각을 이어 붙이면 처음 글과 같다(tests/device.test.ts가 본다).
+ */
+export function hintParts(text: string = NEXT_HINT): HintPart[] {
+  return text
+    .split(/(→|Space)/)
+    .filter((piece) => piece !== '')
+    .map((piece) => ({ text: piece, key: piece === '→' || piece === 'Space' }));
+}
+
 /** 판마다 알림을 보이는 창의 수 */
 export const HINT_WINDOWS = 3;
 

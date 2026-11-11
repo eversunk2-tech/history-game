@@ -1,7 +1,7 @@
 // 씨앗을 받는 난수. 같은 씨앗이면 언제나 같은 수열이 나온다.
 // Math.random이나 시계를 쓰지 않는다.
 
-import type { DrawKind, RoleId } from './types';
+import type { DrawKind, Look, RoleDef, RoleId } from './types';
 
 export type Rng = () => number;
 
@@ -88,24 +88,46 @@ export function rollDraw(kind: DrawKind, seed: number): string | null {
   return pickWeighted(mulberry32(subSeed(seed, `draw:${kind}`)), table).id;
 }
 
+/** 뽑힌 아이: 태어날 집과 모습 */
+export interface Hero {
+  role: RoleId;
+  look: Look;
+}
+
+/** 아직 살아 보지 않은 (집, 모습)은 이만큼 더 잘 나온다(spec.md 3.1의 3번 — 사용자 결정 2026-11-11) */
+export const UNLIVED_WEIGHT = 3;
+
 /**
- * 태어날 집 뽑기. 패 넉 장에 집을 한 장씩 숨기고, 내가 뒤집은 패(pickedIndex)에는
- * 반드시 할 수 있는 집이 오게 한다. 돌려주는 것은 패 차례대로의 집이다.
+ * 태어날 집과 모습을 함께 뽑는다(spec.md 3.1). 화면·시계·Math.random을 모르는 순수한 셈이다.
+ *   - 후보는 할 수 있는 집(playable — 봄의 꼭 할 일이 만들어진 집) × 그 집이 될 수 있는 모습.
+ *   - 무게 = (1 ÷ 할 수 있는 집의 수) × (1 ÷ 그 집의 모습 수): 집이 고르게 나오고, 한 집 안에서 남녀가 고르게 나온다.
+ *   - 아직 살아 보지 않은 (집, 모습)은 무게를 세 배로(lived: 이 이야기를 깬 기록의 집과 모습들). 살아 본 것도 나올 수 있다.
+ *   - 난수는 subSeed(seed, 'hero') — 날씨 뽑기(draw:weather)와 얽히지 않는다. 같은 씨앗·같은 기록이면 언제나 같은 아이.
+ * 집이 늘어나도(양반 집·노비 집, ② 이야기) 셈은 그대로 넓어진다.
  */
-export function dealRoles(
-  all: readonly RoleId[],
-  playable: readonly RoleId[],
-  seed: number,
-  pickedIndex: number,
-): RoleId[] {
-  if (playable.length === 0) throw new Error('할 수 있는 집이 없다');
-  if (pickedIndex < 0 || pickedIndex >= all.length) throw new Error('없는 패를 골랐다');
-  const rng = mulberry32(subSeed(seed, 'role'));
-  const dealt = shuffle(rng, all);
-  if (!playable.includes(dealt[pickedIndex])) {
-    const wanted = pickOne(rng, playable);
-    const from = dealt.indexOf(wanted);
-    [dealt[pickedIndex], dealt[from]] = [dealt[from], dealt[pickedIndex]];
-  }
-  return dealt;
+export function drawHero(roles: readonly Pick<RoleDef, 'id' | 'looks'>[], playable: readonly RoleId[], seed: number, lived: readonly Hero[]): Hero {
+  const open = roles.filter((role) => playable.includes(role.id) && role.looks.length > 0);
+  if (open.length === 0) throw new Error('할 수 있는 집이 없다');
+  const table = open.flatMap((role) =>
+    role.looks.map((look) => {
+      const livedOnce = lived.some((one) => one.role === role.id && one.look === look);
+      return { id: `${role.id}/${look}`, role: role.id, look, weight: (1 / open.length) * (1 / role.looks.length) * (livedOnce ? 1 : UNLIVED_WEIGHT) };
+    }),
+  );
+  const hit = pickWeighted(mulberry32(subSeed(seed, 'hero')), table);
+  return { role: hit.role, look: hit.look };
+}
+
+/**
+ * 패 놓기(spec.md 3.2): 뒤집은 패(picked)에는 뽑힌 집(mine)이 오고, 나머지 패에는 다른 집들이 씨앗으로 섞인 차례로 놓인다.
+ * 어느 패를 눌러도 나오는 아이는 drawHero가 정한 그 아이다 — 섞는 것은 패의 자리뿐이다.
+ */
+export function layCards(all: readonly RoleId[], mine: RoleId, seed: number, picked: number): RoleId[] {
+  if (!all.includes(mine)) throw new Error('뽑힌 집이 패에 없다');
+  if (picked < 0 || picked >= all.length) throw new Error('없는 패를 골랐다');
+  const rest = shuffle(
+    mulberry32(subSeed(seed, 'hero:cards')),
+    all.filter((id) => id !== mine),
+  );
+  return all.map((_, index) => (index === picked ? mine : (rest.shift() as RoleId)));
 }

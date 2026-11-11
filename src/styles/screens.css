@@ -1,42 +1,93 @@
 /* 맵이 아닌 화면들의 모양: 제목, 이야기책, 누가 될까, 나를 소개합니다, 계절 닫기, "다음에 만들어요", 이어 갈 수 없을 때.
    글은 1.25rem(20px)부터(이름표만 1.125rem), 누르는 것은 높이 3.5rem(56px)부터. */
 
-/* ── 1. 제목 ── */
+/* ── 1. 제목 ── 시안 B: 해 뜨는 느티골 그림이 화면 가득. 왼쪽 위 글, 왼쪽 아래 단추, 오른쪽 위 "곧 열려요", 오른쪽 아래 판 번호.
+   그림(2400×1067, 2.25:1)은 화면 너비에 딱 맞추어 한 번만 늘이고(더 키워 자르지 않는다) 아래 끝을 화면 아래에 붙인다.
+   그림의 꼴이 우리 화면들(1.33~2.1:1)보다 넓어 위에 빈 곳이 남는데, 그곳은 그림 맨 윗줄의 빛깔로 하늘을 이어 칠한다
+   (scripts/make-title.py가 잰 값: #eaebeb 0% · #efece7 35% · #e1e9ee 65% · #d7dee6 100%). 이음매는 그림 위 끝 9%를 투명하게 녹여 감춘다. */
 
 .title {
-  display: grid;
-  grid-template-columns: minmax(0, 55fr) minmax(0, 45fr);
+  background: linear-gradient(to right, #eaebeb 0%, #efece7 35%, #e1e9ee 65%, #d7dee6 100%);
 }
 
 .title-art {
-  position: relative;
-  min-width: 0;
-  overflow: hidden;
-  border-right: 0.14rem solid var(--ink);
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2400 / 1067;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 9%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 9%);
+  pointer-events: none;
 }
 
-.title-box {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0.6rem;
-  min-width: 0;
-  min-height: 0;
-  padding: 1rem 1.75rem 1.9rem;
-  overflow-x: hidden;
-  overflow-y: auto;
-  touch-action: pan-y;
+/* 그림 위에 한지 결을 아주 옅게(곱하기) — "종이에 찍은 그림"의 결로 늘인 그림의 무름을 감싼다 */
+.title::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--tex) 0 0 / 32rem repeat;
+  mix-blend-mode: multiply;
+  opacity: 0.07;
+  pointer-events: none;
+}
+
+/* 해가 왼쪽 위에서 뜬다: 빛은 그쪽에서 온다(단추의 그림자가 오른쪽 아래로 조금 기운 까닭) */
+.title-glow {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 46%;
+  height: 72%;
+  background: radial-gradient(ellipse at 40% 62%, rgba(255, 236, 200, 0.5), rgba(255, 236, 200, 0) 60%);
+  pointer-events: none;
+}
+
+.title-text {
+  position: absolute;
+  top: 3.25rem;
+  left: 4.25rem;
+  z-index: 1;
+  width: 32rem;
 }
 
 .title-name {
-  font-size: 2.75rem;
-  font-weight: 900;
-  line-height: 1.2;
+  margin-top: 0.875rem;
+  color: var(--ink);
+  font-family: var(--f-title);
+  font-size: 5.5rem;
+  font-weight: 400;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 0 rgba(255, 252, 245, 0.7);
+}
+
+.title-line2 {
+  padding-left: 2.25rem;
+}
+
+.title-rule {
+  width: 8rem;
+  margin: 1.25rem 0 1.125rem 0.25rem;
+  border-radius: 1px;
 }
 
 .title-lead {
-  line-height: 1.5;
+  max-width: 27rem;
+  color: var(--ink-soft);
+  font-family: var(--f-story);
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.7;
+  /* 낮고 넓은 화면(1366×650)에서는 소개 글이 산 그림 위에 놓인다: 옅은 한지빛 빛 번짐을 깔아 글자 둘레를 밝힌다(4.5:1 넘게 —
+     하늘 위에서는 바탕과 같은 빛이라 보이지 않는다. Review ㉠ 권고 5) */
+  text-shadow:
+    0 1px 0 rgba(255, 252, 245, 0.7),
+    0 0 0.25rem rgba(251, 247, 238, 0.95),
+    0 0 0.75rem rgba(251, 247, 238, 0.9);
 }
 
 .title-notice,
@@ -52,6 +103,11 @@
   line-height: 1.45;
 }
 
+.title-notice {
+  max-width: 27rem;
+  margin-top: 0.75rem;
+}
+
 .title-notice-mark,
 .band-notice-mark {
   flex: none;
@@ -62,63 +118,183 @@
   background: var(--ink);
   color: var(--paper-light);
   font-size: 1.125rem;
-  font-weight: 900;
+  font-weight: 800;
   line-height: 1.5rem;
   text-align: center;
 }
 
-.title-buttons {
+/* 낮은 화면(높이 700 아래 — 1366×650, 1024×690): 제목 묶음의 위 여백과 단청 띠 둘레를 줄여, 두 줄짜리 알림 줄이 떠도
+   "이어 하기"와 겹치지 않게 한다(Review ㉠ 권고 6 — 1366×650에서 7px 덮였다). 단추의 자리는 그대로다. */
+@media (max-height: 700px) {
+  .title-text {
+    top: 2.25rem;
+  }
+  .title-name {
+    margin-top: 0.5rem;
+  }
+  .title-rule {
+    margin: 0.875rem 0 0.75rem 0.25rem;
+  }
+  .title-notice {
+    margin-top: 0.5rem;
+  }
+}
+
+/* 아래 왼쪽: 쪽빛 큰 단추 하나와 종이 단추 */
+.title-actions {
+  position: absolute;
+  bottom: 6.25rem;
+  left: 4.25rem;
+  z-index: 1;
   display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin-top: 0.3rem;
+  align-items: flex-end;
+  gap: 1rem;
 }
 
 .title-resume {
   flex-direction: column;
-  gap: 0;
-  min-height: 4.25rem;
+  align-items: flex-start;
+  gap: 0.25rem;
+  min-width: 21rem;
+  padding: 0.625rem 2rem 0.75rem 1.75rem;
+}
+
+.title-go {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-size: 1.875rem;
+  line-height: 1.15;
+}
+
+.title-tri {
+  font-size: 1.125rem;
 }
 
 .title-saved {
+  color: var(--btn-on);
+  font-family: var(--f-ui);
   font-size: 1.125rem;
-  font-weight: 600;
-  opacity: 0.9;
+  font-weight: 800;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 
-.title-pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
+.title-start {
+  font-size: 1.5rem;
 }
 
-.title-pair .btn {
-  flex-wrap: wrap;
-  padding: 0.4rem 0.5rem;
+/* 이어 할 것이 없을 때는 "처음부터"가 쪽빛 큰 단추다 */
+.title-start.primary {
+  min-width: 15rem;
+  font-size: 1.875rem;
 }
 
+/* 자주 누르지 않는 것: 얕은 점토(3px), 정보 글꼴 */
 .title-small {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 4.25rem;
+  z-index: 1;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: 0.75rem;
 }
 
 .title-small .btn {
-  color: var(--ink-soft);
-  border-color: var(--ink-faint);
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 48%),
+    rgba(251, 247, 238, 0.9);
+  font-family: var(--f-ui);
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+.title-small .btn:disabled {
+  background: rgba(224, 210, 179, 0.85);
 }
 
 .title-devbtn {
-  border-style: dashed;
+  border: 2px dashed var(--ink-faint);
 }
 
-.title-build {
+/* 위 오른쪽: 준비 중인 둘(잠긴 스티커 — 점선 알약 + 자물쇠). 누를 수 없다 */
+.title-soon {
   position: absolute;
-  right: 0.8rem;
-  bottom: 0.35rem;
+  top: 1.75rem;
+  right: 2rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.title-soon-label {
+  margin-right: 0.125rem;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+.title-sticker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 3.5rem;
+  padding: 0 0.875rem 0 0.5rem;
+  border: 0;
+  border-radius: 1rem;
+  background: rgba(251, 247, 238, 0.86);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.7),
+    0 0 0 1.5px rgba(106, 94, 80, 0.4),
+    1px 0.375rem 0.75rem -0.375rem rgba(58, 38, 18, 0.35);
+  color: var(--ink-soft);
+  font-family: var(--f-title);
+  font-size: 1.25rem;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.title-sticker:nth-of-type(1) {
+  transform: rotate(-2.5deg);
+}
+
+.title-sticker:nth-of-type(2) {
+  transform: rotate(2deg);
+}
+
+.title-sticker .soon {
+  margin-left: 0.125rem;
+}
+
+/* 판 번호: 누를 자리는 56px, 보이는 알약은 작게(device.css의 옛 button.title-build보다 앞서게 .title 안으로 묶는다) */
+.title .title-build {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.625rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  min-height: 3.5rem;
+  padding: 0 0.5rem;
+  border: 0;
+  background: none;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.title .title-build > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0 0.875rem;
+  border-radius: 999px;
+  background: rgba(251, 247, 238, 0.88);
+  box-shadow: var(--sh-1);
   color: var(--ink-soft);
   font-size: 1.125rem;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   line-height: 1.3;
 }
 
@@ -238,10 +414,21 @@ button.book-card:active {
   font-weight: 800;
 }
 
-/* ── 3. 누가 될까 ── */
+/* ── 3. 누가 될까 ── 엎어진 패 → 한 장 뒤집기 → 뽑힌 아이를 크게(패들 앞에 떠 있는 종이). spec.md 3.2
+   패는 그 이야기의 집 수만큼(--role-count). 뒤집기는 240ms(뽑힌 패 먼저, 나머지는 조금씩 늦게), 움직임 줄이기면 바로 바뀐다. */
 
 .rolepick {
   grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.rolepick.flipped {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.role-stage {
+  position: relative;
+  display: grid;
+  min-height: 0;
 }
 
 .role-cards {
@@ -250,63 +437,135 @@ button.book-card:active {
   grid-template-rows: minmax(0, 1fr);
   gap: 1rem;
   min-height: 0;
+  padding-bottom: 6px;
+  perspective: 1400px;
 }
 
 .role-card {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--r-card);
+}
+
+.role-card-inner {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform var(--t-mid) ease-out var(--turn-delay, 0ms);
+}
+
+.role-card.turned .role-card-inner {
+  transform: rotateY(180deg);
+}
+
+/* 엎어진 패를 누르면 점토처럼 내려앉는다 */
+.role-card:has(> .role-card-hit:active) .role-card-inner {
+  transform: translateY(5px);
+}
+
+.role-side {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  min-width: 0;
+  gap: 0.5rem;
   min-height: 0;
-  padding: 0.8rem 0.6rem;
-  border: 0.14rem solid var(--ink);
-  border-radius: 1rem;
-  background: var(--paper-light);
+  padding: 0.75rem 0.625rem 0.625rem;
+  border-radius: var(--r-card);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
-button.role-card {
+/* 뒷면: 한지에 단청 테(먹 · 흰 · 뇌록 · 흰 · 황) */
+.role-side-back {
+  justify-content: center;
+  background:
+    linear-gradient(rgba(251, 247, 238, 0.62), rgba(251, 247, 238, 0.62)),
+    var(--tex) 0 0 / 32rem repeat,
+    var(--paper-light);
+  box-shadow:
+    var(--rim),
+    0 5px 0 var(--clay-edge),
+    1px 0.75rem 1.25rem -0.5rem rgba(58, 38, 18, 0.45);
+  color: var(--ink-soft);
+}
+
+.role-back-art {
+  position: relative;
+  display: grid;
+  flex: 1 1 0;
+  place-items: center;
+  width: 100%;
+  min-height: 0;
+  border-radius: 1rem;
+  background: var(--paper-deep);
+  box-shadow:
+    inset 0 0 0 3px var(--ink),
+    inset 0 0 0 5px var(--baek),
+    inset 0 0 0 9px var(--rok),
+    inset 0 0 0 10px var(--baek),
+    inset 0 0 0 12px var(--hwang),
+    inset 0 0 0 13px rgba(43, 36, 29, 0.25);
+}
+
+.role-back-mark {
+  color: var(--ink-faint);
+  font-family: var(--f-title);
+  font-size: 4rem;
+  line-height: 1;
+}
+
+/* 앞면 */
+.role-side-face {
+  background:
+    linear-gradient(rgba(251, 247, 238, 0.62), rgba(251, 247, 238, 0.62)),
+    var(--tex) 0 0 / 32rem repeat,
+    var(--paper-light);
+  box-shadow:
+    var(--rim),
+    0 2px 0 var(--clay-edge),
+    1px 0.5rem 1rem -0.5rem rgba(58, 38, 18, 0.4);
+  transform: rotateY(180deg);
+}
+
+.role-card.mine .role-side-face {
+  box-shadow:
+    var(--rim),
+    inset 0 0 0 3px var(--hwang),
+    0 2px 0 var(--hwang-edge),
+    1px 0.5rem 1rem -0.5rem rgba(58, 38, 18, 0.45);
+}
+
+.role-card.soon-card .role-side-face {
+  background: rgba(224, 210, 179, 0.45);
+  box-shadow: inset 0 2px 3px rgba(58, 38, 18, 0.18);
+  outline: 2px dashed rgba(106, 94, 80, 0.55);
+  outline-offset: -6px;
+  color: var(--ink-soft);
+}
+
+/* 엎어진 패를 덮는 누름 자리(패 전체) */
+.role-card-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  border: 0;
+  border-radius: var(--r-card);
+  background: transparent;
   cursor: pointer;
 }
 
-button.role-card:active {
-  transform: translateY(0.06rem);
-}
-
-.role-card.back {
-  background: var(--paper-deep);
-  color: var(--ink-soft);
-}
-
-.role-card.mine {
-  border-width: 0.32rem;
-  background: #fffaea;
-}
-
-.role-card.soon-card {
-  border-style: dashed;
-  border-color: var(--ink-faint);
-  background: transparent;
-  color: var(--ink-soft);
-}
-
-.role-face,
-.role-back {
+.role-face {
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
   align-items: center;
   gap: 0.4rem;
-  width: 100%;
-  min-height: 0;
-}
-
-.role-back {
-  justify-content: center;
-}
-
-.role-back-art {
-  flex: 0 1 15rem;
   width: 100%;
   min-height: 0;
 }
@@ -320,12 +579,12 @@ button.role-card:active {
   grid-template-rows: minmax(0, 1fr);
   width: 100%;
   min-height: 0;
-  border-radius: 0.6rem;
+  border-radius: 1rem;
   background: var(--season-soft);
+  box-shadow: inset 0 2px 4px rgba(58, 38, 18, 0.15);
 }
 
-.role-figure,
-.look-figure {
+.role-figure {
   position: relative;
   display: flex;
   align-items: flex-end;
@@ -335,41 +594,40 @@ button.role-card:active {
   overflow: hidden;
 }
 
-.role-figure .figure-img,
-.look-figure .figure-img {
-  height: 100%;
+.role-figure .figure-img {
   width: auto;
   max-width: 100%;
+  height: 100%;
   object-fit: contain;
   object-position: bottom;
 }
 
 .role-label {
   flex: none;
-  font-size: 1.375rem;
-  font-weight: 800;
-  line-height: 1.3;
+  font-family: var(--f-title);
+  font-size: 1.5rem;
+  line-height: 1.25;
   text-align: center;
 }
 
 .role-tag {
   flex: none;
-  padding: 0.05rem 0.8rem;
-  border-radius: 1rem;
-  background: var(--ink);
-  color: var(--paper-light);
+  padding: 0 0.875rem;
+  border-radius: 999px;
+  background: var(--rok);
+  color: var(--baek);
   font-size: 1.125rem;
-  font-weight: 700;
-  line-height: 1.6;
+  font-weight: 800;
+  line-height: 1.75;
 }
 
 /* 딱지가 없는 패도 같은 높이를 차지하게 */
 .role-tag-none {
   flex: none;
-  height: 1.8rem;
+  height: 1.97rem;
 }
 
-.role-card .soon {
+.role-side-face .soon {
   flex: none;
 }
 
@@ -377,13 +635,7 @@ button.role-card:active {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1.2rem;
   min-height: 3.5rem;
-}
-
-.role-say {
-  font-size: 1.375rem;
-  font-weight: 800;
 }
 
 .role-say.wait {
@@ -392,58 +644,134 @@ button.role-card:active {
   font-weight: 600;
 }
 
-/* 모습 고르기: 큰 도트 인물 둘 */
-.look-cards {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 22rem);
-  grid-template-rows: minmax(0, 1fr);
+/* 뽑힌 아이: 패들 앞에 떠 있는 종이 한 장 */
+.role-hero-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 1.5rem;
-  min-height: 0;
-  grid-row: 2 / 4;
+  background: rgba(244, 236, 217, 0.55);
+  animation: role-hero-in var(--t-mid) ease-out both;
 }
 
-.look-card {
+@keyframes role-hero-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.role-hero {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  gap: 1.25rem;
+  width: min(48rem, 100%);
+  max-height: 100%;
+  padding: 1.25rem 1.5rem 1.25rem 1.25rem;
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-3), var(--rim);
+}
+
+.role-hero-figure {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 15rem;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--season-soft);
+  box-shadow: inset 0 2px 4px rgba(58, 38, 18, 0.15);
+}
+
+.role-hero-text {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 0.4rem;
-  min-height: 0;
-  padding: 0.8rem;
-  border: 0.2rem solid var(--ink);
-  border-radius: 1rem;
-  background: var(--paper-light);
-  text-align: center;
-  cursor: pointer;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  padding-top: 0.25rem;
 }
 
-.look-card:active {
-  transform: translateY(0.06rem);
+.role-hero-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
 }
 
-.look-figure {
-  flex: 1 1 0;
-  border-radius: 0.6rem;
-  background: var(--season-soft);
-}
-
-.look-label {
-  font-size: 1.5rem;
+.role-look {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0 0.875rem;
+  border-radius: 999px;
+  background: var(--paper-deep);
+  box-shadow: inset 0 1px 2px rgba(58, 38, 18, 0.18);
+  color: var(--ink);
+  font-size: 1.125rem;
   font-weight: 800;
-  line-height: 1.3;
 }
 
-.look-go {
-  padding: 0.5rem;
-  border-radius: 0.6rem;
-  background: var(--ink);
-  color: var(--paper-light);
-  font-size: 1.25rem;
+.role-hero .role-say {
+  font-family: var(--f-story);
+  font-size: 1.5rem;
   font-weight: 700;
+  line-height: 1.4;
 }
 
-/* ── 4. 나를 소개합니다 ── */
+.role-hero-guide {
+  color: var(--ink-soft);
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+
+.role-lived {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.role-lived-tag {
+  padding: 0 0.75rem;
+  border-radius: 999px;
+  background: var(--paper-deep);
+}
+
+.role-lived-name {
+  color: var(--ink);
+  font-family: var(--f-title);
+  font-size: 1.25rem;
+  font-weight: 400;
+}
+
+.role-go {
+  margin-top: auto;
+}
+
+.role-go-tri {
+  font-size: 1.125rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .role-card-inner {
+    transition: none;
+  }
+  .role-hero-veil {
+    animation: none;
+  }
+}
+
+/* ── 4. 나를 소개합니다 ── 왼쪽: 마당 그림 + 뽑힌 아이. 오른쪽: 떠 있는 종이 한 장 */
 
 .intro {
   display: grid;
@@ -454,7 +782,6 @@ button.role-card:active {
   position: relative;
   min-width: 0;
   overflow: hidden;
-  border-right: 0.14rem solid var(--ink);
 }
 
 /* 주인공은 마당에 서 있다(그림 파일이 없으면 맵의 도트 인물을 크게) */
@@ -468,9 +795,9 @@ button.role-card:active {
 }
 
 .intro-hero .figure-img {
-  height: 86%;
   width: auto;
   max-width: 96%;
+  height: 86%;
   object-fit: contain;
   object-position: bottom;
 }
@@ -480,54 +807,53 @@ button.role-card:active {
 }
 
 .intro-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.6rem;
   min-width: 0;
   min-height: 0;
-  padding: 1rem 1.5rem 1.1rem;
+  margin: 0.875rem 1rem 0.875rem -1.5rem;
+  padding: 1rem 1.5rem 1rem;
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-3), var(--rim);
   overflow-x: hidden;
   overflow-y: auto; /* 글이 넘칠 때의 안전망. 글자 수 한도 안에서는 넘치지 않는다 */
   touch-action: pan-y;
 }
 
+.intro-panel .story {
+  font-size: 1.3125rem;
+  line-height: 1.55;
+}
+
 .intro-family {
+  font-family: var(--f-story);
+  font-weight: 700;
   line-height: 1.5;
 }
 
 .intro-meters {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem 1rem;
+  gap: 0.5rem 1.25rem;
+  margin-top: 0.25rem;
 }
 
 .intro-meters .meter {
   align-items: flex-start;
 }
 
-.intro-meters .meter-body {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.intro-meters .meter-top {
-  flex-wrap: wrap;
-}
-
 .intro-meters .meter-about {
-  order: 3;
-  flex-basis: 100%;
+  display: block;
+  margin-top: 0.2rem;
   font-size: 1.125rem;
+  line-height: 1.3;
 }
 
-.intro-meters .meter-cells {
-  gap: 0.16rem;
-  margin: 0.15rem 0;
-}
-
-.intro-meters .cell {
-  flex: 1 1 0;
-  width: auto;
+.intro-panel .push-down {
+  align-self: flex-start;
+  margin-bottom: 5px;
 }
 
 /* ── 계절 닫기, "다음에 만들어요" ── 흐린 배경 위의 한지 빛 종이 */

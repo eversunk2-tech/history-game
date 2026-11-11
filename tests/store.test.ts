@@ -1009,6 +1009,91 @@ describe('새 판', () => {
   });
 });
 
+// 3판 다듬기 ㉠(spec.md 3절): 누가 될까는 늘 뽑는다 — 집과 모습을 함께, 씨앗과 깬 기록으로. 저장의 꼴은 그대로(꼴 4).
+describe('누가 될까 — 뽑힌 아이', () => {
+  /** 이야기책에서 1395년을 연다(씨앗은 주소의 ?seed=) */
+  const open = (s: Store): void => {
+    later();
+    s.goBook();
+    later();
+    s.openStory('s1395');
+  };
+
+  it('이야기를 열면 아이가 뽑혀 있고, 그 아이로 정하면 나를 소개합니다 → 맵(처음 저장)', async () => {
+    env.state.search = '?seed=7';
+    const s = await boot();
+    open(s);
+    expect(s.screen.value).toBe('rolePick');
+    const hero = s.hero.value!;
+    expect(hero.role).toBe('farmer'); // 지금은 농민 집만 만들어졌다
+    expect(['boy', 'girl']).toContain(hero.look);
+    later();
+    s.settleRole(hero.role, hero.look);
+    expect(s.screen.value).toBe('intro');
+    expect(s.game.value?.look).toBe(hero.look);
+    expect(s.game.value?.seed).toBe(7);
+    expect(saved()).toBeNull(); // 소개까지는 적지 않는다
+    later();
+    s.beginYear();
+    expect(s.screen.value).toBe('map');
+    expect(saved()?.current?.look).toBe(hero.look);
+  });
+
+  it('?seed=가 같으면 다시 켜도 같은 아이, 씨앗이 다르면 남자아이·여자아이가 섞여 나온다', async () => {
+    const looks = new Map<number, string>();
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
+      env.state.search = `?seed=${seed}`;
+      const s = await boot();
+      open(s);
+      looks.set(seed, s.hero.value!.look);
+      const again = await boot();
+      open(again);
+      expect(again.hero.value, `씨앗 ${seed}`).toEqual(s.hero.value);
+    }
+    expect(new Set(looks.values())).toEqual(new Set(['boy', 'girl']));
+  });
+
+  it('뽑은 뒤 저장의 꼴이 그대로다: 꼴 4, 새 칸이 없고(역할·모습·씨앗뿐), 고른 길(settleRole)로 적은 저장과 칸이 같다', async () => {
+    env.state.search = '?seed=7';
+    let s = await boot();
+    open(s);
+    const hero = s.hero.value!;
+    later();
+    s.settleRole(hero.role, hero.look);
+    later();
+    s.beginYear();
+    const drawn = saved()!;
+    expect(drawn.schema).toBe(SCHEMA);
+    expect(SCHEMA).toBe(4);
+    env.data.clear();
+    s = await boot();
+    startSpring(s, hero.look);
+    const picked = saved()!;
+    expect(Object.keys(drawn).sort()).toEqual(Object.keys(picked).sort());
+    expect(Object.keys(drawn.current!).sort()).toEqual(Object.keys(picked.current!).sort());
+    expect(drawn.current?.role).toBe('farmer');
+    expect(drawn.current?.seed).toBe(7);
+    // 다시 읽어도 그대로 이어진다
+    expect(parseSave(JSON.stringify(drawn)).status).toBe('ok');
+  });
+
+  it('깬 기록이 있으면 아직 살아 보지 않은 모습이 더 잘 나온다(여자아이로 깬 견본 → 남자아이가 3/4쯤)', async () => {
+    let boys = 0;
+    const N = 120;
+    for (let seed = 0; seed < N; seed++) {
+      env.data.clear();
+      env.data.set(SAVE_KEY, SAVE_FILES['./fixtures/saves/schema4-year-cleared.json']);
+      env.state.search = `?seed=${seed}`;
+      const s = await boot();
+      expect(s.save.value.cleared.s1395?.[0]?.look).toBe('girl');
+      open(s);
+      if (s.hero.value!.look === 'boy') boys++;
+    }
+    expect(boys / N).toBeGreaterThan(0.6);
+    expect(boys / N).toBeLessThan(0.9);
+  });
+});
+
 describe('저장이 안 되거나 읽을 수 없을 때', () => {
   it('저장이 안 되는 창: 알리고, 게임은 끝까지 된다', async () => {
     env.state.noStorage = true;

@@ -1,9 +1,12 @@
 // 1. 제목 — 이어 하기, 처음부터, 수첩·선생님 자료(준비 중), 모두 지우고 처음부터.
 // 귀퉁이에 게임의 판 번호. 저장을 읽은 결과에 따라 쉬운 말의 알림이 뜬다.
+// 모습(3판 다듬기 ㉠ — 시안 B): 해 뜨는 느티골 그림이 화면 가득, 왼쪽 위에 주아체 제목과 소개 글, 왼쪽 아래에 쪽빛 단추 하나,
+// 오른쪽 위에 "곧 열려요" 잠긴 스티커, 오른쪽 아래에 판 번호 알약(누를 자리 56px).
+// 제목 그림은 사용자가 업스케일한 판에서 scripts/make-title.py로 만든다(빌드본은 첫 문서에서 미리 받는다 — vite.config.ts).
 
 import type { JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { Scenery } from '../art/Scenery';
+import TITLE_ART from '../assets/ui/title-dawn.webp';
 import { getPack } from '../content';
 import { seasonReady } from '../engine/game';
 import { BUILD, type LoadStatus } from '../state/storage';
@@ -12,6 +15,7 @@ import { inTabOnTablet, standalone } from '../state/device';
 import { Ask } from '../ui/Ask';
 import { DeviceInfo } from '../ui/DeviceInfo';
 import { InstallGuide } from '../ui/InstallGuide';
+import { LockIcon } from '../ui/icons';
 import { prewarmGame } from './prewarm';
 import { savedLineOf } from '../ui/year';
 
@@ -81,15 +85,18 @@ export function Title(): JSX.Element {
 
   return (
     <main class="screen title season-spring">
-      <div class="title-art">
-        <Scenery story="s1395" place="entrance" season="spring" label="느티나무가 선 마을 어귀" />
-      </div>
-      <div class="title-box">
+      {/* 제목 그림: 화면 너비에 맞춰 아래에 붙이고, 남는 위쪽은 그림 맨 윗줄의 빛깔로 하늘을 잇는다(screens.css — spec.md 5.1) */}
+      <img class="title-art" src={TITLE_ART} alt="느티나무가 선 마을 어귀" decoding="async" draggable={false} />
+      <div class="title-glow" aria-hidden="true" />
+
+      <div class="title-text">
         <p class="kicker">조선 시대 마을 느티골 이야기</p>
         <h1 class="title-name">
           조선에서
-          <br />한 해 살기
+          <br />
+          <span class="title-line2">한 해 살기</span>
         </h1>
+        <div class="dan title-rule" aria-hidden="true" />
         <p class="title-lead">그때 사람이 되어 봄, 여름, 가을, 겨울을 살아 보아요. 내가 고르는 대로 한 해가 흘러가요.</p>
 
         {notice && (
@@ -100,45 +107,60 @@ export function Title(): JSX.Element {
             {notice}
           </p>
         )}
+      </div>
 
-        <div class="title-buttons">
-          {resume && (
-            <button type="button" class="btn primary title-resume" disabled={blocked} onClick={continueGame}>
-              <span>이어 하기</span>
-              <span class="title-saved">{savedLine()}</span>
-            </button>
-          )}
-          <button type="button" class={`btn${resume ? '' : ' primary'}`} disabled={blocked} onClick={start}>
-            처음부터
-          </button>
-          <div class="title-pair">
-            <button type="button" class="btn" disabled>
-              수첩 <span class="soon">준비 중</span>
-            </button>
-            <button type="button" class="btn" disabled>
-              선생님 자료 <span class="soon">준비 중</span>
-            </button>
-          </div>
-          <div class="title-small">
-            <button type="button" class="btn small" disabled={blocked} onClick={() => setAsk('wipe')}>
-              모두 지우고 처음부터
-            </button>
-            {!standalone.value && (
-              <button type="button" class="btn small" onClick={() => setGuide('manual')}>
-                홈 화면에 추가
-              </button>
-            )}
-            {import.meta.env.DEV && (
-              <button type="button" class="btn small title-devbtn" onClick={goSheet}>
-                그림 견본(개발용)
-              </button>
-            )}
-          </div>
-        </div>
-        <button type="button" class="title-build" onClick={() => setInfo(true)} aria-label={`판 ${BUILD}. 이 기기의 정보 보기`}>
-          판 {BUILD} · 이 기기
+      {/* 위 오른쪽: 준비 중인 둘을 잠긴 스티커로 모은다 */}
+      <div class="title-soon" role="group" aria-labelledby="title-soon-label">
+        <span class="title-soon-label" id="title-soon-label">
+          곧 열려요
+        </span>
+        <button type="button" class="title-sticker" disabled>
+          <LockIcon />
+          수첩 <span class="soon">준비 중</span>
+        </button>
+        <button type="button" class="title-sticker" disabled>
+          <LockIcon />
+          선생님 자료 <span class="soon">준비 중</span>
         </button>
       </div>
+
+      {/* 아래 왼쪽: 엄지가 닿는 자리. 쪽빛은 하나 — 이어 할 것이 있으면 "이어 하기", 없으면 "처음부터"(흐르는 빛도 그 단추에만) */}
+      <div class="title-actions">
+        {resume && (
+          <button type="button" class="btn big primary sheen title-resume" disabled={blocked} onClick={continueGame}>
+            <span class="title-go">
+              이어 하기
+              <span class="title-tri" aria-hidden="true">
+                ▶
+              </span>
+            </span>
+            <span class="title-saved">{savedLine()}</span>
+          </button>
+        )}
+        <button type="button" class={`btn big title-start${resume ? '' : ' primary sheen'}`} disabled={blocked} onClick={start}>
+          <span>처음부터</span>
+        </button>
+      </div>
+
+      <div class="title-small">
+        <button type="button" class="btn small quiet" disabled={blocked} onClick={() => setAsk('wipe')}>
+          모두 지우고 처음부터
+        </button>
+        {!standalone.value && (
+          <button type="button" class="btn small quiet" onClick={() => setGuide('manual')}>
+            홈 화면에 추가
+          </button>
+        )}
+        {import.meta.env.DEV && (
+          <button type="button" class="btn small quiet title-devbtn" onClick={goSheet}>
+            그림 견본(개발용)
+          </button>
+        )}
+      </div>
+
+      <button type="button" class="title-build" onClick={() => setInfo(true)} aria-label={`판 ${BUILD}. 이 기기의 정보 보기`}>
+        <span>판 {BUILD} · 이 기기</span>
+      </button>
 
       {guide && !ask && !info && <InstallGuide auto={guide === 'auto'} onClose={closeGuide} />}
       {info && (

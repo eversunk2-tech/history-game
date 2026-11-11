@@ -1,0 +1,40 @@
+/* 글꼴 셋(spec.md 4절) — 글꼴마다 한 파일(나뉜 조각 unicode-range를 쓰지 않는다: 처음에 다 받아 두어
+   도중에 인터넷이 끊기거나 새 판이 올라가도 글자가 빠지지 않게). 출처와 라이선스는 src/assets/fonts/SOURCES.md.
+   - 주아(Jua) 400: 제목·단추·이름표. KS X 1001 한글 2,350자로 줄였다(scripts/make-fonts.py).
+   - 고운바탕(Gowun Batang) 700: 이야기 글. 굵은 것 하나만(보통 굵기는 넣지 않는다 — spec 9절 4번).
+   - Pretendard 600·800: 정보·숫자. 꾸러미의 공식 조각을 손대지 않고 쓴다(예약된 이름이라 줄이지 않는다).
+   글꼴이 늦어도 글은 바로 보인다(swap — 먼저 다음 글꼴이나 기기 글꼴로 그리고 바뀐다).
+   빌드본은 주아만 첫 문서에서 제목 그림과 함께 미리 받는다(vite.config.ts의 FIRST_SCREEN — 넷을 다 미리 받으면 코드와 망을 나눠 써
+   첫 그림이 늦어진다). 나머지 셋은 첫 화면을 그릴 때 받는다. */
+
+@font-face {
+  font-family: 'Jua';
+  src: url('../assets/fonts/jua-2350.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gowun Batang';
+  src: url('../assets/fonts/gowunbatang-bold-2350.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Pretendard';
+  src: url('../../node_modules/pretendard/dist/web/static/woff2-subset/Pretendard-SemiBold.subset.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Pretendard';
+  src: url('../../node_modules/pretendard/dist/web/static/woff2-subset/Pretendard-ExtraBold.subset.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}

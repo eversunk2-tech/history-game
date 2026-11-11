@@ -25,7 +25,7 @@ import {
   type DoInput,
 } from '../engine/game';
 import { reviewYear } from '../engine/review';
-import { rollDraw } from '../engine/rng';
+import { drawHero, rollDraw, type Hero } from '../engine/rng';
 import { SEASONS, STATS, type Deed, type GameState, type Look, type RoleId, type Season, type SituationPack } from '../engine/types';
 import {
   dropBackup,
@@ -79,6 +79,21 @@ export const playNo = signal(0);
 export const artSeason = signal<Season>('spring');
 
 export const pack = computed<SituationPack | null>(() => (situationId.value ? (getPack(situationId.value) ?? null) : null));
+
+/**
+ * 누가 될까에서 뽑힌 아이(spec.md 3절): 태어날 집과 모습을 함께 뽑는다. 이 판의 씨앗(openStory가 정한다 — 개발판은 ?seed=)과
+ * 이 이야기를 깬 기록(살아 본 집·모습은 덜 나온다)으로 정해진다. 같은 씨앗·같은 기록이면 언제나 같은 아이다.
+ * 화면은 이야기의 pickBy(뽑는가 고르는가)와 상관없이 늘 뽑는다(사용자 결정 2026-11-11 — pickBy는 자료의 꼴과 검사기에만 남아 있다).
+ * 다시 뽑기는 없다. 뽑은 것은 "한 해 시작하기"에서 처음 저장할 때 role·look·seed로 적힌다(저장의 꼴은 그대로 — 꼴 4).
+ */
+export const hero = computed<Hero | null>(() => {
+  const p = pack.value;
+  if (!p) return null;
+  const playable = playableRoles(p);
+  if (playable.length === 0) return null;
+  const lived = (save.value.cleared[p.situation.id] ?? []).map((record) => ({ role: record.role, look: record.look }));
+  return drawHero(p.situation.roles, playable, seed.value, lived);
+});
 
 /** 이어 할 것이 있는가(제목의 "이어 하기") */
 export const canContinue = computed<boolean>(() => {
@@ -295,7 +310,7 @@ export function openStory(id: string): void {
   screen.value = 'rolePick';
 }
 
-/** 누가 될까에서 역할과 모습을 정한다 → 나를 소개합니다 */
+/** 누가 될까에서 뽑힌 역할과 모습으로 정한다(화면은 hero의 것을 넘긴다) → 나를 소개합니다 */
 export function settleRole(role: RoleId, look: Look): void {
   const p = pack.value;
   if (!p || !playableRoles(p).includes(role)) return; // 준비 중인 집

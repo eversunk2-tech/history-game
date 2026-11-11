@@ -1,7 +1,10 @@
 // 위쪽 띠 — 맵 화면과 대화 장면이 함께 쓴다.
-// 계절 · 해와 곳과 역할 · 수치 셋(이름·숫자·칸) · 해 ☀(남은 것/계절의 해) · 지난 이야기 · 봇짐 · "봄을 보낸다" · 처음으로.
-// 넓은 화면에서는 한 줄, 좁으면(1024 너비) 두 줄이 된다. 높이는 내용이 정한다.
-// 뜻은 색만으로 전하지 않는다: 수치는 이름과 숫자와 칸, 해는 숫자와 모양(찬 해 · 빈 동그라미), 잠긴 단추는 자물쇠와 점선.
+// 계절 · 해와 곳과 역할 · 수치 셋(이름·숫자·젤리 막대) · 해 ☀(남은 것/계절의 해) · 지난 이야기 · 봇짐 · "봄을 보낸다" · 처음으로.
+// 넓은 화면에서는 한 줄, 좁으면(1024 너비) 두 줄이 된다. 높이는 내용이 정한다(지금까지의 띠보다 높지 않게 — spec.md 6.4).
+// 모습(3판 다듬기 ㉠ — 시안 B): 한지 띠 + 아래 가장자리에 겹쳐 그린 단청 띠(띠의 높이에 들지 않는다), 계절 칩(계절 도트 + 이름),
+// 수치 쟁반(도트 아이콘 + 이름 + 숫자 + 열 칸 눈금의 젤리 막대), 해 쟁반(도트 해 · 진 해는 점선 동그라미 + "3/3"),
+// 단추 넷은 도트 아이콘 + 글의 점토 단추(잠긴 "봄을 보낸다"는 파인 자리 + 점선 + 자물쇠, 풀리면 쪽빛 + "▶").
+// 뜻은 색만으로 전하지 않는다: 수치는 이름과 숫자와 눈금, 해는 숫자와 모양(찬 해 · 빈 동그라미), 잠긴 단추는 자물쇠와 점선.
 //
 // 세 가지 모습이 있다.
 //   1. 맵(꼭 할 일이 남았다)      — 위에 적은 그대로. 한 줄 안내는 자리가 넉넉할 때만 보인다.
@@ -10,7 +13,7 @@
 //   3. 대화 장면·일 놀이가 떠 있다 — 한 줄로 줄인다. 계절·곳·수치·해만 남기고, 그때 쓸 수 없는 단추와 안내는 감춘다(무대가 넓어진다).
 // 알림 줄(기록을 남기지 못했어요, 인터넷이 끊겼어요)은 어느 모습에서도 보인다.
 
-import type { JSX } from 'preact';
+import { Fragment, type JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { picturesMissed } from '../art/pictures';
 import { seasonLabels, statLabels } from '../content/labels';
@@ -19,6 +22,8 @@ import { SEASONS, STATS, STAT_MAX, type Stat } from '../engine/types';
 import { askHome, closeSeasonNow, game, mapBusy, openPanel, pack, panel, saveFailed, talk } from '../state/store';
 import { Ask } from './Ask';
 import { LockIcon, StatIcon, SunIcon } from './icons';
+import { Jelly } from './Meter';
+import { Icon } from './PxIcon';
 import { yearAndPlace } from './where';
 import { josa } from './words';
 
@@ -26,17 +31,13 @@ function BandStat({ stat, value }: { stat: Stat; value: number }): JSX.Element {
   const info = statLabels[stat];
   return (
     <div class={`band-stat band-stat-${stat}`} role="img" aria-label={`${info.label} ${value}, 가장 많으면 ${STAT_MAX}`}>
-      <StatIcon stat={stat} />
-      <div class="band-stat-body">
+      <StatIcon stat={stat} size={1.5} />
+      <div class="band-stat-main">
         <div class="band-stat-top">
           <span class="band-stat-name">{info.label}</span>
           <span class="band-stat-num">{value}</span>
         </div>
-        <div class="band-cells">
-          {Array.from({ length: STAT_MAX }, (_, index) => (
-            <span key={index} class={index < value ? 'cell on' : 'cell'} />
-          ))}
-        </div>
+        <Jelly value={value} />
       </div>
     </div>
   );
@@ -109,37 +110,36 @@ export function TopBand(): JSX.Element | null {
   };
 
   return (
-    <header class={`band season-${season}${compact ? ' compact' : canClose ? ' open' : ''}`}>
+    <header class={`band hanji season-${season}${compact ? ' compact' : canClose ? ' open' : ''}`}>
       <div class="band-row">
         <div class="band-info">
           <span class={`season-chip season-${season} now`}>
-            <span class="season-mark" aria-hidden="true">
-              ●
-            </span>
+            <Icon name={season} size={1.5} />
             {seasonName}
           </span>
           <div class="band-where">
             <span class="band-year">{yearAndPlace(p, g.role)}</span>
             <span class="band-role">{role.label}</span>
           </div>
-          <div class="band-stats">
-            {STATS.map((stat) => (
-              <BandStat key={stat} stat={stat} value={g.stats[stat]} />
+          <div class="band-stats band-tray">
+            {STATS.map((stat, index) => (
+              <Fragment key={stat}>
+                {index > 0 && <span class="band-sep" aria-hidden="true" />}
+                <BandStat stat={stat} value={g.stats[stat]} />
+              </Fragment>
             ))}
           </div>
-          <div class="band-suns" role="img" aria-label={`남은 해 ${g.sunsLeft}, 이 계절의 해 ${sunsAll}`}>
-            <div class="band-stat-top">
-              <span class="band-stat-name">해</span>
-              <span class="band-stat-num">
-                {g.sunsLeft}
-                <span class="band-sun-all">/{sunsAll}</span>
-              </span>
-            </div>
-            <div class="band-sun-row">
+          <div class="band-suns band-tray" role="img" aria-label={`남은 해 ${g.sunsLeft}, 이 계절의 해 ${sunsAll}`}>
+            <span class="band-suns-label">해</span>
+            <span class="band-sun-row">
               {Array.from({ length: sunsAll }, (_, index) => (
                 <SunIcon key={index} spent={index >= g.sunsLeft} />
               ))}
-            </div>
+            </span>
+            <span class="band-stat-num">
+              {g.sunsLeft}
+              <span class="band-sun-all">/{sunsAll}</span>
+            </span>
           </div>
         </div>
 
@@ -168,30 +168,33 @@ export function TopBand(): JSX.Element | null {
               </p>
             )}
             <div class="band-btns">
-              <button type="button" class="band-btn" aria-pressed={panel.value === 'past'} disabled={busy && panel.value !== 'past'} onClick={() => openPanel('past')}>
-                지난 이야기
+              <button type="button" class="btn small band-btn" aria-pressed={panel.value === 'past'} disabled={busy && panel.value !== 'past'} onClick={() => openPanel('past')}>
+                <Icon name="scroll" size={1.5} cls="band-btn-icon" />
+                <span>지난 이야기</span>
               </button>
-              <button type="button" class="band-btn" aria-pressed={panel.value === 'bag'} disabled={busy && panel.value !== 'bag'} onClick={() => openPanel('bag')}>
-                봇짐
+              <button type="button" class="btn small band-btn" aria-pressed={panel.value === 'bag'} disabled={busy && panel.value !== 'bag'} onClick={() => openPanel('bag')}>
+                <Icon name="bundle" size={1.5} cls="band-btn-icon" />
+                <span>봇짐</span>
               </button>
               <button
                 type="button"
-                class={`band-btn send${canClose ? ' open' : ' locked'}`}
+                class={`btn small band-btn send${canClose ? ' primary open' : ' locked'}`}
                 aria-disabled={!canClose}
                 aria-describedby={canClose ? undefined : 'band-why-text'}
                 disabled={busy}
                 onClick={onSend}
               >
                 {!canClose && <LockIcon />}
-                {sendLabel}
+                <span>{sendLabel}</span>
                 {canClose && (
                   <span class="band-send-go" aria-hidden="true">
                     ▶
                   </span>
                 )}
               </button>
-              <button type="button" class="band-btn quiet" disabled={busy} onClick={askHome}>
-                처음으로
+              <button type="button" class="btn small quiet band-btn" disabled={busy} onClick={askHome}>
+                <Icon name="house" size={1.5} cls="band-btn-icon" />
+                <span>처음으로</span>
               </button>
             </div>
           </div>
@@ -224,6 +227,9 @@ export function TopBand(): JSX.Element | null {
           {reason}
         </p>
       )}
+
+      {/* 단청 띠: 띠의 아래 가장자리에 겹쳐 그린다(띠의 높이에 들지 않고 무대의 맨 윗줄을 덮는다) */}
+      <div class="dan band-dan" aria-hidden="true" />
 
       {asking && (
         <Ask

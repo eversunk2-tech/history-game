@@ -24,7 +24,7 @@ import {
   seasonReady,
 } from '../src/engine/game';
 import { reviewYear, type YearReview } from '../src/engine/review';
-import { drawValues, mulberry32 } from '../src/engine/rng';
+import { drawHero, drawValues, mulberry32, type Hero } from '../src/engine/rng';
 import { SEASONS, STATS, type GameState, type Look, type RoleId, type Season, type SituationPack } from '../src/engine/types';
 import { exploreYear, playSeasonRandom } from './fixtures';
 
@@ -308,6 +308,33 @@ describe('완주', () => {
           expect(solved, m.id).toBeLessThan(RUNS);
         }
       });
+    }
+  });
+
+  // 3판 다듬기 ㉠(spec.md 3.9): 누가 될까는 늘 뽑는다. 뽑기로 나온 아이(씨앗마다 drawHero가 정한 집과 모습)가 한 해를 끝까지 깬다.
+  // 모습별로 도는 위의 시험과 같은 엔진이지만, 여기서는 고르지 않고 뽑기 길로 들어간다(처음 판, 그리고 한 번 깬 뒤의 다시 하는 판).
+  describe('뽑기로 나온 아이로 한 해를 끝까지', () => {
+    for (const pack of packs) {
+      const playable = playableRoles(pack);
+      const roles = pack.situation.roles;
+      it(`${pack.situation.id}: 처음 판과 다시 하는 판 모두, 뽑힌 집·모습으로 네 계절(만들어진 만큼)을 닫는다. 두 모습이 다 뽑힌다`, () => {
+        const seen = new Set<string>();
+        for (const lived of [[], [{ role: playable[0], look: roleOf(pack, playable[0]).looks[0] }]] as Hero[][]) {
+          for (let seed = 1; seed <= 60; seed++) {
+            const hero = drawHero(roles, playable, seed, lived);
+            expect(playable).toContain(hero.role);
+            expect(roleOf(pack, hero.role).looks).toContain(hero.look);
+            seen.add(`${hero.role}/${hero.look}`);
+            const run = playBuilt(pack, hero.role, hero.look, seed);
+            expect(missingMusts(pack, run.end), `씨앗 ${seed}`).toEqual([]);
+            expect(run.end.phase).toBe('seasonClose');
+            if (run.seasons.length === SEASONS.length) expect(run.review?.yearName.id, `씨앗 ${seed}`).toBeTruthy();
+          }
+        }
+        // 할 수 있는 집의 모든 모습이 한 번은 뽑힌다(① 농민 집 아이: 남자아이·여자아이)
+        const all = playable.flatMap((role) => roleOf(pack, role).looks.map((look) => `${role}/${look}`));
+        expect([...seen].sort()).toEqual(all.sort());
+      }, 120000);
     }
   });
 

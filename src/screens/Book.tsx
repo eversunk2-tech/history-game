@@ -1,6 +1,7 @@
 // 2. 이야기책 — 일곱 이야기가 연대순으로 놓여 있다. 만들어진 이야기만 펼칠 수 있고 나머지는 "준비 중"이다.
 // 깬 이야기에는 그 해의 "한 해 이름"이 도장처럼 찍혀 있다(가장 최근에 깬 해의 것 — 저장의 깬 기록에서 읽는다).
-// 몇 번 살았는지와 살아 본 모습이 함께 보이고, 다른 모습으로 다시 살아 볼 수 있다(누가 될까에서 뽑지 않고 고른다).
+// 몇 번 살았는지와 살아 본 모습이 함께 보이고, 다시 살아 볼 수 있다. 다시 살 때도 누가 될까에서 뽑는다
+// (아직 살아 보지 않은 집과 모습이 더 잘 나오지만, 다른 모습이 나온다고 약속할 수는 없어 늘 "다시 살기 ▶"라고 쓴다 — spec.md 3.8).
 // 다음 이야기가 열리는 것, 견주어 보기, 두루마리 꾸밈은 뒤 바퀴에서 더한다.
 
 import type { JSX } from 'preact';
@@ -54,9 +55,6 @@ export function Book(): JSX.Element {
       <ol class="book-list">
         {list.map((item, index) => {
           const stamp = stamps.get(item.id) ?? null;
-          const pack = getPack(item.id);
-          // 아직 살아 보지 않은 모습이 남았는가(할 수 있는 역할 가운데)
-          const more = stamp && pack ? pack.situation.roles.some((r) => item.playable.includes(r.id) && r.looks.some((look) => !stamp.lived.some((one) => one.role === r.id && one.look === look))) : false;
           const inner = (
             <>
               <span class="book-text">
@@ -71,7 +69,7 @@ export function Book(): JSX.Element {
                 <span class="book-tags">
                   {!item.ready && <span class="soon">준비 중</span>}
                   {item.ready && !stamp && <span class="book-open">펼치기 ▶</span>}
-                  {item.ready && stamp && <span class="book-open">{more ? '다른 모습으로 다시 살기 ▶' : '다시 살기 ▶'}</span>}
+                  {item.ready && stamp && <span class="book-open">다시 살기 ▶</span>}
                   {stamp && (
                     <span class="book-cleared">
                       깬 이야기 · {timesWord(stamp.times)} 살았어요
@@ -88,7 +86,7 @@ export function Book(): JSX.Element {
               )}
             </>
           );
-          const label = stamp ? `${item.year}년 ${item.title}. 깬 이야기, 한 해 이름 ${stamp.title}. ${more ? '다른 모습으로 다시 살기' : '다시 살기'}` : undefined;
+          const label = stamp ? `${item.year}년 ${item.title}. 깬 이야기, 한 해 이름 ${stamp.title}. 다시 살기` : undefined;
           return (
             <li key={item.id} class={stamp && wide ? 'wide' : undefined}>
               {item.ready ? (

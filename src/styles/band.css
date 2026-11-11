@@ -1,123 +1,174 @@
 /* 위쪽 띠(맵 화면과 대화 장면이 함께 쓴다)와, 맵의 무대 위에 얹히는 종이(미션이 풀림, 봇짐, 지난 이야기).
-   띠는 넓으면 한 줄, 좁으면(1024 너비) 두 줄이 된다. 높이는 내용이 정한다.
+   띠(3판 다듬기 ㉠ — 시안 B): 한지 띠 + 아래 가장자리에 겹쳐 그린 단청 띠(.band-dan — 띠의 높이에 들지 않고 무대의 맨 윗줄 7px을 덮는다).
+   첫 줄: 계절 칩 · 곳 · 수치 쟁반 · 해 쟁반. 둘째 묶음: (자물쇠 + 까닭 한 줄) · 점토 단추 넷.
+   넓으면 한 줄, 좁으면(1024 너비) 두 줄. 높이는 지금까지의 띠를 넘지 않는다(spec.md 6.4 — 잰 값은 Build 보고):
+     쟁반·칩은 누르는 것이 아니라 2.75rem, 띠 단추는 3px만 내려앉고, 위아래 여백은 0.2rem.
    꼭 할 일을 다 한 뒤에는 안내 한 줄이 어느 너비에서도 보인다(자리가 모자라면 띠가 한 줄 늘어난다).
-   대화 장면과 일 놀이가 떠 있는 동안에는 한 줄로 줄어든다(.band.compact — 어두운 바탕, 단추와 안내 없음).
-   글은 1.25rem(20px)부터(이름표만 1.125rem), 누르는 것은 높이 3.5rem(56px)부터. */
+   대화 장면과 일 놀이가 떠 있는 동안에는 첫 줄만 남는다(.band.compact — 같은 한지 띠, 단추와 안내 없음).
+   글은 1.25rem(20px)부터(꼬리표만 1.125rem), 누르는 것은 높이 3.5rem(56px)부터. */
 
 .band {
   position: relative;
-  z-index: 6; /* 까닭 풍선이 무대 위로 내려온다 */
+  z-index: 6; /* 까닭 풍선과 단청 띠가 무대 위로 내려온다 */
   min-width: 0;
-  padding: 0.25rem 0.75rem;
-  border-bottom: 0.14rem solid var(--ink);
-  background: var(--paper-light);
+  padding: 0.2rem 0.75rem;
+  box-shadow: 0 0.375rem 1rem -0.5rem rgba(40, 24, 10, 0.5);
+}
+
+/* 단청 띠: 띠 아래 가장자리 바로 밑(무대 위)에 겹쳐 그린다 */
+.band-dan {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  pointer-events: none;
 }
 
 .band-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 1rem;
+  gap: 0.25rem 0.75rem;
   min-width: 0;
 }
 
-/* 왼쪽: 계절 · 해와 곳 · 수치 셋 · 해 ☀ */
+/* 왼쪽: 계절 · 곳 · 수치 쟁반 · 해 쟁반 */
 .band-info {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 0.9rem;
+  gap: 0.5rem;
   min-width: 0;
-  min-height: 3.25rem;
+}
+
+/* 계절 칩: 계절 도트 + 이름(주아). 아래 테는 그 계절의 진한 빛 */
+.band .season-chip.now {
+  gap: 0.25rem;
+  min-width: 0;
+  height: 2.75rem;
+  padding: 0 0.875rem 0 0.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--season-chip);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    0 3px 0 var(--season-deep),
+    1px 0.5rem 0.875rem -0.5rem rgba(58, 38, 18, 0.45);
+  color: var(--ink);
+  font-family: var(--f-title);
+  font-size: 1.375rem;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .band-where {
   display: flex;
   flex: none;
   flex-direction: column;
-  font-size: 1.125rem;
-  line-height: 1.25;
+  line-height: 1.15;
   white-space: nowrap;
 }
 
 .band-year {
-  font-weight: 800;
+  font-family: var(--f-title);
+  font-size: 1.25rem;
 }
 
 .band-role {
+  color: var(--ink-faint);
+  font-size: 1.125rem;
   font-weight: 600;
-  color: var(--ink-soft);
+}
+
+/* 쟁반: 떠 있는 종이 알약(누르는 것이 아니다 — 대화 중에는 "아무 곳 누르기"의 자리) */
+.band-tray {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 2.75rem;
+  border-radius: 999px;
+  background: var(--paper-light);
+  box-shadow:
+    var(--rim),
+    0 3px 0 #dccaa5,
+    1px 0.5rem 0.875rem -0.5rem rgba(58, 38, 18, 0.4);
 }
 
 .band-stats {
-  display: flex;
-  flex: none;
-  gap: 0.9rem;
+  gap: 0.5rem;
+  padding: 0 0.75rem 0 0.5rem;
+}
+
+.band-sep {
+  align-self: stretch;
+  width: 1px;
+  margin: 0.5rem 0;
+  background: rgba(43, 36, 29, 0.16);
 }
 
 .band-stat {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
 }
 
-.band-stat .icon {
-  width: 1.6rem;
-  height: 1.6rem;
+.band-stat-main {
+  display: flex;
+  flex-direction: column;
+  width: 4rem;
 }
 
 .band-stat-top {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.375rem;
+  line-height: 1.05;
+}
+
+.band-stat-name {
+  color: var(--ink-soft);
   font-size: 1.125rem;
   font-weight: 800;
-  line-height: 1.2;
 }
 
 .band-stat-num {
   font-size: 1.25rem;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
-.band-cells {
-  display: flex;
-  gap: 0.1rem;
-  margin-top: 0.12rem;
+.band-stat .jelly {
+  height: 0.625rem;
+  margin-top: 0.2rem;
 }
 
-.band-cells .cell {
-  width: 0.52rem;
-  height: 0.75rem;
-}
-
-/* 해 ☀: 남은 것은 살이 뻗은 찬 해, 진 것은 빈 동그라미. 숫자가 함께 있다. */
+/* 해 ☀: 남은 것은 살이 뻗은 찬 해, 진 것은 빈 점선 동그라미. 숫자가 함께 있다 */
 .band-suns {
-  flex: none;
-  padding-left: 0.8rem;
-  border-left: 0.1rem solid var(--ink-faint);
+  gap: 0.3rem;
+  padding: 0 0.75rem 0 0.625rem;
 }
 
-.band-sun-all {
-  font-size: 1.125rem;
-  font-weight: 700;
+.band-suns-label {
   color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 800;
 }
 
 .band-sun-row {
   display: flex;
-  gap: 0.1rem;
-  margin-top: 0.05rem;
+  align-items: center;
+  gap: 0;
 }
 
-.band-sun-row .icon {
-  width: 1.15rem;
-  height: 1.15rem;
+.band-suns .band-stat-num {
+  margin-left: 0.25rem;
 }
 
-.band-sun-row .icon.spent {
+.band-sun-all {
   color: var(--ink-faint);
+  font-size: 1.125rem;
+  font-weight: 800;
 }
 
 /* 오른쪽: (한 줄 안내) · 단추 넷. 자리가 모자라면 이 묶음이 통째로 둘째 줄로 내려간다. */
@@ -126,16 +177,17 @@
   flex: 1 1 auto;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.4rem;
+  gap: 0.5rem;
   min-width: 0;
 }
 
-/* 단추 넷은 언제나 한 줄에 함께 있다 */
+/* 단추 넷은 언제나 한 줄에 함께 있다(아래 3px은 점토의 아래 테가 놓일 자리) */
 .band-btns {
   display: flex;
   flex: none;
   align-items: center;
   gap: 0.4rem;
+  padding-bottom: 3px;
 }
 
 /* 꼭 할 일을 다 한 뒤: 안내 한 줄이 반드시 보인다.
@@ -162,15 +214,18 @@
   min-width: 0;
 }
 
+/* "꼭 할 일을 다 했어요…": 황 옅은 알약 */
 .band-done-text {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
   min-height: 2.6rem;
-  padding: 0.2rem 0.9rem;
-  border: 0.14rem solid var(--ink);
-  border-radius: 0.7rem;
-  background: var(--season-soft);
+  padding: 0.2rem 1rem;
+  border-radius: 999px;
+  background: var(--hwang-soft);
+  box-shadow:
+    inset 0 0 0 2px var(--hwang),
+    var(--sh-1);
   color: var(--ink);
   font-size: 1.25rem;
   font-weight: 800;
@@ -179,6 +234,7 @@
 }
 
 .band-done-mark {
+  color: var(--hwang-edge);
   font-size: 0.8rem;
 }
 
@@ -191,8 +247,8 @@
   height: 3.5rem;
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: 1.25rem; /* 문장이라 20px부터(spec 1.3) — 자리가 모자라면 통째로 가려지고 단추를 누르면 풍선이 뜬다 */
+  font-weight: 600;
   line-height: 3.5rem;
 }
 
@@ -215,14 +271,9 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.4rem;
   height: 3.5rem;
   white-space: nowrap;
-}
-
-.band-hint .icon {
-  width: 1.4rem;
-  height: 1.4rem;
 }
 
 .band-hint.nudge .band-hint-text {
@@ -231,46 +282,56 @@
   text-underline-offset: 0.25rem;
 }
 
-.band-btn {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
+/* 띠의 단추: 점토(base.css의 .btn.small — 3px만 내려앉는다) + 도트 아이콘 + 글. (.btn.small보다 앞서게 .band 안으로 묶는다) */
+.band .band-btn {
   gap: 0.25rem;
   min-width: 3.5rem;
-  min-height: 3.5rem;
-  padding: 0 0.7rem;
-  border: 0.14rem solid var(--ink);
-  border-radius: 0.7rem;
-  background: var(--paper);
-  font-size: 1.125rem;
-  font-weight: 700;
-  line-height: 1.2;
+  padding: 0 0.625rem 0 0.5rem;
   white-space: nowrap;
-  cursor: pointer;
 }
 
-.band-btn .icon {
-  width: 1.3rem;
-  height: 1.3rem;
-}
-
+/* 봇짐·지난 이야기가 열려 있는 동안: 눌린 채 */
 .band-btn[aria-pressed='true'] {
-  background: var(--ink);
-  color: var(--paper-light);
+  transform: translateY(var(--press));
+  background: var(--paper-deep);
+  box-shadow:
+    inset 0 2px 3px rgba(58, 38, 18, 0.25),
+    0 0 0 var(--edge);
 }
 
-/* "봄을 보낸다": 잠겼으면 자물쇠와 점선과 흐린 글, 열렸으면 먹빛으로 찬 바탕과 "▶"와 겹테(색만으로 가르지 않는다).
-   열린 단추는 띠가 다시 보일 때마다 두어 번 두근거린다(움직임을 줄여 달라고 한 기기에서는 가만히 있다). */
-.band-btn.send.open {
-  padding: 0 0.9rem;
-  border-color: var(--ink);
-  background: var(--ink);
+/* 다른 창이 떠 있어 잠깐 쓸 수 없을 때: 흐리게(잠긴 것 — 점선 — 과 헷갈리지 않게 모양은 그대로) */
+.band-btn:disabled {
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 48%),
+    var(--face);
   box-shadow:
-    0 0 0 0.14rem var(--paper-light),
-    0 0 0 0.3rem var(--ink);
-  color: var(--paper-light);
-  font-weight: 800;
+    inset 0 2px 0 rgba(255, 255, 255, 0.85),
+    0 var(--press) 0 var(--edge);
+  outline: 0;
+  transform: none;
+  opacity: 0.55;
+}
+
+/* "봄을 보낸다": 잠겼으면 파인 자리 + 점선 + 자물쇠(눌러 볼 수는 있다 — 까닭이 뜬다),
+   열렸으면 쪽빛 점토 + "▶"(색만으로 가르지 않는다). 열린 단추는 띠가 다시 보일 때마다 두어 번 두근거린다. */
+.band-btn.send.locked {
+  background: rgba(224, 210, 179, 0.45);
+  color: var(--ink-soft);
+  box-shadow:
+    inset 0 2px 3px rgba(58, 38, 18, 0.22),
+    inset 0 0 0 2px rgba(106, 94, 80, 0.35);
+  outline: 2px dashed rgba(106, 94, 80, 0.55);
+  outline-offset: -6px;
+  transform: translateY(var(--press));
+}
+
+.band-btn.send.locked:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.band-btn.send.open {
+  padding: 0 0.875rem;
   animation: send-beat 1.2s ease-in-out 0.3s 3;
 }
 
@@ -294,75 +355,14 @@
   }
 }
 
-.band-btn.send.locked {
-  border-style: dashed;
-  border-color: var(--ink-soft);
-  background: transparent;
-  color: var(--ink-soft);
-}
-
-.band-btn.quiet {
-  border-color: var(--ink-faint);
-  background: transparent;
-  color: var(--ink-soft);
-  font-weight: 600;
-}
-
-.band-btn:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-
-.band-btn:active:not(:disabled) {
-  transform: translateY(0.06rem);
-}
-
-/* ── 줄인 띠 ── 대화 장면과 일 놀이가 떠 있는 동안. 한 줄, 어두운 바탕(무대와 한 덩어리로 보이게).
-   계절 · 해와 곳 · 수치 셋 · 해 ☀만 남는다. 뜻은 여전히 이름·숫자·칸·모양으로 전한다. */
+/* ── 줄인 띠 ── 대화 장면과 일 놀이가 떠 있는 동안. 같은 한지 띠의 첫 줄만(검은 띠로 바꾸지 않는다 — 시안 B).
+   계절 · 곳 · 수치 · 해만 남는다. 뜻은 여전히 이름·숫자·눈금·모양으로 전한다. */
 .band.compact {
-  padding: 0.2rem 0.75rem;
-  border-bottom-color: #0f0b09;
-  background: #1b1410;
-  color: #f6efe2;
+  padding: 0.35rem 0.75rem;
 }
 
 .band.compact .band-row {
   flex-wrap: nowrap;
-}
-
-.band.compact .band-info {
-  min-height: 3rem;
-}
-
-.band.compact .season-chip.now {
-  height: 2.5rem;
-  border-color: #d9b872;
-}
-
-.band.compact .band-role,
-.band.compact .band-sun-all {
-  color: rgba(246, 239, 226, 0.78);
-}
-
-.band.compact .cell {
-  border-color: rgba(246, 239, 226, 0.85);
-}
-
-.band.compact .cell.on {
-  background: #f6efe2;
-}
-
-.band.compact .band-suns {
-  border-left-color: rgba(246, 239, 226, 0.4);
-}
-
-.band.compact .band-sun-row .icon.spent {
-  color: rgba(246, 239, 226, 0.6);
-}
-
-/* 알림 줄은 줄인 띠에서도 보인다(밝은 바탕 그대로) */
-.band.compact .band-notice {
-  color: var(--ink);
 }
 
 /* 알림 한 줄(기록을 남기지 못했어요, 인터넷이 끊겼어요) */
@@ -379,7 +379,7 @@
 /* 잠긴 "봄을 보낸다"를 눌렀을 때의 까닭 풍선(띠 아래, 무대의 오른쪽 위에 잠깐 뜬다) */
 .band-why {
   position: absolute;
-  top: calc(100% + 0.5rem);
+  top: calc(100% + 0.75rem);
   right: 0.75rem;
   z-index: 7;
   display: flex;
@@ -395,11 +395,6 @@
   font-weight: 800;
   line-height: 1.4;
   pointer-events: none;
-}
-
-.band-why .icon {
-  width: 1.5rem;
-  height: 1.5rem;
 }
 
 /* ── 종이 한 장 ── 무대를 덮는 어두운 막 위의 한지 빛 창 */

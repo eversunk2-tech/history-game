@@ -19,7 +19,7 @@ import {
   guideKinds,
   guideShape,
 } from '../src/ui/InstallGuide';
-import { HINT_WINDOWS, NEXT_HINT, NextHint, OWN_TAP, freeTap, isNextArrow, pageByKey, stepAdvances, type TalkStepKind } from '../src/ui/advance';
+import { HINT_WINDOWS, NEXT_HINT, NextHint, OWN_TAP, freeTap, hintParts, isNextArrow, pageByKey, stepAdvances, type TalkStepKind } from '../src/ui/advance';
 import { guardKeys, holdKeys, keysAreHeld, swallowIfHeld } from '../src/ui/focus';
 import { OPEN_GAP_MS, TAP_GAP_MS, TapGate } from '../src/ui/taps';
 import { keyWalks } from '../src/screens/MapScreen';
@@ -598,8 +598,23 @@ describe('대화 넘기기 — → 키, 화면 아무 곳, 넘기는 법 알림'
     expect(talk).toMatch(/useMemo\(\(\) => nextWindow && nextHint\.take\(playNo\.peek\(\)\), \[windowKey\]\)/);
     // "다음 ▼" 셋 모두 알림과 함께 그린다("돌아가기 ▼"에는 붙지 않는다)
     expect((talk.match(/<NextMark hint=\{hinted\} \/>/g) ?? []).length).toBe(3);
-    expect((talk.match(/다음 ▼/g) ?? []).length).toBeGreaterThanOrEqual(1);
-    expect(talk).toMatch(/<span class="talk-hint" aria-hidden="true">\s*\n\s*\{NEXT_HINT\}/);
+    expect((talk.match(/<NextMark hint=\{false\} label="돌아가기" \/>/g) ?? []).length).toBe(2);
+    // (3판 다듬기 ㉠) "다음 ▼"은 옅은 쪽빛 알약이고 ▼만 까딱인다: 글은 label(기본 "다음") + 띄어쓰기 + ▼ 그대로
+    expect(talk).toMatch(/function NextMark\(\{ hint, label = '다음' \}/);
+    expect(talk).toMatch(/<span class="talk-next">\s*\n\s*\{label\} <span class="talk-next-tri">▼<\/span>/);
+    // 알림 줄은 화면 읽기에는 숨기고(창의 글만 읽힌다), 글은 NEXT_HINT를 나눈 조각을 그대로 잇는다
+    expect(talk).toMatch(/<span class="talk-next-row" aria-hidden="true">/);
+    expect(talk).toMatch(/<span class="talk-hint" data-hint=\{NEXT_HINT\}>/);
+    expect(talk).toMatch(/\{hintParts\(NEXT_HINT\)\.map\(\(part, index\) => \(part\.key \? <kbd key=\{index\}>\{part\.text\}<\/kbd> : <span key=\{index\}>\{part\.text\}<\/span>\)\)\}/);
+  });
+
+  it('(3판 다듬기 ㉠) 알림 글을 나누는 셈: 조각을 이어 붙이면 NEXT_HINT와 글자 하나 다르지 않고, 자판 꼴은 → 와 Space 둘뿐이다', () => {
+    const parts = hintParts(NEXT_HINT);
+    expect(parts.map((part) => part.text).join('')).toBe(NEXT_HINT);
+    expect(parts.filter((part) => part.key).map((part) => part.text)).toEqual(['→', 'Space']);
+    expect(parts.every((part) => part.text !== '')).toBe(true);
+    // 다른 글이 와도 글자가 바뀌지 않는다
+    for (const text of ['→', 'Space', '→·Space', '아무 글', '']) expect(hintParts(text).map((part) => part.text).join('')).toBe(text);
   });
 
   it('알림 글: 30자 안, "~요"로 끝나는 쉬운 말, 누르기와 →·Space를 함께 알린다. 글자는 이름표 기준(18px)보다 크다', async () => {

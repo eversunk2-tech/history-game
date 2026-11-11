@@ -1,7 +1,8 @@
 /* 대화 장면(미연시 구도)과 일 놀이. 맵의 무대 위에 가득 얹힌다. 승인된 시안(docs/mockup-vn/)의 구도를 따른다.
    대화 장면이 떠 있는 동안 위쪽 띠는 한 줄(약 56px)로 줄어 있다(band.css의 .band.compact).
-   크기 셈(spec 9.2, 1024×690 — 무대 1024×634): 본문 20px·줄 높이 32px, 대화창은 세 줄 96px + 안쪽 여백 = 약 150px,
-   글 너비 약 850px(한 줄 44~46자).
+   대사 창(3판 다듬기 ㉠ — 시안 B): 둥근 한지 말풍선(모서리 2rem), 말하는 사람 쪽으로 꼬리, 뇌록 리본에 이름, 대사는 고운바탕 1.5625rem.
+   글 너비 46rem(한 줄 29자 안팎 — 가장 긴 대사 51자가 두 줄), 창의 가장 낮은 높이 10.75rem(--talk-box-h).
+   그림 위라 초점 테는 한지빛(--focus — spec.md 1.2의 3).
    선택지가 뜨면 선 사람이 비켜선다(시안의 둘째 화면). 선택지 묶음의 너비는 --choices-w = min(36rem, 56%)이다
    (1024 너비에서 573px — 26자 선택지와 30자 까닭 줄이 한 줄에 든다).
      한 사람: 남은 왼쪽 칸의 가운데로 물러나고, 선택지는 오른쪽에 붙는다.
@@ -12,7 +13,7 @@
   --talk-ink: #1b1410;
   --talk-paper: #f6efe2;
   --talk-gold: #d9b872;
-  --talk-box-h: 9.4rem;
+  --talk-box-h: 10.75rem;
   --talk-gap: 0.75rem;
   --choices-w: min(36rem, 56%);
 
@@ -23,6 +24,8 @@
   background: #1b1410;
   color: var(--talk-paper);
   cursor: pointer;
+  /* 어두운 그림·선택지 막 위에서도 보이는 초점 테 */
+  --focus: #fbf7ee;
 }
 
 .talk.step-choose,
@@ -222,82 +225,135 @@
   height: 1.3rem;
 }
 
-/* ── 대화창 ── 어두운 반투명 바탕, 금빛 가는 테두리 */
+/* ── 대사 창 ── 둥근 한지 말풍선. 말하는 사람이 무대에 서 있으면 그 사람 쪽으로 꼬리(--tail — Talk.tsx가 선 자리에서 정한다).
+   "나"의 이야기 줄은 리본·꼬리 없이 먹2 빛. 창 전체가 단추다(창 밖 그림 어디를 눌러도 넘어간다). */
 
 .talk-box {
   position: absolute;
+  right: 1.25rem;
   bottom: var(--talk-gap);
-  left: 0.9rem;
+  left: 1.25rem;
   z-index: 2;
   /* 글은 창의 위쪽부터 놓인다(단추는 내용을 가운데로 모으므로 따로 잡는다) */
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
-  width: calc(100% - 1.8rem);
   min-height: var(--talk-box-h);
-  padding: 1.5rem 2.2rem 1.4rem;
-  border: 0.1rem solid rgba(217, 184, 114, 0.85);
-  border-radius: 0.8rem;
-  background: linear-gradient(to bottom, rgba(20, 16, 13, 0.82), rgba(20, 16, 13, 0.92));
-  box-shadow:
-    inset 0 0 0 0.3rem rgba(20, 16, 13, 0.35),
-    inset 0 0 0 0.38rem rgba(217, 184, 114, 0.28);
-  color: var(--talk-paper);
-  font-size: 1.25rem;
-  font-weight: 500;
-  line-height: 2rem;
+  padding: 1.75rem 2rem 0.875rem 2.25rem;
+  border: 0;
+  border-radius: 2rem;
+  background:
+    linear-gradient(rgba(251, 247, 238, 0.62), rgba(251, 247, 238, 0.62)),
+    var(--tex) 0 0 / 32rem repeat,
+    var(--paper-light);
+  box-shadow: var(--sh-3), var(--rim);
+  color: var(--ink-soft);
+  font-family: var(--f-story);
+  font-size: 1.5625rem;
+  font-weight: 700;
+  line-height: 1.6;
   text-align: left;
+}
+
+/* 사람의 말은 먹, "나"의 이야기 줄은 먹2(리본·꼬리가 없다) */
+.talk-box.says {
+  color: var(--ink);
+}
+
+/* 꼬리: 말하는 사람이 무대에 서 있을 때만 */
+.talk-box.tail::before {
+  content: '';
+  position: absolute;
+  top: calc(-1.125rem + 1px);
+  left: calc(var(--tail, 50%) - 1.25rem);
+  width: 2.5rem;
+  height: 1.125rem;
+  background: #f9f4ea;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 
 button.talk-box {
   cursor: pointer;
 }
 
+/* 대사 창의 초점 테: 두 겹 — 먹 3px(밝은 옷·한지 위에서 보인다)을 한지빛(--focus)이 안팎으로 감싼다(어두운 그림 위에서 보인다).
+   창 위 가장자리에는 말하는 사람의 흰 옷이 바로 닿아 한지빛 한 겹으로는 갈리지 않았다(Review ㉠ 2 — 1.3~1.8:1). */
 button.talk-box:focus-visible {
-  outline: 0.2rem solid var(--talk-gold);
-  outline-offset: 0.1rem;
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+  box-shadow:
+    var(--sh-3),
+    var(--rim),
+    0 0 0 9px var(--focus);
 }
 
-/* 이름표: 사람의 말에만 붙는다. "나"의 이야기 줄에는 없다. */
+/* 이름 리본(base.css의 .ribbon): 사람의 말에만 붙는다. "나"의 이야기 줄에는 없다. */
 .talk-name {
   position: absolute;
-  top: -1.3rem;
-  left: 1.6rem;
-  padding: 0 1.1rem;
-  border-radius: 0.5rem;
-  background: var(--talk-gold);
-  color: var(--talk-ink);
-  font-size: 1.25rem;
-  font-weight: 800;
-  line-height: 2.2rem;
-  white-space: nowrap;
+  top: -1.5rem;
+  left: 1.75rem;
 }
 
-/* 글 너비를 묶어 화면이 넓어져도 줄이 같은 자리에서 바뀌게 한다(한 창은 세 줄까지) */
+/* 글 너비를 묶어 화면이 넓어져도 줄이 같은 자리에서 바뀌게 한다(한 창은 두 줄 안팎) */
 .talk-text {
   display: block;
-  max-width: 53.5rem;
+  max-width: 46rem;
+}
+
+/* 오른쪽 아래 줄: (판마다 처음 세 창만) 손가락 + 넘기는 법 알림 · "다음 ▼"(옅은 쪽빛 알약, ▼ 까딱임).
+   글과 겹치지 않게 창 안의 흐름(글 밑)에 놓는다. */
+.talk-next-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-self: flex-end;
+  justify-content: flex-end;
+  gap: 0.5rem 1.25rem;
+  margin-top: auto;
+  padding-top: 0.375rem;
 }
 
 .talk-next {
-  position: absolute;
-  right: 1.4rem;
-  bottom: 0.6rem;
-  color: var(--talk-gold);
-  font-size: 1.125rem;
-  font-weight: 700;
-  line-height: 1.4;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 3.5rem;
+  padding: 0 1.25rem;
+  border-radius: 999px;
+  background: var(--btn-soft);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.8),
+    0 3px 0 var(--btn-soft-edge);
+  color: var(--ink);
+  font-family: var(--f-title);
+  font-size: 1.375rem;
+  font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-/* 넘기는 법 알림: 판마다 처음 몇 창에만 "다음 ▼" 왼쪽 곁에 붙는다(Talk.tsx·ui/advance.ts).
-   글과 겹치지 않게 창 안의 흐름(글 밑)에 놓고, 아래로 당겨 "다음 ▼"과 한 줄에 맞춘다.
-   글이 두 줄까지면 창의 높이가 그대로이고, 세 줄이면 창이 조금(약 6px) 위로 자란다. 20px, 밝은 글(어두운 창 위 대비 10:1 넘게). */
+.talk-next-tri {
+  display: inline-block;
+  font-size: 1rem;
+  animation: talk-bob 1.4s ease-in-out infinite;
+}
+
+@keyframes talk-bob {
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+/* 넘기는 법 알림: 판마다 처음 세 창에만 "다음 ▼" 왼쪽 곁에 붙는다(Talk.tsx·ui/advance.ts).
+   글은 NEXT_HINT 그대로이고, 글 안의 "→"와 "Space"만 작은 자판 꼴(kbd)로 보인다. 앞에 손가락 도트(끝에 물결). 20px, 먹2 */
 .talk-hint {
-  align-self: flex-end;
-  margin: auto 4.6rem -0.9rem 0;
-  padding-top: 0.2rem;
-  color: var(--talk-paper);
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.125rem;
+  color: var(--ink-soft);
+  font-family: var(--f-ui);
   font-size: 1.25rem;
   font-weight: 700;
   line-height: 1.4;
@@ -314,9 +370,80 @@ button.talk-box:focus-visible {
   }
 }
 
+.talk-hint kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2.25rem;
+  height: 2.125rem;
+  margin: 0 0.125rem;
+  padding: 0 0.5rem;
+  border-radius: 0.5rem;
+  background: var(--paper-light);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 3px 0 var(--clay-edge),
+    0 0 0 1px rgba(43, 36, 29, 0.16);
+  color: var(--ink);
+  font-family: var(--f-ui);
+  font-size: 1.125rem;
+  font-weight: 800;
+  transform: translateY(-1px);
+}
+
+/* 손가락: 끝에 퍼지는 물결("눌러요"). 움직임 줄이기면 멈춘 둘레만 남는다 */
+.talk-hand {
+  position: relative;
+  display: inline-flex;
+  margin-right: 0.375rem;
+}
+
+.talk-hand::before,
+.talk-hand::after {
+  content: '';
+  position: absolute;
+  top: -0.5625rem;
+  left: 0.3125rem;
+  width: 1.375rem;
+  height: 1.375rem;
+  border: 2px solid var(--hwang-edge);
+  border-radius: 50%;
+  opacity: 0;
+  animation: talk-tap 2.4s ease-out infinite;
+  pointer-events: none;
+}
+
+.talk-hand::after {
+  animation-delay: 0.5s;
+}
+
+@keyframes talk-tap {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.4);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .talk-hint {
+  .talk-hint,
+  .talk-next-tri {
     animation: none;
+  }
+  .talk-hand::before {
+    animation: none;
+    opacity: 0.55;
+    transform: scale(1.05);
+  }
+  .talk-hand::after {
+    animation: none;
+    opacity: 0.25;
+    transform: scale(1.45);
   }
 }
 
@@ -325,13 +452,15 @@ button.talk-box:focus-visible {
   cursor: pointer;
 }
 
-/* 수치 변화: 화살표·글·숫자를 함께(색만으로 알리지 않는다) */
+/* 수치 변화: 화살표·글·숫자를 함께(색만으로 알리지 않는다). 창이 밝아져 화살표는 먹2(㉢에서 수치 도트를 더한다) */
 .talk-changes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 24rem));
   gap: 0 2.5rem;
   width: 100%;
   max-width: 53.5rem;
+  font-family: var(--f-ui);
+  font-size: 1.25rem;
 }
 
 .talk-change {
@@ -344,7 +473,7 @@ button.talk-box:focus-visible {
 .talk-change-arrow {
   flex: none;
   width: 1.3rem;
-  color: var(--talk-gold);
+  color: var(--ink-soft);
   text-align: center;
 }
 

@@ -1,26 +1,78 @@
-/* 바탕: 빛깔, 글자, 단추.
+/* 바탕: 빛깔, 글자, 단추 — 3판 다듬기의 시안 B 「단청 그림책」·쪽빛 단추(spec.md 1절).
    크기는 모두 rem으로 적는다. 1024×768에서 1rem = 16px이고,
-   화면이 커지면 비율대로 커진다(1920×1080에서 22.5px). 본문은 1.25rem = 20px부터다.
+   화면이 커지면 비율대로 커진다(1920×1080에서 22.5px). 본문은 1.25rem = 20px부터, 문장이 아닌 꼬리표는 1.125rem = 18px부터다.
 
    바탕 글자 = min(너비/64, max(16px, 높이/48))
    - 높이가 낮아도(주소 줄·탭 줄 때문에 1024×690, 1366×650쯤이 되어도) 16px 아래로 줄지 않는다.
      그래서 본문 20px, 단추 56px이 지켜진다. 줄어든 높이는 그림 칸과 글 칸의 빈 곳이 받는다.
-   - 너비가 1024px보다 좁으면 너비에 맞춰 줄어든다(가로로 넘치지 않게). 그런 화면은 기준 밖이다. */
+   - 너비가 1024px보다 좁으면 너비에 맞춰 줄어든다(가로로 넘치지 않게). 그런 화면은 기준 밖이다.
+
+   토큰은 지금까지의 이름(--paper, --ink …)을 그대로 두고 값만 시안 B로 바꿨다(화면마다의 CSS가 이 이름을 쓴다).
+   시안에만 있던 것은 새 이름으로 더했다. 대비는 WCAG 2로 셈한 값(tests/design.test.ts가 토큰 값으로 다시 셈한다). */
 
 :root {
   font-size: min(calc(100vw / 64), max(16px, calc(100vh / 48)));
 
-  --paper: #f4ecd9; /* 한지 빛 바탕 */
-  --paper-light: #fbf6e9;
-  --paper-deep: #e9dfc6;
-  --ink: #2e2925; /* 먹 */
-  --ink-soft: #5c5348;
-  --ink-faint: #857b6e;
-  --focus: #1f5fbf;
+  /* 바탕: 한지 */
+  --paper: #f4ecd9; /* 화면 바탕(한지 질감을 덮어 깐다). 매니페스트·띠 빛과 묶여 있어 그대로 둔다 */
+  --paper-light: #fbf7ee; /* 떠 있는 종이·카드·단추 면 */
+  --paper-deep: #ede3cd; /* 파인 자리(탭 트랙, 덤 쟁반) */
+  --paper-deeper: #e0d2b3; /* 젤리 막대의 빈 트랙, 잠긴 것의 바탕 — 이 위에 --ink-faint 글을 두지 않는다(4.22:1) */
+  --baek: #fffaf0; /* 흰(단추 위 글자, 단청 띠의 흰 선) */
+  --tex: url('../assets/ui/hanji-512.webp'); /* 한지 질감 타일(scripts/make-hanji.py) */
+
+  /* 글자: 먹 */
+  --ink: #2b241d; /* 바탕 위 13.0:1, 종이 위 14.3:1 */
+  --ink-soft: #4b4137; /* 8.5:1 */
+  --ink-faint: #6a5e50; /* 가장 옅은 글자(설명·단위). 바탕 5.4:1, 종이 5.9:1, --paper-deep 4.95:1 */
+
+  /* 주 단추: 쪽빛(사용자 결정 — 한 화면에 하나). 단추 위 흰 글자 7.15:1, 단추 몸 대 바탕 6.3:1 */
+  --btn: #2e5591;
+  --btn-edge: #1b3563;
+  --btn-on: #fffaf0;
+  --btn-hi: rgba(206, 222, 255, 0.5);
+  --btn-glow: rgba(18, 36, 80, 0.48);
+  --btn-soft: #dfe6f2; /* "다음 ▼" 같은 옅은 짝(위 먹 12.2:1) */
+  --btn-soft-edge: #aab8d2;
+
+  /* 초점 테: 먹 3px(대화 장면 안에서는 한지빛 — talk.css) */
+  --focus: #2b241d;
+
+  /* 단청 — 오방색은 선·점·작은 면에만 */
+  --ju: #c4462a; /* 주홍: "꼭 할 일" 표시에만(사용자 결정 2) */
+  --ju-edge: #8f2f18;
+  --rok: #1f7d74; /* 뇌록: 이름 리본, 단청 띠, 한 해 이름 도장. 위 흰 글자 4.76:1 */
+  --rok-edge: #135650;
+  --hwang: #e9ad2a; /* 황: 해 ☀, 젤리 막대, 화살표가 가리키는 줄의 테, 붓줄, 단청 띠의 맨 아랫줄. 위 먹 7.6:1 */
+  --hwang-edge: #b47d12;
+  --hwang-soft: #f8e6b0; /* "다 했어요" 안내 바탕(위 먹 12.3:1) */
+  --clay-edge: #cdb98f; /* 종이 점토의 아래 테 */
 
   /* 계절마다 한 가지 색. .season-봄여름가을겨울 에서 바뀐다 */
   --season: #7fa650;
   --season-soft: #e2ecc8;
+  --season-chip: #8bb35c; /* 계절 칩(위 먹 6.3:1) */
+  --season-deep: #4d6e2c; /* 계절 도장·칩 아래 테·고른 것의 점(흰 위 5.9:1) */
+
+  /* 빛: 왼쪽 위에서 하나(제목 그림의 해가 뜨는 쪽). 그림자는 아래로, 조금 오른쪽. 두 겹(짧고 진한 것 + 넓고 연한 것) */
+  --rim: inset 0 2px 0 rgba(255, 255, 255, 0.8);
+  --sh-1: 0 1px 2px rgba(58, 38, 18, 0.16);
+  --sh-2: 0 1px 2px rgba(58, 38, 18, 0.14), 1px 0.75rem 1.75rem -0.5rem rgba(58, 38, 18, 0.34);
+  --sh-3: 0 2px 4px rgba(58, 38, 18, 0.16), 2px 1.75rem 3.5rem -1.25rem rgba(40, 24, 10, 0.55);
+
+  /* 모양 */
+  --r-card: 1.5rem;
+  --r-btn: 1rem;
+  --press: 5px;
+
+  /* 움직임 */
+  --t-fast: 120ms;
+  --t-mid: 240ms;
+
+  /* 글꼴 셋(fonts.css). 주아·고운바탕에 없는 기호(▲▶▼◀ ·… 등)는 다음 글꼴이 그린다 — 줄의 차례가 그 몫이다 */
+  --f-title: 'Jua', 'Pretendard', 'Gowun Batang', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+  --f-story: 'Gowun Batang', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+  --f-ui: 'Pretendard', 'Gowun Batang', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
 }
 
 @supports (height: 100dvh) {
@@ -32,18 +84,26 @@
 .season-spring {
   --season: #7fa650;
   --season-soft: #e2ecc8;
+  --season-chip: #8bb35c;
+  --season-deep: #4d6e2c;
 }
 .season-summer {
   --season: #2f8a76;
   --season-soft: #cfe6d6;
+  --season-chip: #4fae97;
+  --season-deep: #1f5f51;
 }
 .season-autumn {
   --season: #c07f24;
   --season-soft: #f1ddb0;
+  --season-chip: #d39239;
+  --season-deep: #7d5112;
 }
 .season-winter {
   --season: #64809c;
   --season-soft: #dbe3ea;
+  --season-chip: #8aa6c2;
+  --season-deep: #3e5770;
 }
 
 *,
@@ -65,20 +125,15 @@ body {
   overflow: hidden;
   background: var(--paper);
   color: var(--ink);
-  font-family:
-    'Pretendard Variable',
-    Pretendard,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Apple SD Gothic Neo',
-    'Malgun Gothic',
-    'Noto Sans KR',
-    sans-serif;
+  font-family: var(--f-ui);
   font-size: 1.25rem;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.5;
   word-break: keep-all; /* 낱말 가운데에서 줄이 바뀌지 않게 */
   overflow-wrap: break-word;
+  /* 글꼴마다 있는 굵기만 쓴다(주아 400, 고운바탕 700, Pretendard 600·800 — 가짜 굵게를 만들지 않는다) */
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
@@ -125,9 +180,14 @@ button {
   user-select: none;
 }
 
+/* 자판으로 왔을 때의 초점: 먹 3px, 3px 띄움(어두운 그림 위 — 대화 장면 — 에서는 한지빛 테. talk.css) */
 button:focus-visible {
-  outline: 0.2rem solid var(--focus);
-  outline-offset: 0.15rem;
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+kbd {
+  font: inherit;
 }
 
 .visually-hidden {
@@ -139,57 +199,244 @@ button:focus-visible {
   white-space: nowrap;
 }
 
-/* ── 단추 ── 높이는 3.5rem(56px)부터 */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 한지 ── 질감 타일(32rem — 1024 너비에서 한 점이 CSS 1px) 위에 바탕 빛을 덮어 결만 남긴다 */
+
+.hanji {
+  background:
+    linear-gradient(rgba(244, 236, 217, 0.55), rgba(244, 236, 217, 0.55)),
+    var(--tex) 0 0 / 32rem repeat,
+    var(--paper);
+}
+
+/* 떠 있는 종이(카드·창·쪽지) */
+.sheet-paper {
+  background:
+    linear-gradient(rgba(251, 247, 238, 0.62), rgba(251, 247, 238, 0.62)),
+    var(--tex) 0 0 / 32rem repeat,
+    var(--paper-light);
+}
+
+/* 단청 띠: 먹 · 흰 · 뇌록 · 흰 · 황(주홍은 "꼭 할 일" 표시에만 — 사용자 결정 2). 선으로만, 화면마다 한두 곳 */
+.dan {
+  height: 7px;
+  background: linear-gradient(
+    to bottom,
+    var(--ink) 0 2px,
+    var(--baek) 2px 3px,
+    var(--rok) 3px 5px,
+    var(--baek) 5px 6px,
+    var(--hwang) 6px 7px
+  );
+}
+
+/* 이름 리본: 뇌록 몸에 먹 테·황 선, 양 끝은 제비꼬리(주아, 흰 글 4.76:1). 대화의 말하는 사람, 뽑힌 집의 이름 */
+.ribbon {
+  display: inline-flex;
+  flex: none;
+  filter: drop-shadow(1px 0.25rem 0.25rem rgba(19, 50, 46, 0.4));
+}
+
+.ribbon > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 1.75rem;
+  background: linear-gradient(
+    to bottom,
+    var(--rok-edge) 0 3px,
+    var(--hwang) 3px 5px,
+    #237f76 5px 45%,
+    var(--rok) 45% calc(100% - 5px),
+    var(--hwang) calc(100% - 5px) calc(100% - 3px),
+    var(--rok-edge) calc(100% - 3px)
+  );
+  clip-path: polygon(0 0, 100% 0, calc(100% - 0.75rem) 50%, 100% 100%, 0 100%, 0.75rem 50%);
+  color: var(--baek);
+  font-family: var(--f-title);
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* 도트 아이콘(src/ui/PxIcon.tsx — 점 하나가 기기 화소의 정수배. 크기는 그 부품이 적는다) */
+.px-icon {
+  display: inline-block;
+  flex: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  vertical-align: middle;
+}
+
+/* ── 단추 ── 점토: 윗면 흰 빛 + 아래 단단한 그림자(같은 빛의 진한 테) + 넓은 확산 그림자.
+   누르면 그림자만큼 내려앉는다(120ms). 높이는 3.5rem(56px)부터. 글은 주아. */
 
 .btn {
+  --face: var(--paper-light);
+  --edge: var(--clay-edge);
+  --on: var(--ink);
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   min-height: 3.5rem;
-  padding: 0.5rem 1.5rem;
-  border: 0.14rem solid var(--ink);
-  border-radius: 0.75rem;
-  background: var(--paper-light);
+  padding: 0.5rem 1.25rem;
+  border: 0;
+  border-radius: var(--r-btn);
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 48%),
+    var(--face);
+  color: var(--on);
+  font-family: var(--f-title);
   font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1.3;
+  font-weight: 400;
+  line-height: 1.25;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.05),
+    0 var(--press) 0 var(--edge),
+    1px calc(var(--press) + 0.375rem) 0.875rem -0.375rem rgba(58, 38, 18, 0.45);
   cursor: pointer;
+  transition:
+    transform var(--t-fast) ease-out,
+    box-shadow var(--t-fast) ease-out;
 }
 
+@media (hover: hover) {
+  .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+}
+
+.btn:active:not(:disabled),
+.btn.is-pressed {
+  transform: translateY(var(--press));
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    0 0 0 var(--edge),
+    0 2px 3px rgba(58, 38, 18, 0.3);
+}
+
+/* 주 단추: 쪽빛(한 화면에 하나) */
 .btn.primary {
-  background: var(--ink);
-  color: var(--paper-light);
+  --face: var(--btn);
+  --edge: var(--btn-edge);
+  --on: var(--btn-on);
+  box-shadow:
+    inset 0 2px 0 var(--btn-hi),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.12),
+    0 var(--press) 0 var(--edge),
+    1px calc(var(--press) + 0.5rem) 1.125rem -0.375rem var(--btn-glow);
 }
 
+.btn.primary:active:not(:disabled),
+.btn.primary.is-pressed {
+  box-shadow:
+    inset 0 2px 0 var(--btn-hi),
+    0 0 0 var(--edge),
+    0 2px 3px var(--btn-glow);
+}
+
+.btn.big {
+  --press: 6px;
+  min-height: 4.5rem;
+  padding: 0.5rem 1.75rem;
+  border-radius: 1.25rem;
+  font-size: 1.625rem;
+}
+
+/* 위 띠·작은 자리용: 글이 조금 작고 얕게 내려앉는다(누를 자리는 56px 그대로) */
 .btn.small {
-  padding: 0.4rem 1rem;
-  font-size: 1.125rem;
-  font-weight: 600;
+  --press: 3px;
   flex: none;
+  padding: 0.4rem 1rem;
+  font-size: 1.1875rem;
 }
 
-.btn:active:not(:disabled) {
-  transform: translateY(0.06rem);
-}
-
-.btn:disabled {
-  border-style: dashed;
-  border-color: var(--ink-faint);
-  background: transparent;
+/* 자주 누르지 않는 것: 조용한 종이 점토 */
+.btn.quiet {
+  --edge: #ddcfb1;
   color: var(--ink-soft);
+}
+
+/* 잠긴 단추: 깊이가 없다(바탕에 파인 자리) + 점선 테 + (곁의) 자물쇠 — 색만으로 가르지 않는다 */
+.btn:disabled {
+  background: rgba(224, 210, 179, 0.45);
+  color: var(--ink-soft);
+  box-shadow:
+    inset 0 2px 3px rgba(58, 38, 18, 0.22),
+    inset 0 0 0 2px rgba(106, 94, 80, 0.35);
+  outline: 2px dashed rgba(106, 94, 80, 0.55);
+  outline-offset: -6px;
+  transform: translateY(var(--press));
   cursor: default;
 }
 
-/* "준비 중" 딱지 */
+/* 주 단추에만 반짝 지나가는 빛(7.5초에 한 번, 38% 폭·40% 흰빛 — 글자 위를 지나도 읽기를 막지 않는다).
+   두 곳뿐: 제목의 "이어 하기"(없으면 "처음부터"), 한 해 돌아보기의 "다음". 움직임 줄이기면 없다. */
+.sheen {
+  overflow: hidden;
+}
+
+.sheen > * {
+  position: relative;
+  z-index: 1;
+}
+
+.sheen::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 38%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transform: skewX(-18deg);
+  animation: sheen 7.5s cubic-bezier(0.2, 0.7, 0.2, 1) 1.6s infinite;
+  pointer-events: none;
+}
+
+@keyframes sheen {
+  0% {
+    left: -60%;
+  }
+  13% {
+    left: 135%;
+  }
+  100% {
+    left: 135%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheen::after {
+    animation: none;
+    display: none;
+  }
+  .btn {
+    transition: none;
+  }
+}
+
+/* "준비 중" 딱지: 점선 알약(자물쇠 도트는 곁에 놓는다) */
 .soon {
-  display: inline-block;
-  padding: 0 0.5rem;
-  border: 0.1rem dashed currentColor;
-  border-radius: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.625rem;
+  border: 1.5px dashed rgba(106, 94, 80, 0.7);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-family: var(--f-ui);
   font-size: 1.125rem;
-  font-weight: 700;
-  line-height: 1.45;
+  font-weight: 800;
+  line-height: 1.55;
   white-space: nowrap;
 }
 
@@ -197,19 +444,24 @@ button:focus-visible {
 
 .kicker {
   font-size: 1.125rem;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--ink-soft);
 }
 
+/* 화면 머리(주아) */
 .screen-title {
+  font-family: var(--f-title);
   font-size: 2rem;
-  font-weight: 800;
+  font-weight: 400;
   line-height: 1.25;
 }
 
+/* 이야기 글(고운바탕 굵게) */
 .story {
-  font-size: 1.25rem;
-  line-height: 1.55;
+  font-family: var(--f-story);
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.6;
 }
 
 .box-head {
@@ -233,23 +485,36 @@ button:focus-visible {
   background: var(--paper-deep);
 }
 
+/* 올해의 바람: 파인 쟁반 + 황 붓줄 */
 .wish-box {
-  padding: 0.5rem 0.8rem;
-  border: 0.14rem solid var(--ink);
-  border-radius: 0.75rem;
-  background: var(--paper-light);
+  padding: 0.5rem 1rem 0.625rem;
+  border-radius: 1rem;
+  background: var(--paper-deep);
+  box-shadow: inset 0 2px 4px rgba(58, 38, 18, 0.2);
 }
 
 .wish-text {
+  display: inline;
+  font-family: var(--f-story);
+  font-size: 1.375rem;
   font-weight: 700;
+  line-height: 1.5;
+  background: linear-gradient(to top, rgba(233, 173, 42, 0.55) 0 0.38em, transparent 0.38em);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
-/* ── 수치 막대 ── */
+/* ── 수치 막대 ── 도트 아이콘 + 이름 + 숫자 + 열 칸 눈금의 젤리 막대(채움의 길이와 눈금으로 읽는다 — 색만으로 알리지 않는다) */
 
 .meter {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.5rem;
+}
+
+.meter-body {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .meter-top {
@@ -270,10 +535,52 @@ button:focus-visible {
 
 .meter-num {
   margin-left: auto;
+  font-size: 1.3125rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
+/* 파인 트랙 안의 젤리 막대. 열 칸 눈금이 함께 보인다 */
+.jelly {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 0.75rem;
+  margin-top: 0.25rem;
+  border-radius: 999px;
+  background: var(--paper-deeper);
+  box-shadow:
+    inset 0 2px 3px rgba(58, 38, 18, 0.3),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.6);
+  overflow: hidden;
+}
+
+.jelly > b {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--v) / var(--max, 10) * 100%);
+  border-radius: 999px;
+  background: var(--hwang);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.12);
+}
+
+.jelly::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0 calc(100% / var(--max, 10) - 1px),
+    rgba(43, 36, 29, 0.3) calc(100% / var(--max, 10) - 1px) calc(100% / var(--max, 10))
+  );
+  pointer-events: none;
+}
+
+/* 열 칸 눈금(옛 모양 — 일 놀이의 눈금 등 아직 젤리 막대로 바꾸지 않은 곳이 쓴다) */
 .meter-cells {
   display: flex;
   gap: 0.12rem;
