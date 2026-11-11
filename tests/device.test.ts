@@ -19,8 +19,10 @@ import {
   guideKinds,
   guideShape,
 } from '../src/ui/InstallGuide';
+import { HINT_WINDOWS, NEXT_HINT, NextHint, OWN_TAP, freeTap, isNextArrow, pageByKey, stepAdvances, type TalkStepKind } from '../src/ui/advance';
 import { guardKeys, holdKeys, keysAreHeld, swallowIfHeld } from '../src/ui/focus';
 import { OPEN_GAP_MS, TAP_GAP_MS, TapGate } from '../src/ui/taps';
+import { keyWalks } from '../src/screens/MapScreen';
 import { turnNeeded } from '../src/ui/TurnNotice';
 
 const UA = {
@@ -469,5 +471,270 @@ describe('자판 — 선택지의 첫 자리와 세로 안내 뒤의 초점', ()
     const turn = source('/ui/TurnNotice.tsx');
     expect(turn).toMatch(/const kept = /);
     expect(turn).toMatch(/kept\.focus\(\{ preventScroll: true \}\)/);
+  });
+});
+
+// 2026-11-11 사용자 요청: "다음 ▼"을 눌러야만 넘어가는 줄 알아 불편했다. →(와 Space)로, 화면 아무 곳이나 눌러도 넘어가게.
+// 화면을 그리지 않고 셈(ui/advance.ts)과 소스로 본다(실제 화면은 머리 없는 크롬으로 따로 보았다).
+describe('대화 넘기기 — → 키, 화면 아무 곳, 넘기는 법 알림', () => {
+  const source = (end: string): string => SOURCES[Object.keys(SOURCES).find((path) => path.endsWith(end)) ?? ''] ?? '';
+  /** 글 파일을 그대로 읽는다(CSS와 문서 — pngSize와 같은 길로 Node의 fs를 부른다) */
+  const readText = async (rel: string): Promise<string> => {
+    const fs = (await import(/* @vite-ignore */ ['node', 'fs'].join(':'))) as { readFileSync(path: string): Uint8Array };
+    return new TextDecoder().decode(fs.readFileSync(decodeURIComponent(new URL(rel, import.meta.url).pathname)));
+  };
+  const key = (k: string, more: Partial<Pick<KeyboardEvent, 'repeat' | 'altKey' | 'ctrlKey' | 'metaKey'>> = {}) => ({
+    key: k,
+    repeat: false,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    ...more,
+  });
+
+  it('넘기기가 먹는 단계: 여는 대화·결과·달라진 것·할 수 없는 일, 선택지가 모두 잠긴 때. 선택지를 고르는 동안·놀이·쪽지는 아니다', () => {
+    const goes: TalkStepKind[] = ['open', 'result', 'change', 'blocked'];
+    const stays: TalkStepKind[] = ['choose', 'play', 'note'];
+    for (const kind of goes) expect(stepAdvances(kind, false), kind).toBe(true);
+    for (const kind of stays) expect(stepAdvances(kind, false), kind).toBe(false);
+    expect(stepAdvances('choose', true)).toBe(true); // 모두 잠김 → 대화창이 "돌아가기"
+    expect(stepAdvances('play', true)).toBe(false);
+  });
+
+  it('→ 한 번은 넘기는 누름이다. 누르고 있어 되풀이되는 것, Alt·Ctrl·⌘과 함께 누른 것(뒤로 가기 등), 다른 화살표는 아니다', () => {
+    expect(isNextArrow(key('ArrowRight'))).toBe(true);
+    expect(isNextArrow(key('ArrowRight', { repeat: true }))).toBe(false);
+    expect(isNextArrow(key('ArrowRight', { altKey: true }))).toBe(false);
+    expect(isNextArrow(key('ArrowRight', { ctrlKey: true }))).toBe(false);
+    expect(isNextArrow(key('ArrowRight', { metaKey: true }))).toBe(false);
+    for (const other of ['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Enter', ' ']) expect(isNextArrow(key(other)), other).toBe(false);
+  });
+
+  it('Talk.tsx: →는 Enter·Space와 같은 advance로 가되, 넘기기가 먹는 단계에서만(선택지를 고르지 않는다)', () => {
+    const talk = source('/screens/Talk.tsx');
+    const arrow = talk.slice(talk.indexOf("ev.key === 'ArrowRight'"), talk.indexOf("ev.key === 'ArrowDown' || ev.key === 'ArrowUp'"));
+    expect(arrow).toMatch(/if \(!isNextArrow\(ev\) \|\| !stepAdvances\(step\.kind, stuckNow\)\) return;/);
+    expect(arrow).toMatch(/advance\(\);/);
+    expect(arrow).not.toMatch(/choose\(|focus\(/); // 선택지를 고르거나 초점을 옮기지 않는다
+    // →는 Enter·Space보다 먼저 가로채지 않는다(선택지 묶음의 Enter 규칙은 그대로)
+    expect(talk.indexOf("ev.key === 'Enter' || ev.key === ' '")).toBeLessThan(talk.indexOf("ev.key === 'ArrowRight'"));
+    // advance도 같은 판정을 쓴다(누름·Enter·Space·→가 한 규칙)
+    expect(talk).toMatch(/if \(!stepAdvances\(step\.kind, stuckNow\)\) return;\s*\n\s*if \(tooSoon\(\)\) return;/);
+    // 초점이 대사 창 단추에 있어도 →는 창의 자판 처리로 온다(단추가 스스로 받는 것은 Enter·Space뿐 — focus.ts)
+    expect(source('/ui/focus.ts')).toMatch(/const isPress = \(ev: KeyboardEvent\): boolean => ev\.key === 'Enter' \|\| ev\.key === ' ';/);
+    expect(source('/ui/focus.ts')).toMatch(/if \(isPress\(ev\) && ev\.target instanceof HTMLButtonElement\) return;/);
+  });
+
+  // 가짜 요소: 자신부터 조상까지의 꼴("header", "span", "button", "[data-own]", '[aria-modal="true"]' …)을 적어 둔다.
+  // closest는 고른 꼴 가운데 하나라도 맞는 조상이 있으면 그것을 돌려준다(이 시험에 쓰는 단순한 꼴만 안다).
+  type Fake = { tag: string; attrs: Record<string, string> };
+  const node = (tag: string, attrs: Record<string, string> = {}): Fake => ({ tag, attrs });
+  const matches = (one: Fake, selector: string): boolean => {
+    const m = /^([a-z]*)(?:\[([a-z-]+)(?:="([^"]*)")?\])?$/.exec(selector.trim());
+    if (!m) throw new Error(`모르는 꼴: ${selector}`);
+    const [, tag, attr, value] = m;
+    if (tag && tag !== one.tag) return false;
+    if (attr && !(attr in one.attrs)) return false;
+    if (attr && value !== undefined && one.attrs[attr] !== value) return false;
+    return true;
+  };
+  const element = (inScene: boolean, ...chain: Fake[]) => ({
+    inScene,
+    closest: (selector: string) => chain.find((one) => selector.split(',').some((part) => matches(one, part))) ?? null,
+  });
+  const scene = { contains: (other: Node | null) => Boolean((other as unknown as { inScene?: boolean })?.inScene) };
+  const tap = (el: ReturnType<typeof element>): boolean => freeTap(el as unknown as EventTarget, scene as unknown as Node);
+  const band = node('header', { class: 'band compact' });
+
+  it('대화 장면 밖의 누름: 위쪽 띠의 빈 곳과 글(계절·수치·해)은 넘기고, 띠의 단추와 다른 창(세로 안내·물음)은 아니다', () => {
+    expect(tap(element(false, band))).toBe(true); // 띠의 빈 곳
+    expect(tap(element(false, node('span'), node('div'), band))).toBe(true); // 수치 이름·숫자
+    expect(tap(element(false, node('div', { role: 'img' }), band))).toBe(true); // 해 ☀(그림 구실의 묶음)
+    expect(tap(element(false, node('p'), band))).toBe(true); // 알림 줄(기록을 남기지 못했어요)
+    expect(tap(element(false, node('span'), node('button'), band))).toBe(false); // 띠의 단추(대화 중에 보인다면)
+    expect(tap(element(false, node('p'), node('div', { role: 'alertdialog', 'aria-modal': 'true' })))).toBe(false); // 세로 안내
+    expect(tap(element(false, node('a', { href: '#' })))).toBe(false);
+  });
+
+  it('대화 장면 안의 누름은 장면이 받는다(두 번 넘기지 않게). 요소가 아닌 것과 장면이 없을 때도 넘기지 않는다', () => {
+    expect(tap(element(true, node('div', { class: 'talk' })))).toBe(false);
+    expect(freeTap(null, scene as unknown as Node)).toBe(false);
+    expect(freeTap({} as EventTarget, scene as unknown as Node)).toBe(false);
+    expect(freeTap(element(false, band) as unknown as EventTarget, null)).toBe(false);
+    // 저마다 받는 것의 꼴에 단추·장면이 받겠다고 한 것이 들어 있다
+    for (const one of ['button', '[data-own]', '[role="button"]', 'a[href]', 'input']) expect(OWN_TAP.split(', ')).toContain(one);
+  });
+
+  it('Talk.tsx: 장면 밖의 누름은 문서에서 받되, 장면이 뜬 뒤에 시작된 누름만 친다. 이름표는 눌러도 넘어가고 "나중에 할게요"는 저마다 받는다', () => {
+    const talk = source('/screens/Talk.tsx');
+    expect(talk).toMatch(/document\.addEventListener\('pointerdown', onDown, true\);/);
+    expect(talk).toMatch(/document\.addEventListener\('click', onTap\);/);
+    expect(talk).toMatch(/if \(began && freeTap\(ev\.target, rootRef\.current\)\) advanceRef\.current\(\);/);
+    expect(talk).toMatch(/document\.removeEventListener\('click', onTap\);/);
+    // 장면 안: 창 어디를 눌러도 넘어가되 data-own은 저마다 받는다
+    expect(talk).toMatch(/if \(ev\.target instanceof Element && ev\.target\.closest\('\[data-own\]'\)\) return;\s*\n\s*advance\(\);/);
+    expect(talk).toMatch(/<div class="talk-top">/); // 위쪽 줄 전체가 아니라
+    expect(talk).toMatch(/<button type="button" class="talk-later" data-own onClick=\{later\}>/); // "나중에 할게요"만
+    // 대화 중의 띠는 단추를 감춘다(줄인 띠 — 계절·곳·수치·해만)
+    expect(source('/ui/TopBand.tsx')).toMatch(/const compact = talk\.value !== null;/);
+    expect(source('/ui/TopBand.tsx')).toMatch(/\{!compact && \(\s*\n\s*<div class=\{`band-tools/);
+  });
+
+  it('넘기는 법 알림은 판마다 처음 세 창에만 보이고, 판이 바뀌면(새로 시작·이어 하기) 다시 센다', () => {
+    expect(HINT_WINDOWS).toBe(3);
+    const hint = new NextHint();
+    expect([1, 1, 1, 1, 1].map((play) => hint.take(play))).toEqual([true, true, true, false, false]);
+    expect(hint.take(2)).toBe(true); // 이어 하기로 다시 열었다
+    expect(hint.take(2)).toBe(true);
+    expect(hint.take(2)).toBe(true);
+    expect(hint.take(2)).toBe(false);
+    const two = new NextHint(2);
+    expect([5, 5, 5].map((play) => two.take(play))).toEqual([true, true, false]);
+  });
+
+  it('Talk.tsx: 알림은 "다음 ▼"이 붙은 창(여는 대화·결과·달라진 것)마다 한 번 세고, 그 판의 번호(playNo)로 센다', () => {
+    const talk = source('/screens/Talk.tsx');
+    expect(talk).toMatch(/const nextWindow = step\.kind === 'open' \|\| step\.kind === 'result' \|\| step\.kind === 'change';/);
+    expect(talk).toMatch(/useMemo\(\(\) => nextWindow && nextHint\.take\(playNo\.peek\(\)\), \[windowKey\]\)/);
+    // "다음 ▼" 셋 모두 알림과 함께 그린다("돌아가기 ▼"에는 붙지 않는다)
+    expect((talk.match(/<NextMark hint=\{hinted\} \/>/g) ?? []).length).toBe(3);
+    expect((talk.match(/다음 ▼/g) ?? []).length).toBeGreaterThanOrEqual(1);
+    expect(talk).toMatch(/<span class="talk-hint" aria-hidden="true">\s*\n\s*\{NEXT_HINT\}/);
+  });
+
+  it('알림 글: 30자 안, "~요"로 끝나는 쉬운 말, 누르기와 →·Space를 함께 알린다. 글자는 이름표 기준(18px)보다 크다', async () => {
+    expect([...NEXT_HINT].length).toBeLessThanOrEqual(30);
+    expect(NEXT_HINT).toMatch(/요\)?$/);
+    expect(NEXT_HINT).toMatch(/눌러도 넘어가요/);
+    expect(NEXT_HINT).toMatch(/→/);
+    expect(NEXT_HINT).toMatch(/Space/);
+    const css = await readText('../src/styles/talk.css');
+    const rule = css.slice(css.indexOf('.talk-hint {'), css.indexOf('}', css.indexOf('.talk-hint {')));
+    const rem = Number(/font-size: ([\d.]+)rem;/.exec(rule)?.[1] ?? '0');
+    expect(rem * 16).toBeGreaterThan(18); // 1024×768에서 1rem = 16px
+    // 글이 세 줄이어도 겹치지 않게 창 안의 흐름에 놓인다(떠 있는 자리가 아니다)
+    expect(rule).not.toMatch(/position: absolute/);
+    // 글은 기획서(9.2)에 먼저 적었다
+    expect(await readText('../docs/spec-3판.md')).toContain(NEXT_HINT);
+  });
+
+  it('한 해 돌아보기: →는 "다음", ←는 "앞 장". 넘길 단추가 없으면(첫 장의 ←, 남길 것 장의 →) 아무 일도 없다', () => {
+    const count = 4;
+    expect(pageByKey(key('ArrowRight'), 0, count)).toBe(1);
+    expect(pageByKey(key('ArrowRight'), 2, count)).toBe(3); // 올해의 이름 → 남길 것 고르기
+    expect(pageByKey(key('ArrowRight'), 3, count)).toBe(null); // 남길 것: 한 해를 마치는 단추는 →로 누르지 않는다
+    expect(pageByKey(key('ArrowLeft'), 3, count)).toBe(2);
+    expect(pageByKey(key('ArrowLeft'), 1, count)).toBe(0);
+    expect(pageByKey(key('ArrowLeft'), 0, count)).toBe(null);
+    expect(pageByKey(key('ArrowRight', { repeat: true }), 0, count)).toBe(null);
+    expect(pageByKey(key('ArrowLeft', { altKey: true }), 2, count)).toBe(null); // 브라우저의 뒤로 가기
+    expect(pageByKey(key('ArrowLeft', { metaKey: true }), 2, count)).toBe(null);
+    for (const other of ['Enter', ' ', 'ArrowUp', 'ArrowDown']) expect(pageByKey(key(other), 1, count), other).toBe(null);
+  });
+
+  it('YearReview.tsx: ←→는 단추와 같은 turn(같은 틈)으로 가고, 화면 아무 곳 누르기는 없다', () => {
+    const review = source('/screens/YearReview.tsx');
+    expect(review).toMatch(/const to = pageByKey\(ev, pageRef\.current, PAGES\.length\);/);
+    expect(review).toMatch(/pageRef\.current = page;/); // 그린 때의 장을 읽는다(앞 장의 효과가 남아 셈하지 않게)
+    expect(review).toMatch(/turnRef\.current\(to\);/);
+    expect(review).toMatch(/window\.addEventListener\('keydown', onKey\);/);
+    expect(review).toMatch(/window\.removeEventListener\('keydown', onKey\);/);
+    expect(review).not.toMatch(/addEventListener\('click'|addEventListener\('pointerdown'/);
+    expect(review).not.toMatch(/<main[^>]*onClick/);
+  });
+});
+
+// 2026-11-11 Review R1: "돌아가기 ▼" 창을 →로 닫고 누르고 있으면, 닫힌 뒤 오는 → 되풀이를 맵이 받아 주인공이 걸었다.
+// 맵은 그 키의 처음 누름을 받았을 때만 되풀이를 걷기로 친다(MapScreen.tsx의 keyWalks). 실제 화면은 머리 없는 크롬으로 따로 보았다.
+describe('맵의 방향 키 — 맵이 받지 않은 되풀이는 걷지 않는다', () => {
+  const mapSource = SOURCES[Object.keys(SOURCES).find((path) => path.endsWith('/screens/MapScreen.tsx')) ?? ''] ?? '';
+
+  it('처음 누름은 걷고, 되풀이는 맵이 그 키의 처음 누름을 받았을 때만 걷는다', () => {
+    expect(keyWalks(new Set(), 'ArrowRight', false)).toBe(true);
+    expect(keyWalks(new Set(), 'ArrowRight', true)).toBe(false); // 창을 닫은 → 를 누르고 있음
+    expect(keyWalks(new Set(['ArrowRight']), 'ArrowRight', true)).toBe(true); // 맵에서 누르고 있음
+    expect(keyWalks(new Set(['ArrowRight']), 'ArrowLeft', true)).toBe(false); // 다른 키의 되풀이
+    expect(keyWalks(new Set(['ArrowRight']), 'ArrowUp', false)).toBe(true); // 두 키를 함께
+  });
+
+  // MapScreen의 onKeyDown·onKeyUp·onBlur가 held를 다루는 길을 그대로 옮긴 작은 본(창이 떠 있으면 held를 비우고 돌아간다)
+  const mapKeys = () => {
+    const held = new Set<string>();
+    let overlay = false;
+    const norm = (key: string): string => (key.length === 1 ? key.toLowerCase() : key);
+    return {
+      held,
+      open: (): void => void (overlay = true),
+      close: (): void => void (overlay = false),
+      down(key: string, repeat = false): void {
+        if (overlay) {
+          held.clear();
+          return;
+        }
+        const k = norm(key);
+        if (!keyWalks(held, k, repeat)) return;
+        held.add(k);
+      },
+      up: (key: string): void => void held.delete(norm(key)),
+      blur: (): void => held.clear(),
+    };
+  };
+  const hold = (keys: ReturnType<typeof mapKeys>, key: string, times: number): void => {
+    for (let i = 0; i < times; i += 1) keys.down(key, true);
+  };
+
+  it('R1: 창을 →로 닫고 0.5초 누르고 있어도(되풀이 10번) 걷지 않고, 떼었다 다시 누르면 걷는다', () => {
+    const keys = mapKeys();
+    keys.open(); // 막힌 일의 "돌아가기 ▼" — 처음 누름은 창이 받아 멈추게 한다(맵에 오지 않는다)
+    keys.close();
+    hold(keys, 'ArrowRight', 10);
+    expect([...keys.held]).toEqual([]);
+    keys.up('ArrowRight');
+    keys.down('ArrowRight');
+    expect([...keys.held]).toEqual(['ArrowRight']);
+  });
+
+  it('맵에서 누르기: 짧게·길게 걷고, 떼면 멈추고, 두 키를 함께 누르고, 창이 떴다 닫히거나 초점을 잃었다 돌아온 뒤 다시 누르면 걷는다', () => {
+    const keys = mapKeys();
+    keys.down('ArrowRight');
+    expect([...keys.held]).toEqual(['ArrowRight']);
+    hold(keys, 'ArrowRight', 10); // 누르고 있으면 계속 걷는다
+    expect([...keys.held]).toEqual(['ArrowRight']);
+    keys.down('ArrowUp');
+    hold(keys, 'ArrowUp', 5); // 둘째 키의 되풀이
+    expect([...keys.held].sort()).toEqual(['ArrowRight', 'ArrowUp']);
+    keys.up('ArrowUp');
+    expect([...keys.held]).toEqual(['ArrowRight']);
+    keys.up('ArrowRight');
+    expect([...keys.held]).toEqual([]);
+    // 글자 키: Shift를 더 눌러 큰 글자로 되풀이되어도 같은 키다
+    keys.down('d');
+    hold(keys, 'D', 3);
+    expect([...keys.held]).toEqual(['d']);
+    // 걷는 중에 창이 떴다 닫히면 누르고 있던 것은 멈추고, 다시 누르면 걷는다
+    keys.open();
+    keys.down('d', true);
+    keys.close();
+    hold(keys, 'd', 5);
+    expect([...keys.held]).toEqual([]);
+    keys.up('d');
+    keys.down('d');
+    expect([...keys.held]).toEqual(['d']);
+    // 창(브라우저)이 초점을 잃으면 멈추고, 돌아와 다시 누르면 걷는다
+    keys.blur();
+    expect([...keys.held]).toEqual([]);
+    keys.down('ArrowLeft');
+    hold(keys, 'ArrowLeft', 3);
+    expect([...keys.held]).toEqual(['ArrowLeft']);
+  });
+
+  it('MapScreen.tsx: 방향 키 갈래는 held에 넣기 전에 keyWalks로 거르고, 창·초점 잃음·Enter·Space의 길은 앞과 같다', () => {
+    const branch = mapSource.slice(mapSource.indexOf('if (KEY_DIRS[k]) {'), mapSource.indexOf("if (k === 'Enter' || k === ' ') {"));
+    expect(branch).toMatch(/if \(!keyWalks\(held, k, ev\.repeat\)\) \{\s*\n\s*ev\.preventDefault\(\);\s*\n\s*return;\s*\n\s*\}\s*\n\s*held\.add\(k\);/);
+    expect(mapSource).toMatch(/if \(overlaid\(\)\) \{\s*\n\s*if \(held\.size > 0\) \{\s*\n\s*held\.clear\(\);/);
+    expect(mapSource).toMatch(/const onBlur = \(\): void => \{\s*\n\s*held\.clear\(\);/);
+    expect(mapSource).toMatch(/const onKeyUp = \(ev: KeyboardEvent\): void => \{[^}]*held\.delete\(k\);/);
+    expect(mapSource).toMatch(/if \(!session \|\| ev\.repeat\) return;/); // Enter·Space의 되풀이는 앞과 같이 거른다
+    expect(mapSource.match(/keyWalks\(/g)?.length).toBe(2); // 정의 하나와 쓰는 곳 하나
   });
 });

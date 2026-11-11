@@ -290,6 +290,41 @@ button.talk-box:focus-visible {
   line-height: 1.4;
 }
 
+/* 넘기는 법 알림: 판마다 처음 몇 창에만 "다음 ▼" 왼쪽 곁에 붙는다(Talk.tsx·ui/advance.ts).
+   글과 겹치지 않게 창 안의 흐름(글 밑)에 놓고, 아래로 당겨 "다음 ▼"과 한 줄에 맞춘다.
+   글이 두 줄까지면 창의 높이가 그대로이고, 세 줄이면 창이 조금(약 6px) 위로 자란다. 20px, 밝은 글(어두운 창 위 대비 10:1 넘게). */
+.talk-hint {
+  align-self: flex-end;
+  margin: auto 4.6rem -0.9rem 0;
+  padding-top: 0.2rem;
+  color: var(--talk-paper);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  animation: talk-hint-in 0.3s ease-out both;
+}
+
+@keyframes talk-hint-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .talk-hint {
+    animation: none;
+  }
+}
+
+/* 대화가 넘어가는 동안에는 대화 장면 밖의 위쪽 띠를 눌러도 넘어간다(Talk.tsx) — 손가락 모양으로 알린다 */
+.mapscreen:has(.talk:is(.step-open, .step-result, .step-change, .step-blocked)) .band.compact {
+  cursor: pointer;
+}
+
 /* 수치 변화: 화살표·글·숫자를 함께(색만으로 알리지 않는다) */
 .talk-changes {
   display: grid;

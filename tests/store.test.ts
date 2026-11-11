@@ -986,6 +986,27 @@ describe('새 판', () => {
     expect(s.gameNo.value).toBeGreaterThan(first);
     expect(s.game.value!.at).toBeUndefined();
   });
+
+  // 2026-11-11 대화 넘기기: 넘기는 법 알림은 판마다(새로 시작·이어 하기) 처음 몇 창에만 뜬다 — 그 판을 가르는 번호
+  it('판을 연 번호(playNo)는 새로 시작할 때와 이어 하기로 열 때마다 는다(gameNo와 달리 이어 하기에서도)', async () => {
+    env.state.search = '?seed=7';
+    const s = await boot();
+    const before = s.playNo.value;
+    startSpring(s);
+    expect(s.playNo.value).toBe(before + 1);
+    const game = s.gameNo.value;
+    s.goHome();
+    later();
+    s.continueGame();
+    expect(s.screen.value).toBe('map');
+    expect(s.playNo.value).toBe(before + 2);
+    expect(s.gameNo.value).toBe(game);
+    // 대화를 열고 닫는 것, 계절을 보내는 것은 판을 새로 열지 않는다
+    s.openTalk('s1395-spring-sow');
+    expect(s.talk.value).toBe('s1395-spring-sow');
+    s.closeTalk();
+    expect(s.playNo.value).toBe(before + 2);
+  });
 });
 
 describe('저장이 안 되거나 읽을 수 없을 때', () => {

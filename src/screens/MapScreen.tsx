@@ -80,6 +80,14 @@ const KEY_DIRS: Record<string, [number, number]> = {
   s: [0, 1],
 };
 
+/**
+ * 방향 키의 누름이 맵의 걷기인가. 처음 누름은 걷기다. 되풀이 누름(누르고 있는 것)은 맵이 그 키의 처음 누름을 받았을 때만 걷기다.
+ * 대화나 다른 창을 그 키로 닫고도 누르고 있으면, 닫힌 뒤 오는 되풀이가 맵에 오지만 걷지 않는다(떼었다가 다시 누르면 걷는다).
+ */
+export function keyWalks(held: ReadonlySet<string>, key: string, repeat: boolean): boolean {
+  return !repeat || held.has(key);
+}
+
 /** 만드는 사람이 재고 찍어 볼 때 쓰는 값들. 개발 때만 창에 걸어 둔다(빌드에는 들어가지 않는다). */
 interface DevHooks {
   __world?: World;
@@ -678,6 +686,11 @@ function MapView({ pack: p, game: g }: { pack: SituationPack; game: GameState })
       if (ev.target instanceof HTMLButtonElement && (ev.key === 'Enter' || ev.key === ' ')) return;
       const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
       if (KEY_DIRS[k]) {
+        // 맵이 처음 누름을 받지 않은 되풀이는 버린다(창을 →로 닫고 누르고 있던 것이 걷기로 새지 않게)
+        if (!keyWalks(held, k, ev.repeat)) {
+          ev.preventDefault();
+          return;
+        }
         held.add(k);
         applyKeys();
         setNoteOpen(false);

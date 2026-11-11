@@ -4,7 +4,8 @@
 // 차례(spec 9.3):
 //   여는 대화(한 창씩) → 선택지 → (일 놀이) → 일을 마친다(commitTalk) → 결과 대화 → 수치 변화 → 배움 쪽지와 새 카드 → 맵으로.
 // 일을 마치기 전에는(여는 대화, 선택지) "나중에 할게요"로 맵으로 돌아갈 수 있다 — 아무 일도 일어나지 않은 것이다.
-// 창 어디를 눌러도, Enter·Space로도 넘어간다. 글이 한 자씩 찍히는 효과는 없다.
+// 화면 어디를 눌러도(대화 장면 밖 위쪽 띠의 빈 곳과 글까지), 자판 Enter·Space·→로도 넘어간다(ui/advance.ts). 글이 한 자씩 찍히는 효과는 없다.
+// 판마다 처음 몇 창에는 "다음 ▼" 곁에 넘기는 법을 알리는 한 줄이 붙는다.
 //
 // 선택지가 뜨면 선 사람이 비켜선다(시안의 둘째 화면): 한 사람이면 왼쪽으로 물러나고 선택지가 오른쪽에,
 // 두 사람이면 양옆으로 물러나고 선택지가 가운데에 놓인다. 선택지가 몇 줄이 되든 얼굴을 가리지 않는다(자리는 talk.css).
@@ -15,7 +16,7 @@
 // "나중에 할게요"로 돌아가 그 자리로 가라고 대화창이 말해 준다(그 자리의 이름과 함께).
 
 import type { JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Figure } from '../art/Figure';
 import type { Pose } from '../art/pictures';
 import { Scenery } from '../art/Scenery';
@@ -36,7 +37,8 @@ import {
 } from '../engine/game';
 import { STATS, type Deed, type GameState, type Happening, type Line, type Mission, type Person, type Season, type SituationPack } from '../engine/types';
 import { PLAYS } from '../plays';
-import { closeTalk, commitTalk, game, pack } from '../state/store';
+import { closeTalk, commitTalk, game, pack, playNo } from '../state/store';
+import { NEXT_HINT, freeTap, isNextArrow, nextHint, stepAdvances } from '../ui/advance';
 import { focusInto, useModalKeys } from '../ui/focus';
 import { TapGate } from '../ui/taps';
 import { LockIcon, SunIcon } from '../ui/icons';
@@ -152,6 +154,22 @@ function changeRows(deed: Deed): ChangeWords[] {
   );
 }
 
+/** 대화창 오른쪽 아래의 "다음 ▼". 판마다 처음 몇 창에는 그 곁에 넘기는 법을 알리는 한 줄이 붙는다(글과 겹치지 않게 창 안의 흐름에 놓인다 — talk.css). */
+function NextMark({ hint }: { hint: boolean }): JSX.Element {
+  return (
+    <>
+      {hint && (
+        <span class="talk-hint" aria-hidden="true">
+          {NEXT_HINT}
+        </span>
+      )}
+      <span class="talk-next" aria-hidden="true">
+        다음 ▼
+      </span>
+    </>
+  );
+}
+
 export function Talk({ happeningId }: { happeningId: string }): JSX.Element | null {
   const rootRef = useRef<HTMLDivElement>(null);
   const [snap] = useState<Snap | null>(() => {
@@ -214,11 +232,11 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
     commit(choiceId, play ? Object.keys(play.flags)[0] : undefined);
   };
 
+  // 선택지가 모두 잠겨 있으면 대화창이 "돌아가기"가 된다(아무 일도 일어나지 않은 채 맵으로)
+  const stuckNow = step.kind === 'choose' && snap !== null && snap.stuck !== null && !committed.current;
   const advance = (): void => {
     if (!snap) return;
-    // 선택지가 모두 잠겨 있으면 대화창이 "돌아가기"가 된다(아무 일도 일어나지 않은 채 맵으로)
-    const stuckNow = step.kind === 'choose' && snap.stuck !== null && !committed.current;
-    if (step.kind !== 'blocked' && step.kind !== 'open' && step.kind !== 'result' && step.kind !== 'change' && !stuckNow) return;
+    if (!stepAdvances(step.kind, stuckNow)) return;
     if (tooSoon()) return;
     if (step.kind === 'blocked' || stuckNow) {
       closeTalk();
@@ -258,6 +276,12 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
         return;
       }
       advance();
+    } else if (ev.key === 'ArrowRight') {
+      // →도 Enter·Space와 같이 한 창 넘긴다. 선택지를 고르는 동안·일 놀이·쪽지에서는 아무것도 하지 않는다
+      // (선택지를 고르지 않고, 그 화면의 것을 건드리지 않는다). 누르고 있어 되풀이되는 누름은 넘기지 않는다.
+      if (!isNextArrow(ev) || !stepAdvances(step.kind, stuckNow)) return;
+      ev.preventDefault();
+      advance();
     } else if (step.kind === 'choose' && (ev.key === 'ArrowDown' || ev.key === 'ArrowUp')) {
       // 화살표로 선택지를 오간다(PC와 TV). 고르는 것은 Enter·Space다.
       ev.preventDefault();
@@ -277,6 +301,34 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
   useEffect(() => {
     if (rootRef.current) focusInto(rootRef.current);
   }, [step.kind]);
+
+  // 대화 장면 밖(위쪽 띠의 빈 곳과 글)을 눌러도 넘어간다. 장면 안의 누름은 아래 onClick이, 단추와 다른 창은 저마다 받는다.
+  // 장면이 뜬 뒤에 시작된 누름만 친다: 맵을 누르고 있던 손가락이 장면이 뜬 뒤에 떼어지면 그 누름은 장면 밖(무대)에 떨어지는데,
+  // 그것이 첫 창을 넘기지 않게.
+  const advanceRef = useRef(advance);
+  advanceRef.current = advance;
+  useEffect(() => {
+    let pressed = false;
+    const onDown = (): void => {
+      pressed = true;
+    };
+    const onTap = (ev: MouseEvent): void => {
+      const began = pressed;
+      pressed = false;
+      if (began && freeTap(ev.target, rootRef.current)) advanceRef.current();
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('click', onTap);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('click', onTap);
+    };
+  }, []);
+
+  // 넘기는 법 알림: 판마다 처음 몇 창("다음 ▼"이 붙은 창)에만 보인다. 창마다 한 번 센다.
+  const nextWindow = step.kind === 'open' || step.kind === 'result' || step.kind === 'change';
+  const windowKey = step.kind === 'open' || step.kind === 'result' ? `${step.kind}:${step.i}` : step.kind;
+  const hinted = useMemo(() => nextWindow && nextHint.take(playNo.peek()), [windowKey]);
 
   // 열 수 없는 일이면 조용히 닫는다
   useEffect(() => {
@@ -346,9 +398,9 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
       {(step.kind === 'choose' || step.kind === 'note') && <div class="talk-dim" />}
 
       {(step.kind === 'open' || step.kind === 'choose') && (
-        <div class="talk-top" data-own>
+        <div class="talk-top">
           {canLeave && (
-            <button type="button" class="talk-later" onClick={later}>
+            <button type="button" class="talk-later" data-own onClick={later}>
               <span aria-hidden="true">← </span>나중에 할게요
             </button>
           )}
@@ -412,17 +464,13 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
           <span class="talk-text" aria-live="polite">
             {line.text}
           </span>
-          <span class="talk-next" aria-hidden="true">
-            다음 ▼
-          </span>
+          <NextMark hint={hinted} />
         </button>
       )}
       {step.kind === 'open' && !line && (
         <button type="button" class="talk-box" data-autofocus>
           <span class="talk-text">…</span>
-          <span class="talk-next" aria-hidden="true">
-            다음 ▼
-          </span>
+          <NextMark hint={hinted} />
         </button>
       )}
       {step.kind === 'choose' && snap.stuck === null && (
@@ -488,9 +536,7 @@ export function Talk({ happeningId }: { happeningId: string }): JSX.Element | nu
               </span>
             )}
           </span>
-          <span class="talk-next" aria-hidden="true">
-            다음 ▼
-          </span>
+          <NextMark hint={hinted} />
         </button>
       )}
 

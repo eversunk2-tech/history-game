@@ -1,4 +1,5 @@
 // 6. 한 해 돌아보기 — 겨울을 보낸 뒤에 뜬다(spec 4절 6번, 5.4). 종이 화면이고 "다음 ▶"으로 네 장을 넘긴다.
+//    자판 →는 "다음", ←는 "앞 장"과 같다(ui/advance.ts의 pageByKey). 화면 아무 곳 누르기는 없다(남길 것을 고르는 화면이다).
 //   1. 네 계절에 고른 것  계절마다 꼭 할 일에서 내가 고른 것, 해낸 덤 미션, 계절의 끝에 생긴 일과 그 값("(살림 −3)")
 //                         — 미션 종이와 계절 닫기에서 읽은 것을 되풀이하지 않게 "고른 것" 위주로 한 장에 모았다(Review 1-라 21번)
 //   2. 한 해의 흐름       살림·기력·인심이 처음 → 봄 → 여름 → 가을 → 겨울로 어떻게 움직였는지, 그해의 날씨, 올해의 바람과 까닭
@@ -16,6 +17,7 @@ import { roleOf } from '../engine/game';
 import { reviewYear, type YearReview as Year } from '../engine/review';
 import { SEASONS, STATS, type GameState, type Season, type SituationPack, type Stat, type Stats } from '../engine/types';
 import { finishYear, game, pack, saveFailed } from '../state/store';
+import { pageByKey } from '../ui/advance';
 import { LegacyIcon, StatIcon } from '../ui/icons';
 import { MoreBox } from '../ui/More';
 import { yearAndPlace } from '../ui/where';
@@ -286,6 +288,31 @@ export function YearReview(): JSX.Element | null {
   }, [p, g]);
   const recaps = useMemo<SeasonRecap[]>(() => (p && g && year ? year.seasons.map((summary) => seasonRecap(p, g, summary)) : []), [p, g, year]);
 
+  const turn = (to: number): void => {
+    const now = Date.now();
+    if (now - turnedAt.current < TURN_GAP_MS) return;
+    turnedAt.current = now;
+    setPage(Math.max(0, Math.min(PAGES.length - 1, to)));
+  };
+
+  // 자판 ←→로도 장을 넘긴다("앞 장"·"다음"과 같은 틈). 넘길 단추가 없는 장에서는 아무 일도 없다
+  // (첫 장의 ←, 남길 것 장의 → — 그 장의 단추는 장을 넘기지 않고 한 해를 마친다).
+  // 지금 장은 그린 때의 것을 읽는다(효과가 다시 걸리기 전에 온 누름이 앞 장을 기준으로 셈하지 않게).
+  const turnRef = useRef(turn);
+  turnRef.current = turn;
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent): void => {
+      const to = pageByKey(ev, pageRef.current, PAGES.length);
+      if (to === null) return;
+      ev.preventDefault();
+      turnRef.current(to);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const here = PAGES[page];
   // 쪽을 넘기면 초점을 "다음" 단추로 옮긴다(자판으로 Enter만 눌러 넘길 수 있게). 남길 것은 고르는 것이 먼저라 첫 패로 간다.
   useEffect(() => {
@@ -297,12 +324,6 @@ export function YearReview(): JSX.Element | null {
   const role = roleOf(p, g.role);
   const last = page === PAGES.length - 1;
 
-  const turn = (to: number): void => {
-    const now = Date.now();
-    if (now - turnedAt.current < TURN_GAP_MS) return;
-    turnedAt.current = now;
-    setPage(Math.max(0, Math.min(PAGES.length - 1, to)));
-  };
   const leave = (): void => {
     if (!picked || Date.now() - turnedAt.current < TURN_GAP_MS) return;
     finishYear(picked);

@@ -70,6 +70,11 @@ export const panel = signal<'bag' | 'past' | null>(null);
  * 같은 씨앗·같은 모습으로 다시 시작해도 앞 판에서 서 있던 칸에서 시작하지 않게).
  */
 export const gameNo = signal(0);
+/**
+ * 이 창에서 판을 연 번호. 새로 시작할 때와 이어 하기로 열 때마다 하나씩 는다(gameNo와 달리 이어 하기에서도 는다).
+ * 저장하지 않는다. 대화 장면의 넘기는 법 알림이 판마다 처음 몇 창에만 뜨게 센다(ui/advance.ts의 NextHint).
+ */
+export const playNo = signal(0);
 /** 그림 견본 화면과 맵의 계절 빛(개발용) */
 export const artSeason = signal<Season>('spring');
 
@@ -268,6 +273,7 @@ export function continueGame(): void {
     // 닫지 못한 "미션이 풀림" 종이가 있으면 맵에 들어서자마자 뜬다
     owed = (save.value.papers ?? []).filter((id) => next.solved.includes(id) && p.missions.some((m) => m.id === id));
     missionQueue.value = next.phase === 'season' ? owed : [];
+    playNo.value += 1;
     if (next.phase === 'seasonClose') screen.value = 'seasonClose';
     else if (next.phase === 'done') screen.value = 'review';
     else if (next.phase === 'season' && seasonReady(p, next.role, currentSeason(next))) screen.value = 'map';
@@ -300,6 +306,7 @@ export function settleRole(role: RoleId, look: Look): void {
     walkedNow = '';
     owed = [];
     gameNo.value += 1;
+    playNo.value += 1;
     screen.value = 'intro';
   } catch (error) {
     fail(error);
@@ -590,6 +597,7 @@ export function openFromUrl(): void {
       walkedNow = '';
       owed = [];
       gameNo.value += 1;
+      playNo.value += 1;
       screen.value = fresh.phase === 'done' ? 'review' : fresh.phase === 'seasonClose' ? 'seasonClose' : 'map';
       // &talk=일의 id: 그 일의 대화 장면을 바로 연다(화면을 찍어 볼 때)
       const first = q.get('talk');
