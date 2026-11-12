@@ -1,0 +1,467 @@
+/* 시안 C 「연표 두루마리」 — 일곱 이야기가 두루마리 위 연표에 해의 차례대로 놓인다(3판 기획서 4절 "두루마리에 연대순으로").
+   아래의 금빛 시간 줄에 1400~1900년 눈금과 교과서의 두 주제가 깔리고, 카드마다 가는 먹줄이 제 해의 점으로 내려간다
+   (1446년과 1592년 사이처럼 해가 멀면 줄이 길게 기운다 — 시간의 거리가 보인다). 일곱 장이 다 들어가지 않는 화면에서는
+   두루마리를 옆으로 넘긴다. 빛은 왼쪽 위 하나 — 두루마리 축의 왼쪽 면이 밝고, 종이 양 끝이 축으로 말려 들어가며 그늘진다. */
+
+.book-c {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.875rem 1.5rem 1.25rem;
+}
+
+.bc-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.bc-head .screen-title {
+  line-height: 1.15;
+}
+
+.bc-head .dan {
+  width: 5.5rem;
+  margin: 0.25rem 0 0.3125rem;
+}
+
+.bc-guide {
+  color: var(--ink-soft);
+  font-size: 1.25rem;
+  line-height: 1.4;
+}
+
+.bc-home {
+  gap: 0.375rem;
+}
+
+/* ── 두루마리: 왼쪽 축 · 종이 · 오른쪽 축 ── */
+.bc-scroll {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.375rem minmax(0, 1fr) 1.375rem;
+  min-height: 0;
+  margin: 0.375rem 0 0.25rem;
+}
+
+.bc-roller {
+  position: relative;
+  z-index: 3;
+  margin: -0.5rem 0;
+  border-radius: 0.6875rem;
+  background: linear-gradient(to right, #3a2c20, #8a6a4b 30%, #6b4f38 55%, #2f251c);
+  box-shadow: 1px 0.5rem 1rem -0.25rem rgba(40, 24, 10, 0.55);
+}
+
+/* 축머리(위·아래의 둥근 마개) */
+.bc-roller::before,
+.bc-roller::after {
+  content: '';
+  position: absolute;
+  left: -0.25rem;
+  right: -0.25rem;
+  height: 0.875rem;
+  border-radius: 0.4375rem;
+  background: linear-gradient(to right, #2a2018, #6b4f38 35%, #4a3a2c 60%, #1f1812);
+}
+
+.bc-roller::before {
+  top: -0.375rem;
+}
+
+.bc-roller::after {
+  bottom: -0.375rem;
+}
+
+.bc-paper {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  box-shadow:
+    0 1px 2px rgba(58, 38, 18, 0.2),
+    2px 1rem 2rem -1rem rgba(40, 24, 10, 0.5);
+}
+
+/* 종이 양 끝이 축으로 말려 들어가는 그늘 */
+.bc-paper::before,
+.bc-paper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 1.5rem;
+  pointer-events: none;
+}
+
+.bc-paper::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(58, 38, 18, 0.28), rgba(58, 38, 18, 0));
+}
+
+.bc-paper::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(58, 38, 18, 0.34), rgba(58, 38, 18, 0));
+}
+
+.bc-track {
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+.bc-track::-webkit-scrollbar {
+  display: none;
+}
+
+.bc-inner {
+  --cw: 14rem;
+  --gap: 1.25rem;
+  --pad: 1.5rem;
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: calc(7 * var(--cw) + 6 * var(--gap) + 2 * var(--pad));
+  height: 100%;
+  padding: 0.875rem var(--pad) 0.5rem;
+}
+
+.bc-cards {
+  display: grid;
+  grid-template-columns: repeat(7, var(--cw));
+  gap: var(--gap);
+  min-height: 0;
+}
+
+.bc-cards > li {
+  display: flex;
+  min-height: 0;
+}
+
+/* ── 카드 ── */
+.bc-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  width: 100%;
+  min-height: 0;
+  padding: 0.5rem 0.625rem 0.75rem;
+  border: 0;
+  border-radius: 1rem;
+  color: var(--ink);
+  text-align: left;
+}
+
+button.bc-card {
+  cursor: pointer;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.9),
+    0 4px 0 var(--clay-edge),
+    1px 0.625rem 1.125rem -0.375rem rgba(58, 38, 18, 0.42);
+  transition:
+    transform var(--t-fast) ease-out,
+    box-shadow var(--t-fast) ease-out;
+}
+
+button.bc-card:active,
+button.bc-card.is-pressed {
+  transform: translateY(4px);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.6),
+    0 0 0 var(--clay-edge),
+    0 2px 3px rgba(58, 38, 18, 0.3);
+}
+
+button.bc-card:focus-visible,
+button.bc-card.is-focus {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* 지금 살 이야기: 가장 밝고 높이 떠 있다 */
+.bc-card.is-featured {
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.95),
+    0 5px 0 var(--clay-edge),
+    1px 1rem 1.75rem -0.5rem rgba(58, 38, 18, 0.5);
+}
+
+/* 준비 중: 깊이 없음(파인 자리) + 먹 밑그림 + 점선 번호 + 자물쇠 */
+.bc-card.is-soon {
+  color: var(--ink-soft);
+  box-shadow: inset 0 2px 4px rgba(58, 38, 18, 0.2), inset 0 0 0 1.5px rgba(106, 94, 80, 0.25);
+}
+
+.bc-pic {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 4.5rem;
+  max-height: 8.5rem;
+  padding: 0.25rem;
+  border-radius: 0.5rem;
+  background: #efe6d2;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 1px 2px rgba(58, 38, 18, 0.2);
+}
+
+.bc-pic img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 0.3125rem;
+  object-fit: cover;
+}
+
+.bc-card.is-soon .bc-pic {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px rgba(106, 94, 80, 0.2);
+}
+
+.bc-pic > .seal {
+  position: absolute;
+  right: 0.375rem;
+  bottom: 0.375rem;
+}
+
+.bc-pic > .seal {
+  padding: 0.25rem 0.625rem 0.3125rem;
+}
+
+.bc-pic > .seal .seal-t {
+  font-size: 1.125rem;
+}
+
+.bc-standin {
+  position: absolute;
+  left: 0.375rem;
+  top: 0.375rem;
+  right: 0.375rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.375rem;
+  background: rgba(43, 36, 29, 0.78);
+  color: #fffaf0;
+  font: 700 1.125rem/1.3 var(--f-ui);
+}
+
+.bc-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bc-year {
+  font-family: var(--f-story);
+  font-size: 1.625rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.bc-year small {
+  font-size: 1.125rem;
+}
+
+.bc-title {
+  font-family: var(--f-title);
+  font-size: 1.3125rem;
+  line-height: 1.25;
+}
+
+.bc-blurb {
+  font-family: var(--f-story);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.bc-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  margin-top: auto;
+}
+
+.bc-go {
+  color: var(--btn);
+  font-family: var(--f-title);
+  font-size: 1.25rem;
+}
+
+.bc-cleared {
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.bc-lived {
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+
+.bc-cta {
+  pointer-events: none;
+}
+
+.bc-card:active .bc-cta,
+.bc-card.is-pressed .bc-cta {
+  transform: translateY(var(--press));
+}
+
+/* ── 시간 줄 ── */
+.bc-axis {
+  position: relative;
+  height: 5.75rem;
+}
+
+.bc-leaders {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+
+/* 금박 선(황 3px + 먹 1px) */
+.bc-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 1.5rem;
+  height: 4px;
+  background: linear-gradient(to bottom, var(--hwang) 0 3px, rgba(43, 36, 29, 0.55) 3px 4px);
+  border-radius: 2px;
+}
+
+.bc-node {
+  position: absolute;
+  top: calc(1.5rem + 2px);
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--paper-light);
+  box-shadow: inset 0 0 0 2px var(--ink-soft);
+}
+
+.bc-node.open {
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--paper-light);
+}
+
+.bc-node.featured {
+  width: 1.125rem;
+  height: 1.125rem;
+  background: var(--btn);
+  box-shadow: 0 0 0 2px var(--paper-light), 0 0 0 3.5px var(--btn-edge);
+}
+
+.bc-tick {
+  position: absolute;
+  top: 1.5rem;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.bc-tick::before {
+  content: '';
+  width: 2px;
+  height: 0.5rem;
+  margin-bottom: 0.0625rem;
+  background: rgba(43, 36, 29, 0.55);
+}
+
+.bc-band {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: var(--paper-deep);
+  box-shadow: inset 0 2px 3px rgba(58, 38, 18, 0.2);
+  color: var(--ink-soft);
+  font-family: var(--f-story);
+  font-size: 1.125rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ── 옆에 더 있어요(두루마리를 넘긴다) — 새 말 ── */
+.bc-more {
+  position: absolute;
+  top: 0.125rem;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.875rem;
+  border-radius: 999px;
+  background: var(--paper-light);
+  box-shadow: var(--sh-2), var(--rim);
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.bc-more[hidden] {
+  display: none;
+}
+
+.bc-more.right {
+  right: 1.75rem;
+}
+
+.bc-more.left {
+  left: 1.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.bc-card {
+    transition: none;
+  }
+}
+
+@media (max-height: 700px) {
+  .book-c {
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+    padding-bottom: 1rem;
+  }
+  .bc-inner {
+    padding-top: 0.625rem;
+  }
+  .bc-pic {
+    max-height: 5.5rem;
+  }
+}
+
+/* 부품 견본 */
+.parts-c .parts-grid {
+  grid-template-columns: repeat(4, 14rem);
+  justify-content: start;
+}
+
+.parts-c .mini {
+  display: flex;
+  height: 25rem;
+}
