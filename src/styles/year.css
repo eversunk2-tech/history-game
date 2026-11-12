@@ -1,4 +1,4 @@
-/* 한 해 돌아보기, 남길 것, 이야기책의 한 해 이름.
+/* 한 해 돌아보기, 남길 것, 한 해 이름 도장(이야기책도 쓴다 — 이야기책의 나머지 모양은 screens.css).
    계절 닫기와 같은 종이(.closing-paper) 위에 놓인다. 글은 1.25rem(20px)부터(이름표만 1.125rem), 누르는 것은 높이 3.5rem(56px)부터.
    뜻은 색만으로 전하지 않는다: 수치의 흐름은 이름·숫자·점과 선의 모양으로, 고른 것은 굵은 테와 글로 알린다. */
 
@@ -406,54 +406,81 @@
   text-align: left;
 }
 
-/* 도장: 붉은 인주 빛의 겹테. "한 해 이름"이라는 글이 함께 찍혀 있어 빛깔만으로 알리지 않는다. */
+/* 도장: 뇌록(spec.md 1.2의 2번 — "도장은 뇌록", 12.3 "도장"). 이야기책(표지의 그림 위·목차의 깬 줄)과 한 해 돌아보기 3장의 큰 도장이 함께 쓴다.
+   테는 뇌록 3px · 한지빛 2px · 뇌록 1px의 세 겹이고, 그 테만 거친 가장자리(SVG 필터 #rough — src/ui/RoughFilter.tsx)를 받는다.
+   글자는 또렷하다(뇌록 테두리 빛 --rok-edge, 종이 위 7.9:1). 안은 종이 빛 94%라 그림 위에 찍혀도 글의 대비가 그림에 따라 바뀌지 않는다.
+   필터가 없거나 그리지 못하는 기기에서는 테만 매끈해지고 도장은 그대로 보인다. "한 해 이름"이라는 글이 함께 찍혀 있어 빛깔만으로 알리지 않는다. */
 .stamp {
-  --stamp: #a3352b;
-
+  position: relative;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.05rem;
-  padding: 0.3rem 0.9rem 0.4rem;
-  border: 0.22rem solid var(--stamp);
-  border-radius: 0.6rem;
-  outline: 0.08rem solid var(--stamp);
-  outline-offset: 0.16rem;
-  background: rgba(163, 53, 43, 0.06);
-  color: var(--stamp);
-  font-weight: 900;
-  line-height: 1.25;
+  gap: 0.0625rem;
+  padding: 0.4rem 1rem 0.5rem;
+  border-radius: 0.5rem;
+  background: rgba(251, 247, 238, 0.94);
+  color: var(--rok-edge);
+  line-height: 1.2;
   text-align: center;
-  transform: rotate(-2.5deg);
+  transform: rotate(-3deg);
+  box-shadow: 1px 0.25rem 0.5rem -0.125rem rgba(19, 50, 46, 0.35);
+}
+
+.stamp::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 3px var(--rok),
+    inset 0 0 0 5px rgba(251, 247, 238, 0.94),
+    inset 0 0 0 6px var(--rok);
+  filter: url(#rough);
+  pointer-events: none;
 }
 
 .stamp-kicker {
+  /* 넓은 자간의 끝 틈만큼 당겨 가운데를 맞춘다 */
+  margin-right: -0.2em;
+  font-family: var(--f-ui);
   font-size: 1.125rem;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.2em;
 }
 
 .stamp-title {
-  font-size: 1.25rem;
+  font-family: var(--f-title);
+  font-size: 1.375rem;
+  font-weight: 400;
+  text-wrap: balance;
 }
 
+/* 한 해 돌아보기 3장의 큰 도장: 같은 부품을 크게(세 겹 테도 굵게) */
 .stamp.big {
   margin: 0.7rem 0 0.8rem;
-  padding: 0.7rem 2.2rem 0.9rem;
-  border-width: 0.36rem;
-  border-radius: 0.9rem;
-  outline-width: 0.12rem;
-  outline-offset: 0.26rem;
+  padding: 0.75rem 2.25rem 0.9rem;
+  border-radius: 0.875rem;
+}
+
+.stamp.big::before {
+  box-shadow:
+    inset 0 0 0 5px var(--rok),
+    inset 0 0 0 8px rgba(251, 247, 238, 0.94),
+    inset 0 0 0 10px var(--rok);
+}
+
+.stamp.big .stamp-kicker {
+  font-size: 1.25rem;
 }
 
 .stamp.big .stamp-title {
   font-size: 2.5rem;
 }
 
-/* 찍히는 움직임은 한 번, 짧게. 움직임을 줄여 달라고 한 기기에서는 바로 찍혀 있다. */
+/* 찍히는 움직임은 한 번, 짧게(돌아보기 3장, 이야기책은 방금 깨고 돌아왔을 때만 — .fresh). 움직임을 줄여 달라고 한 기기에서는 바로 찍혀 있다. */
 @media (prefers-reduced-motion: no-preference) {
   .stamp.big,
-  .book-card .stamp.fresh {
+  .stamp.fresh {
     animation: stamp-press 0.38s ease-out 0.12s both;
   }
 }
@@ -461,15 +488,15 @@
 @keyframes stamp-press {
   0% {
     opacity: 0;
-    transform: rotate(-2.5deg) scale(1.5);
+    transform: rotate(-3deg) scale(1.5);
   }
   70% {
     opacity: 1;
-    transform: rotate(-2.5deg) scale(0.96);
+    transform: rotate(-3deg) scale(0.96);
   }
   100% {
     opacity: 1;
-    transform: rotate(-2.5deg) scale(1);
+    transform: rotate(-3deg) scale(1);
   }
 }
 
@@ -576,56 +603,6 @@
 .year-ask.picked {
   color: var(--ink);
   font-weight: 800;
-}
-
-/* ── 이야기책: 깬 이야기 ── 한 해 이름이 도장처럼 찍혀 있다. 몇 번 살았는지와 살아 본 모습이 글로도 적힌다. */
-
-/* 깬 이야기가 하나뿐이면 그 카드를 한 줄 가득 편다(줄 수는 그대로다 — 일곱 이야기가 두 칸 넉 줄, 세 칸 석 줄) */
-.book-list > li.wide {
-  grid-column: 1 / -1;
-}
-
-.book-card.cleared {
-  border-width: 0.24rem;
-}
-
-.book-card .stamp {
-  flex: none;
-  max-width: 13.5rem;
-  margin: 0 0.5rem 0 0.2rem;
-}
-
-.book-list > li.wide .stamp {
-  max-width: 20rem;
-  margin-right: 1.2rem;
-  padding: 0.4rem 1.3rem 0.5rem;
-}
-
-.book-list > li.wide .stamp-title {
-  font-size: 1.5rem;
-}
-
-/* 좁은 카드에서는 소개 글을 접어 도장 자리를 낸다(깬 이야기는 이미 살아 본 해다) */
-.book-list > li:not(.wide) .book-card.cleared .book-blurb {
-  display: none;
-}
-
-.book-cleared {
-  display: inline-block;
-  padding: 0 0.55rem;
-  border: 0.1rem solid currentColor;
-  border-radius: 1rem;
-  font-size: 1.25rem;
-  font-weight: 800;
-  line-height: 1.45;
-  white-space: nowrap;
-}
-
-.book-lived {
-  color: var(--ink-soft);
-  font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1.45;
 }
 
 /* ── 누가 될까: 살아 본 집과 모습의 표시 ── 점선 테의 딱지와 글(색만으로 알리지 않는다) */

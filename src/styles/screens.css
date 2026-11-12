@@ -298,20 +298,616 @@
   line-height: 1.3;
 }
 
-/* ── 2. 이야기책 ── */
+/* ── 2. 이야기책 ── 펼친 책 한 권(spec.md 12절 — 시안 A 「펼친 이야기책」). 왼쪽 면은 목차(교과서의 두 주제를 갈피로),
+   오른쪽 면은 지금 살 이야기의 표지(그림 + 큰 해 + 제목 + 소개 글 + 쪽빛 단추 모양 — 면 전체가 단추).
+   빛은 왼쪽 위 하나: 왼쪽 면 위쪽의 넓은 밝음, 가운데 접힌 곳의 그늘, 액자는 아래·조금 오른쪽으로 그림자. 흐르는 빛은 없다(spec.md 1.5).
+   한 해 이름 도장의 모양은 year.css의 .stamp(한 해 돌아보기 3장의 큰 도장과 같은 부품). */
 
-.book,
+.book {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.625rem;
+  padding: 0.875rem 1.5rem 1.375rem;
+}
+
+/* ── 머리 ── */
+.book-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.book-head .screen-title {
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.book-head .dan {
+  width: 5.5rem;
+  margin: 0.25rem 0 0.3125rem;
+  border-radius: 1px;
+}
+
+.book-guide {
+  color: var(--ink-soft);
+  font-size: 1.25rem;
+  line-height: 1.4;
+}
+
+.book-home {
+  gap: 0.375rem;
+}
+
+/* ── 책: 짙은 비단 표지(--cloth) 위에 한지 두 면. 표지에는 글이 올라가지 않는다(바탕 한지와 9.2:1 — 책의 윤곽이 또렷) ── */
+.book-spread {
+  --cloth: #4a3a2c;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.22fr) minmax(0, 1fr);
+  min-height: 0;
+  padding: 0.5rem;
+  border-radius: 1.125rem;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px),
+    linear-gradient(160deg, #5a4836, var(--cloth) 45%, #3c2f24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 2px 4px rgba(58, 38, 18, 0.25),
+    2px 1.5rem 3rem -1rem rgba(40, 24, 10, 0.6);
+}
+
+.book-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* 바깥 가장자리에 종이가 겹친 결(세 줄) */
+.book-left {
+  padding: 0.75rem 2.25rem 0 1.5rem;
+  border-radius: 0.75rem 0.25rem 0.25rem 0.75rem;
+  box-shadow:
+    -2px 1px 0 #efe6d2,
+    -4px 2px 0 #ddd0b3,
+    -5px 3px 0 #f3ecdc;
+}
+
+.book-right {
+  border-radius: 0.25rem 0.75rem 0.75rem 0.25rem;
+  box-shadow:
+    2px 1px 0 #efe6d2,
+    4px 2px 0 #ddd0b3,
+    5px 3px 0 #f3ecdc;
+}
+
+/* 가운데 접힌 곳의 그늘(3.25rem — 왼쪽 면 오른쪽 끝 24%, 오른쪽 면 왼쪽 끝 30%) */
+.book-left::after,
+.book-right::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3.25rem;
+  pointer-events: none;
+}
+
+.book-left::after {
+  right: 0;
+  background: linear-gradient(to right, rgba(58, 38, 18, 0), rgba(58, 38, 18, 0.13) 80%, rgba(58, 38, 18, 0.24));
+}
+
+.book-right::before {
+  left: 0;
+  z-index: 1;
+  background: linear-gradient(to left, rgba(58, 38, 18, 0), rgba(58, 38, 18, 0.17) 80%, rgba(58, 38, 18, 0.3));
+}
+
+/* 왼쪽 위에서 드는 빛(종이 위의 넓은 밝음 — 꾸밈 빛이 아니라 광원 하나) */
+.book-left::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 90% at 8% 0%, rgba(255, 252, 244, 0.55), rgba(255, 252, 244, 0) 60%);
+  pointer-events: none;
+}
+
+/* 갈피끈: 뇌록 비단 끈(제비꼬리 끝) — 오른쪽 면 왼쪽 여백에서 책 아래로 늘어진다. 꾸밈이고 누름을 막지 않는다 */
+.book-ribbon {
+  position: absolute;
+  top: -0.75rem;
+  bottom: -1.625rem;
+  left: 0.875rem;
+  z-index: 4;
+  width: 0.875rem;
+  background: linear-gradient(
+    to right,
+    var(--rok-edge) 0 1px,
+    #2a8f84 1px 35%,
+    var(--rok) 35% calc(100% - 1px),
+    var(--rok-edge) calc(100% - 1px)
+  );
+  -webkit-clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 0.5rem), 0 100%);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 0.5rem), 0 100%);
+  filter: drop-shadow(1px 0.2rem 0.15rem rgba(19, 50, 46, 0.4));
+  pointer-events: none;
+}
+
+/* ── 왼쪽 면: 목차 ── */
+
+/* 머리글 "이야기책"(에디토리얼 마스트헤드: 넓은 자간, 양옆에 이중선) */
+.book-run {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.5;
+  letter-spacing: 0.32em;
+  white-space: nowrap;
+}
+
+.book-run::before,
+.book-run::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 4px;
+  border-top: 1px solid rgba(75, 65, 55, 0.55);
+  border-bottom: 1px solid rgba(75, 65, 55, 0.55);
+}
+
+/* 넘겨 보는 칸(면보다 길면 — MoreBox가 "아래에 더 있어요 ▼"를 붙인다). 양옆과 아래를 0.5rem씩 비워 초점 테(3px, 3px 띄움)가
+   잘리지 않게 한다(아래의 0.5rem은 면의 아래 여백을 칸 안으로 옮긴 것 — 목차가 쓸 수 있는 높이는 시안과 같다) */
+.book-toc {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 -0.5rem;
+  padding: 0 0.5rem 0.5rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-padding: 0.5rem 0;
+  scrollbar-width: none;
+  touch-action: pan-y;
+}
+
+.book-toc::-webkit-scrollbar {
+  display: none;
+}
+
+/* 갈피(교과서의 두 주제) — 고운바탕, 뒤로 황빛 가는 선 */
+.book-theme {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin: 0.375rem 0 0.0625rem 0.75rem;
+  color: var(--ink-soft);
+  font-family: var(--f-story);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.book-theme::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(to right, var(--hwang), rgba(233, 173, 42, 0));
+}
+
+.book-part:first-child .book-theme {
+  margin-top: 0.125rem;
+}
+
+/* 번호: 동그라미 안의 숫자(주아). 꾸밈이라 읽는 글은 따로 있다(aria-hidden) */
+.book-no {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 2.125rem;
+  height: 2.125rem;
+  border-radius: 50%;
+  color: var(--ink);
+  font-family: var(--f-title);
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1;
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+/* 목차 한 줄: 번호 · 해 · 제목 · 점줄 · 상태. 누를 자리는 56px부터 */
+.book-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.625rem;
+  width: 100%;
+  min-height: 3.5rem;
+  margin: 0;
+  padding: 0.25rem 0.75rem;
+  border: 0;
+  border-radius: 0.875rem;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.book-year {
+  font-family: var(--f-story);
+  font-size: 1.3125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.book-name {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+  font-family: var(--f-title);
+  font-size: 1.3125rem;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.book-name > span {
+  min-width: 0;
+}
+
+/* 목차의 점줄: 제목과 상태를 잇는다 */
+.book-name::after {
+  content: '';
+  flex: 1 1 1.5rem;
+  min-width: 1.5rem;
+  border-bottom: 2px dotted rgba(106, 94, 80, 0.5);
+  transform: translateY(-0.3em);
+}
+
+/* 열린 줄의 상태: 쪽빛 글(쪽빛 면은 표지의 단추 하나뿐 — spec.md 1.2의 1번) */
+.book-go {
+  color: var(--btn);
+  font-family: var(--f-title);
+  font-size: 1.25rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* 펼칠 수 있는 줄(단추): 종이 빛 55% + 옅은 테 + 아래 2px 점토 테. 올리면 1px 뜨고 누르면 3px 내려앉는다(120ms) */
+button.book-row {
+  cursor: pointer;
+  transition:
+    transform var(--t-fast) ease-out,
+    box-shadow var(--t-fast) ease-out,
+    background-color var(--t-fast) ease-out;
+}
+
+button.book-row:not(.featured) {
+  background: rgba(251, 247, 238, 0.55);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(75, 65, 55, 0.22),
+    0 2px 0 rgba(205, 185, 143, 0.7);
+}
+
+@media (hover: hover) {
+  button.book-row:hover {
+    transform: translateY(-1px);
+  }
+}
+
+button.book-row:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 2px 3px rgba(58, 38, 18, 0.18),
+    0 0 0 rgba(205, 185, 143, 0);
+}
+
+/* 오른쪽 면에 펼친 이야기의 줄: 가장 밝다(점토 종이 + 쪽빛 번호 — 흰 숫자 7.15:1) */
+.book-row.featured {
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 55%),
+    var(--paper-light);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.9),
+    0 3px 0 var(--clay-edge),
+    1px 0.5rem 0.875rem -0.375rem rgba(58, 38, 18, 0.4);
+}
+
+.book-row.featured .book-no {
+  background: var(--btn);
+  color: var(--btn-on);
+  box-shadow:
+    inset 0 0 0 2px var(--btn-edge),
+    inset 0 2px 0 var(--btn-hi);
+}
+
+.book-row.featured:active {
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.6),
+    0 0 0 var(--clay-edge),
+    0 2px 3px rgba(58, 38, 18, 0.3);
+}
+
+/* 준비 중인 줄: 깊이 없음 + 점선 번호 + 자물쇠 「준비 중」(색만으로 알리지 않는다). 누를 수 없다 */
+.book-row.soon-row {
+  color: var(--ink-soft);
+}
+
+.soon-row .book-no {
+  color: var(--ink-faint);
+  box-shadow: none;
+  outline: 2px dashed rgba(106, 94, 80, 0.7);
+  outline-offset: -2px;
+}
+
+.soon-row .book-name::after {
+  border-bottom-color: rgba(106, 94, 80, 0.3);
+}
+
+/* 깬 이야기(오른쪽 면에 펼치지 않은 줄): 둘째 줄에 작은 도장 + 깬 횟수 + 살아 본 모습 */
+.book-sub {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin: 0.125rem 0 0.1875rem;
+}
+
+.book-sub .stamp {
+  padding: 0.25rem 0.75rem 0.3125rem;
+  transform: rotate(-2deg);
+}
+
+.book-sub .stamp-title {
+  font-size: 1.25rem;
+}
+
+.book-sub-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.book-cleared {
+  align-self: flex-start;
+  padding: 0 0.625rem;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.book-lived {
+  color: var(--ink-soft);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* "아래에 더 있어요 ▼"는 왼쪽 면 아래 가운데에 알약으로 붙는다(넘칠 때만 — MoreBox) */
+.more-below.book-more {
+  position: absolute;
+  bottom: 0.375rem;
+  left: 50%;
+  z-index: 3;
+  margin: 0;
+  padding: 0.125rem 0.875rem;
+  border-top: 0;
+  border-radius: 999px;
+  background: var(--paper-light);
+  box-shadow: var(--sh-2), var(--rim);
+  color: var(--ink-soft);
+  line-height: 1.6;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* ── 오른쪽 면: 지금 살 이야기의 표지(면 전체가 누를 자리 — 누르면 openStory) ── */
+.book-cover {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 1rem 1.5rem 1.25rem 2.5rem;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* 초점은 면 안쪽 0.5rem에 그린다(바깥은 짙은 비단 표지라 먹 테가 묻힌다 — spec.md 1.2의 "둘레와 3:1") */
+.book-cover:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -0.5rem;
+}
+
+/* 그림 액자: 한지 매트(0.375rem) 안의 채색화, 종이 위에 떠 있다. 남는 높이를 받는다(최소 7rem — 짧은 화면에서는 그림이 낮아진다).
+   그림이 오기 전에는 액자 안이 한지 빛이고 글은 바로 보인다(그림은 액자의 크기를 바꾸지 않는다) */
+.book-frame {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 7rem;
+  border-radius: 0.5rem;
+  background: #efe6d2;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 1px 2px rgba(58, 38, 18, 0.22),
+    1px 0.625rem 1.125rem -0.5rem rgba(58, 38, 18, 0.45);
+}
+
+.book-pic {
+  position: absolute;
+  top: 0.375rem;
+  left: 0.375rem;
+  display: block;
+  width: calc(100% - 0.75rem);
+  height: calc(100% - 0.75rem);
+  border-radius: 0.25rem;
+  object-fit: cover;
+  object-position: 40% 46%;
+}
+
+/* 그림 윗가장자리의 얕은 그늘과 왼쪽 위의 옅은 빛 */
+.book-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0.375rem;
+  border-radius: 0.25rem;
+  background: linear-gradient(140deg, rgba(255, 248, 230, 0.16), rgba(255, 248, 230, 0) 38%);
+  box-shadow:
+    inset 0 3px 6px -2px rgba(40, 24, 10, 0.45),
+    inset 0 0 0 1px rgba(43, 36, 29, 0.2);
+  pointer-events: none;
+}
+
+/* 그림이 아직 없는 이야기: 한지 빛 + 큰 번호 */
+.book-pic-none {
+  position: absolute;
+  inset: 0.375rem;
+  display: grid;
+  place-items: center;
+}
+
+.book-pic-none .book-no {
+  width: 5rem;
+  height: 5rem;
+  color: var(--ink-soft);
+  font-size: 2.75rem;
+  box-shadow: inset 0 0 0 3px var(--ink-soft);
+}
+
+/* 그림 위의 한 해 이름 도장: 오른쪽 아래에 낙관처럼(도장 안은 종이 빛이라 그림에 따라 글의 대비가 바뀌지 않는다) */
+.book-frame .stamp {
+  position: absolute;
+  right: 0.875rem;
+  bottom: 0.75rem;
+  z-index: 1;
+  max-width: calc(100% - 1.75rem);
+}
+
+.book-titleline {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.book-titleline .book-no {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1.5rem;
+}
+
+.book-bigyear {
+  font-family: var(--f-story);
+  font-size: 2.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.book-bigyear small {
+  margin-left: 0.125rem;
+  font-size: 1.5rem;
+}
+
+.book-title {
+  font-family: var(--f-title);
+  font-size: 1.875rem;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.book-blurb {
+  font-family: var(--f-story);
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.book-cover .book-sub-text {
+  gap: 0.25rem;
+}
+
+.book-foot {
+  display: flex;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+/* 표지 안의 쪽빛 단추 모양(면 전체가 단추라 이것은 모양만). 면에 손을 올리면 함께 뜨고, 면을 누르면 함께 내려앉는다 */
+.book-cta {
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .book-cover:hover .book-cta {
+    transform: translateY(-1px);
+  }
+}
+
+.book-cover:active .book-cta {
+  transform: translateY(var(--press));
+  box-shadow:
+    inset 0 2px 0 var(--btn-hi),
+    0 0 0 var(--edge),
+    0 2px 3px var(--btn-glow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.book-row {
+    transition: none;
+  }
+}
+
+/* ── 낮은 화면(높이 700 아래 — 1366×650·1024×690): 머리의 단청 띠와 여백을 줄여 목차에 자리를 낸다 ── */
+@media (max-height: 700px) {
+  .book {
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+    padding-bottom: 1.25rem;
+  }
+
+  .book-head .dan {
+    margin: 0.25rem 0;
+  }
+
+  .book-theme {
+    margin-top: 0.125rem;
+  }
+}
+
+/* ── 3. 누가 될까 ── 엎어진 패 → 한 장 뒤집기 → 뽑힌 아이를 크게(패들 앞에 떠 있는 종이). spec.md 3.2
+   패는 그 이야기의 집 수만큼(--role-count). 뒤집기는 240ms(뽑힌 패 먼저, 나머지는 조금씩 늦게), 움직임 줄이기면 바로 바뀐다. */
+
 .rolepick {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0.7rem;
   padding: 1rem 1.5rem 1.1rem;
 }
 
-.book {
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.book-head,
 .role-head {
   display: flex;
   align-items: flex-start;
@@ -319,106 +915,9 @@
   gap: 1rem;
 }
 
-.book-guide,
 .role-guide {
   color: var(--ink-soft);
   line-height: 1.45;
-}
-
-.book-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(27rem, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
-  gap: 0.55rem 0.8rem;
-  min-height: 0;
-}
-
-.book-list > li {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-}
-
-/* 카드 하나: 글(이름 · 소개 · 딱지)과, 깬 이야기면 오른쪽에 한 해 이름 도장(모양은 year.css) */
-.book-card {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  width: 100%;
-  min-width: 0;
-  min-height: 3.5rem;
-  padding: 0.35rem 0.9rem;
-  border: 0.2rem solid var(--ink);
-  border-radius: 0.8rem;
-  background: var(--paper-light);
-  text-align: left;
-}
-
-button.book-card {
-  cursor: pointer;
-}
-
-button.book-card:active {
-  background: var(--season-soft);
-}
-
-.book-card.soon-card {
-  border: 0.14rem dashed var(--ink-faint);
-  background: transparent;
-  color: var(--ink-soft);
-}
-
-.book-text {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0.1rem;
-  min-width: 0;
-}
-
-.book-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  column-gap: 0.5rem;
-  font-size: 1.25rem;
-  font-weight: 800;
-  line-height: 1.35;
-}
-
-.book-mark {
-  font-size: 1.375rem;
-}
-
-.book-year {
-  font-variant-numeric: tabular-nums;
-}
-
-.book-blurb {
-  display: block;
-  font-size: 1.25rem;
-  font-weight: 500;
-  line-height: 1.35;
-}
-
-.book-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.15rem 0.6rem;
-  align-items: center;
-}
-
-.book-open {
-  font-size: 1.125rem;
-  font-weight: 800;
-}
-
-/* ── 3. 누가 될까 ── 엎어진 패 → 한 장 뒤집기 → 뽑힌 아이를 크게(패들 앞에 떠 있는 종이). spec.md 3.2
-   패는 그 이야기의 집 수만큼(--role-count). 뒤집기는 240ms(뽑힌 패 먼저, 나머지는 조금씩 늦게), 움직임 줄이기면 바로 바뀐다. */
-
-.rolepick {
-  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .rolepick.flipped {

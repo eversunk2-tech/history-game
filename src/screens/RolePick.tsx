@@ -59,6 +59,11 @@ export function RolePick(): JSX.Element | null {
    * 자판 Enter·Space가 뽑힌 아이를 보기도 전에 "…로 한 해 살기 ▶"를 누르지 않게(옛 모습 고르기 화면의 400ms 막음과 같은 뜻 — Review ㉠ 3).
    */
   const gate = useRef<TapGate | null>(null);
+  /**
+   * 화면이 뜬 바로 뒤의 패 누름도 받지 않는다(같은 OPEN_GAP_MS). 이야기책에서 표지나 펼친 줄을 두 번 빠르게 누르면 둘째 누름이
+   * 이 화면의 패에 떨어져 아이가 고르기도 전에 패가 뒤집혔다(Review 이야기책 권고 1). 자판 Enter·Space도 패의 누름으로 와 같은 문을 지난다.
+   */
+  const [cardGate] = useState(() => new TapGate(Date.now()));
 
   // 패를 뒤집고 잠깐 뒤에 뽑힌 아이의 종이를 띄운다(뒤집히는 것을 먼저 보게)
   useEffect(() => {
@@ -149,7 +154,16 @@ export function RolePick(): JSX.Element | null {
                       ))}
                   </span>
                 </span>
-                {!shown && <button type="button" class="role-card-hit" aria-label={`${index + 1}번 패`} onClick={() => setPicked(index)} />}
+                {!shown && (
+                  <button
+                    type="button"
+                    class="role-card-hit"
+                    aria-label={`${index + 1}번 패`}
+                    onClick={() => {
+                      if (cardGate.pass(Date.now())) setPicked(index);
+                    }}
+                  />
+                )}
               </div>
             );
           })}
@@ -186,6 +200,11 @@ export function RolePick(): JSX.Element | null {
                   type="button"
                   class="btn big primary role-go"
                   ref={goRef}
+                  // 자판을 누르고 있어서 되풀이되는 Enter·Space는 받지 않는다: 패에서 Enter를 1.5초 넘게 누르고 있으면 막음(380ms)이 지난 뒤
+                  // 되풀이 입력이 이 단추를 눌러 뽑힌 아이의 종이를 건너뛰었다(Review ㉠ 권고). 기본 동작(누름)을 막으면 단추가 눌리지 않는다.
+                  onKeyDown={(ev) => {
+                    if (ev.repeat && (ev.key === 'Enter' || ev.key === ' ')) ev.preventDefault();
+                  }}
                   onClick={() => {
                     if (gate.current?.pass(Date.now())) settleRole(role.id, drawn.look);
                   }}

@@ -17,6 +17,7 @@ import { Trouble } from '../screens/Trouble';
 import { YearReview } from '../screens/YearReview';
 import { askingHome, cancelHome, game, goHome, noteTrouble, pack, screen, seed, situationId } from '../state/store';
 import { Ask } from '../ui/Ask';
+import { RoughFilter } from '../ui/RoughFilter';
 import { TurnNotice } from '../ui/TurnNotice';
 
 /**
@@ -113,6 +114,7 @@ export function App(): JSX.Element {
   }, [story]);
   return (
     <div class="stage">
+      <RoughFilter />
       <Guard>
         <Current />
         {askingHome.value && <HomeConfirm />}

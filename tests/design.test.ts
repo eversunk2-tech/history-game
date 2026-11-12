@@ -220,6 +220,11 @@ describe('글자 크기의 바닥과 누를 자리(spec.md 1.3·6.2)', () => {
       '.role-say.wait',
       '.story',
       '.wish-text',
+      // 이야기책(spec.md 12.8): 안내 줄, 표지의 소개 글, 깬 횟수, 살아 본 모습
+      '.book-guide',
+      '.book-blurb',
+      '.book-cleared',
+      '.book-lived',
     ];
     for (const sel of SENTENCES) {
       const found = RULES.filter((rule) => rule.selectors.includes(sel));
@@ -245,12 +250,15 @@ describe('글자 크기의 바닥과 누를 자리(spec.md 1.3·6.2)', () => {
       'title-build': '.title .title-build',
       'talk-later': '.talk-later',
       'talk-choice': '.talk-choice',
+      // 이야기책: 목차의 열린 줄, 표지(오른쪽 면 전체가 단추)
+      'book-row': '.book-row',
+      'book-cover': '.book-cover',
     };
     for (const selector of Object.values(SHAPES)) expect(minHeight(selector), selector).toBeGreaterThanOrEqual(3.5);
     // 대사 창은 창 전체가 단추(가장 낮은 높이 --talk-box-h), 패의 누름 자리는 패 전체를 덮는다
     expect(css('talk.css')).toMatch(/--talk-box-h: 10\.75rem;/);
     expect(css('screens.css')).toMatch(/\.role-card-hit \{\s*position: absolute;\s*inset: 0;/);
-    for (const file of ['/screens/Title.tsx', '/screens/RolePick.tsx', '/screens/Intro.tsx', '/ui/TopBand.tsx', '/screens/Talk.tsx']) {
+    for (const file of ['/screens/Title.tsx', '/screens/RolePick.tsx', '/screens/Intro.tsx', '/ui/TopBand.tsx', '/screens/Talk.tsx', '/screens/Book.tsx']) {
       for (const m of code(file).matchAll(/<button[^>]*?class=(?:"([^"]*)"|\{`([^`]*)`\})/g)) {
         const first = (m[1] ?? m[2] ?? '').split(/[\s$]/)[0];
         expect([...Object.keys(SHAPES), 'role-card-hit', 'talk-box'], `${file}: ${first}`).toContain(first);
@@ -305,9 +313,160 @@ describe('빛깔의 자리와 표시(spec.md 1.2)', () => {
     }
     expect(missing).toEqual([]);
     // ㉠의 움직임이 모두 있다(반짝 빛, ▼ 까딱임, 손가락 물결, 패 뒤집기 뒤의 종이)
-    for (const name of ['sheen', 'talk-bob', 'talk-tap', 'role-hero-in']) expect(used).toContain(name);
+    for (const name of ['sheen', 'talk-bob', 'talk-tap', 'role-hero-in', 'stamp-press']) expect(used).toContain(name);
     // 패 뒤집기(transition)도 줄이기 설정이면 바로 바뀐다
     expect(reduce.some((rule) => rule.selectors.includes('.role-card-inner') && /transition:\s*none/.test(rule.body))).toBe(true);
+  });
+});
+
+// ── 이야기책(spec.md 12절 — 시안 A 「펼친 이야기책」) ─────────────────────────
+
+describe('이야기책 — 쪽빛 하나, 뇌록 도장, 글은 그대로(spec.md 12.3·12.5·12.8)', () => {
+  // 설명 줄을 뺀 코드(설명에 같은 말이 있어도 화면의 글이 바뀌면 잡히게 — 글자 빠짐 시험과 같은 길)
+  const book = code('/screens/Book.tsx')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:'"`])\/\/[^\n]*/g, '$1');
+  const root = tokens(':root');
+
+  it('쪽빛 면은 하나: 표지의 단추 모양(btn primary)이 Book.tsx에 한 번만. 흐르는 빛(.sheen)은 없다', () => {
+    expect((book.match(/\bbtn primary\b/g) ?? []).length).toBe(1);
+    expect((book.match(/\bprimary\b/g) ?? []).length).toBe(1);
+    expect(book).toMatch(/<span class="btn primary big book-cta">\{goWord\(coverStamp\)\}<\/span>/);
+    expect(book).not.toMatch(/\bsheen\b/);
+    // 다른 열린 줄은 쪽빛 글만(종이 위 4.5:1 넘게)
+    expect(css('screens.css')).toMatch(/\.book-go \{[^}]*color: var\(--btn\);/);
+    expect(contrast(root['--btn'], root['--paper-light'])).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(root['--btn'], root['--paper'])).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('도장은 뇌록: year.css의 .stamp가 --rok(테)·--rok-edge(글)를 쓰고 붉은 인주(#a3352b)가 없다. 테만 거친 가장자리(#rough)', () => {
+    const year = css('year.css');
+    expect(year).not.toMatch(/#a3352b|163,\s*53,\s*43/i);
+    const stamp = RULES.find((rule) => rule.file === 'year.css' && rule.at.length === 0 && rule.selectors.includes('.stamp'))?.body ?? '';
+    expect(stamp).toMatch(/color: var\(--rok-edge\);/);
+    expect(stamp).toMatch(/background: rgba\(251, 247, 238, 0\.94\);/); // 안은 종이 빛 — 그림 위에서도 글의 대비가 같다
+    const ring = RULES.find((rule) => rule.file === 'year.css' && rule.at.length === 0 && rule.selectors.includes('.stamp::before'))?.body ?? '';
+    expect(ring).toMatch(/inset 0 0 0 3px var\(--rok\),\s*inset 0 0 0 5px rgba\(251, 247, 238, 0\.94\),\s*inset 0 0 0 6px var\(--rok\);/);
+    expect(ring).toMatch(/filter: url\(#rough\);/);
+    // 큰 도장(한 해 돌아보기 3장)도 같은 부품 — 붉은 테를 따로 두지 않는다
+    for (const rule of RULES.filter((r) => r.file === 'year.css' && r.selectors.some((sel) => sel.startsWith('.stamp')))) {
+      expect(rule.body, rule.selectors.join(', ')).not.toMatch(/var\(--ju|#[0-9a-f]{6}/i);
+    }
+    // 글 7.9:1(종이 위), 테 3:1 넘게
+    expect(contrast(root['--rok-edge'], root['--paper-light'])).toBeGreaterThanOrEqual(7);
+    expect(contrast(root['--rok'], root['--paper-light'])).toBeGreaterThanOrEqual(3);
+    // 필터는 앱 맨 위에 한 번(RoughFilter.tsx → App.tsx)
+    expect(code('/ui/RoughFilter.tsx')).toMatch(/<filter id="rough">/);
+    expect((code('/app/App.tsx').match(/<RoughFilter \/>/g) ?? []).length).toBe(1);
+    const filters = Object.values(CODE).flatMap((text) => text.match(/<filter id="rough">/g) ?? []);
+    expect(filters).toHaveLength(1);
+  });
+
+  it('찍히는 움직임은 방금 깼을 때(.fresh)와 돌아보기 3장(.stamp.big)에서만, 움직임을 줄이지 않을 때만', () => {
+    const pressing = RULES.filter((rule) => /animation:[^;]*\bstamp-press\b/.test(rule.body));
+    expect(pressing.length).toBe(1);
+    expect(pressing[0].selectors.sort()).toEqual(['.stamp.big', '.stamp.fresh']);
+    expect(pressing[0].at.some((head) => /prefers-reduced-motion:\s*no-preference/.test(head))).toBe(true);
+    expect(book).toMatch(/<span class=\{`stamp\$\{fresh \? ' fresh' : ''\}`\}>/);
+  });
+
+  it('표지의 초점 테는 면 안쪽(바깥은 짙은 비단 표지라 먹 테가 묻힌다), 목차 줄은 바탕의 먹 테 그대로', () => {
+    expect(css('screens.css')).toMatch(/\.book-cover:focus-visible \{\s*outline: 3px solid var\(--focus\);\s*outline-offset: -0\.5rem;\s*\}/);
+    // 넘겨 보는 목차 칸이 초점 테(3px + 3px 띄움)를 자르지 않게 양옆을 비운다
+    const toc = RULES.find((rule) => rule.file === 'screens.css' && rule.at.length === 0 && rule.selectors.includes('.book-toc'))?.body ?? '';
+    expect(toc).toMatch(/margin: 0 -0\.5rem;/);
+    expect(toc).toMatch(/padding: [\d.]+(?:rem)? 0\.5rem 0\.5rem;/);
+  });
+
+  it('화면의 글은 그대로(새 말 없음 — 12.5): 머리·안내 줄·머리글·단추 글·준비 중·도장·깬 이야기·살아 본 모습', () => {
+    for (const text of [
+      '어느 해를 살아 볼까요?',
+      '교과서는 ‘건국부터 병자호란까지’와 ‘조선 후기부터 개항 이후까지’ 두 주제로 배워요.',
+      '이야기책',
+      '펼치기 ▶',
+      '다시 살기 ▶',
+      '준비 중',
+      '한 해 이름',
+      '깬 이야기 · ',
+      '살아 본 모습: ',
+      '처음으로',
+    ]) {
+      expect(book, text).toContain(text);
+    }
+    // 읽는 글의 규칙도 그대로(깬 이야기면 한 해 이름까지, 준비 중이면 "…, 준비 중")
+    expect(book).toContain('`${item.year}년 ${item.title}. 깬 이야기, 한 해 이름 ${stamp.title}. 다시 살기`');
+    expect(book).toContain('`${item.year}년 ${item.title}, 준비 중`');
+  });
+
+  it('꾸밈은 읽지 않는다: 번호 원·갈피끈·표지 그림은 aria-hidden(읽는 글은 단추의 이름이 맡는다 — 12.3)', () => {
+    const nos = [...book.matchAll(/<span class="book-no"([^>]*)>/g)];
+    expect(nos.length).toBe(3); // 목차 줄 · 표지의 해 옆 · 그림이 없는 액자
+    for (const m of nos) {
+      // 저마다 aria-hidden이거나, aria-hidden인 "그림 없는 자리"(.book-pic-none) 바로 안에 있다
+      const own = /\baria-hidden="true"/.test(m[1]);
+      const inNone = /<span class="book-pic-none" aria-hidden="true">\s*$/.test(book.slice(0, m.index));
+      expect(own || inNone, m[0]).toBe(true);
+    }
+    expect(book).toMatch(/<span class="book-ribbon" aria-hidden="true" \/>/);
+    expect(book).toMatch(/<img class="book-pic"[^>]*\balt=""[^>]*\baria-hidden="true"/);
+  });
+
+  it('갈피끈은 누름을 막지 않는다(pointer-events: none — 표지 위에 걸쳐 있다)', () => {
+    const ribbon = RULES.filter((rule) => rule.selectors.some((sel) => sel.includes('.book-ribbon')));
+    expect(ribbon.some((rule) => rule.at.length === 0 && /pointer-events:\s*none;/.test(rule.body))).toBe(true);
+    // 어느 규칙도(화면 크기·움직임 설정 안의 것도) 누름을 되살리지 않는다
+    for (const rule of ribbon) {
+      for (const m of rule.body.matchAll(/pointer-events:\s*([\w-]+)/g)) expect(m[1], rule.selectors.join(', ')).toBe('none');
+    }
+  });
+
+  it('움직임 줄이기: 이야기책의 옮김(transition)은 모두 꺼진다 — 목차 줄, 표지의 쪽빛 단추 모양(.btn)', () => {
+    const reduce = RULES.filter((rule) => rule.at.some((head) => /prefers-reduced-motion:\s*reduce/.test(head)));
+    const stops = (sel: string): boolean => reduce.some((rule) => rule.selectors.includes(sel) && /transition:\s*none/.test(rule.body));
+    const moving = RULES.filter(
+      (rule) =>
+        rule.at.length === 0 &&
+        rule.selectors.some((sel) => /\bbook-/.test(sel)) &&
+        /(?:^|[;\s])transition(?:-property|-duration)?:\s*(?!none)/.test(rule.body),
+    );
+    expect(moving.map((rule) => rule.selectors.join(', '))).toContain('button.book-row');
+    for (const rule of moving) for (const sel of rule.selectors) expect(stops(sel), sel).toBe(true);
+    // 표지의 단추 모양은 .btn이라 바탕의 줄이기 규칙이 끈다(면을 누르면 함께 내려앉는 옮김)
+    expect(book).toMatch(/class="btn primary big book-cta"/);
+    expect(stops('.btn')).toBe(true);
+  });
+
+  it('도장에 붉은 인주 빛이 없다 — 어떻게 적어도(#A3352B · #a33 · rgb(163, 53, 43) · rgb(163 53 43) · rgba(…))', () => {
+    /** CSS 글에서 빛깔을 [r, g, b]로: #rgb·#rgba·#rrggbb·#rrggbbaa, rgb()·rgba()(쉼표·띄어쓰기·%) */
+    const colorsIn = (text: string): [number, number, number][] => {
+      const out: [number, number, number][] = [];
+      for (const m of text.matchAll(/#([0-9a-f]{3,8})\b/gi)) {
+        const h = m[1];
+        const full = h.length <= 4 ? [...h.slice(0, 3)].map((c) => c + c).join('') : h.slice(0, 6);
+        if (h.length === 3 || h.length === 4 || h.length === 6 || h.length === 8) out.push([0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as [number, number, number]);
+      }
+      for (const m of text.matchAll(/rgba?\(\s*([\d.]+%?)[\s,]+([\d.]+%?)[\s,]+([\d.]+%?)/gi)) {
+        out.push([m[1], m[2], m[3]].map((v) => (v.endsWith('%') ? parseFloat(v) * 2.55 : parseFloat(v))) as [number, number, number]);
+      }
+      return out;
+    };
+    const reddish = ([r, g, b]: [number, number, number]): boolean => r - Math.max(g, b) >= 60;
+    // 읽개 스스로의 시험: 붉은 값의 여러 꼴을 잡고, 뇌록·한지빛·그림자는 잡지 않는다
+    for (const red of ['#a3352b', '#A3352B', '#a33', 'rgb(163, 53, 43)', 'rgb(163 53 43)', 'rgba(163,53,43,0.9)', 'rgb(64% 21% 17%)']) {
+      expect(colorsIn(red).some(reddish), red).toBe(true);
+    }
+    for (const ok of ['#1f7d74', '#135650', 'rgba(251, 247, 238, 0.94)', 'rgba(19, 50, 46, 0.35)']) expect(colorsIn(ok).some(reddish), ok).toBe(false);
+    // 도장의 모든 규칙(year.css의 .stamp…, 이야기책의 .book-frame .stamp·.book-sub .stamp …)
+    const stampRules = RULES.filter((rule) => rule.selectors.some((sel) => /\.stamp\b/.test(sel)));
+    expect(stampRules.length).toBeGreaterThanOrEqual(8);
+    for (const rule of stampRules) {
+      expect(colorsIn(rule.body).filter(reddish), `${rule.file} ${rule.selectors.join(', ')}`).toEqual([]);
+      expect(rule.body, rule.selectors.join(', ')).not.toMatch(/--stamp\b|var\(--ju/);
+    }
+    // 옛 인주 값은 CSS 어디에도, 도장을 그리는 화면 코드에도 없다
+    for (const [path, text] of [...Object.entries(CSS), ['Book.tsx', code('/screens/Book.tsx')], ['YearReview.tsx', code('/screens/YearReview.tsx')]]) {
+      expect(text, path).not.toMatch(/a3352b|163\D{1,4}53\D{1,4}43\b/i);
+    }
   });
 });
 
@@ -375,6 +534,27 @@ describe('누가 될까 — 화면의 동작(RolePick.tsx)', () => {
     const gate = new TapGate(at);
     expect(gate.pass(at + 120)).toBe(false); // 잇달아 누른 둘째 누름(0.12초)
     expect(gate.pass(at + OPEN_GAP_MS - 1)).toBe(false);
+    expect(new TapGate(at).pass(at + OPEN_GAP_MS)).toBe(true);
+  });
+
+  it('"…로 한 해 살기 ▶"는 자판을 누르고 있어 되풀이되는 Enter·Space(ev.repeat)를 받지 않는다(패에서 Enter를 1.5초 누르고 있어도 종이를 건너뛰지 않게 — Review ㉠ 권고)', () => {
+    // 그 단추(role-go)에서, 되풀이 keydown의 기본 동작(단추 누름)을 막는다
+    const go = /<button\s+type="button"\s+class="btn big primary role-go"[\s\S]*?onClick=/.exec(pick)?.[0] ?? '';
+    expect(go).toMatch(/onKeyDown=\{\(ev\) => \{\s*if \(ev\.repeat && \(ev\.key === 'Enter' \|\| ev\.key === ' '\)\) ev\.preventDefault\(\);\s*\}\}/);
+    // 패(role-card-hit)는 그대로 — 처음 누름은 받는다
+    expect((pick.match(/ev\.repeat/g) ?? []).length).toBe(1);
+  });
+
+  it('누가 될까가 뜬 뒤 OPEN_GAP_MS 동안은 패 누름도 받지 않는다(이야기책에서 표지를 두 번 빠르게 누른 둘째 누름이 패를 뒤집지 않게 — Review 이야기책 권고 1)', () => {
+    // 화면이 처음 그려질 때 문을 세우고(새 틈 값을 만들지 않는다), 패의 누름(마우스·손가락·자판 Enter·Space 모두 click으로 온다)은 그 문을 지나야 뒤집는다
+    expect(pick).toMatch(/const \[cardGate\] = useState\(\(\) => new TapGate\(Date\.now\(\)\)\);/);
+    const hit = /<button\s+type="button"\s+class="role-card-hit"[\s\S]*?\/>/.exec(pick)?.[0] ?? '';
+    expect(hit).toMatch(/onClick=\{\(\) => \{\s*if \(cardGate\.pass\(Date\.now\(\)\)\) setPicked\(index\);\s*\}\}/);
+    // 패를 뒤집는 길은 이 하나뿐이다(문을 지나지 않고 setPicked를 부르는 곳이 없다)
+    expect((pick.match(/setPicked\(/g) ?? []).length).toBe(1);
+    // 두 번 누름의 간격(0.09·0.15·0.2초)은 막히고, 틈이 지나면 받는다(영영 막히지 않는다)
+    const at = 2_000_000;
+    for (const gap of [90, 150, 200]) expect(new TapGate(at).pass(at + gap), `${gap}ms`).toBe(false);
     expect(new TapGate(at).pass(at + OPEN_GAP_MS)).toBe(true);
   });
 });
